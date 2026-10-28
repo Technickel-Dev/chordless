@@ -109,7 +109,12 @@ function fingerFor(fret, string, position, holding) {
   // The same fret on another string already held by that finger: use the
   // next finger, so both stay down (G# and C# at fret 9).
   const held = holding.get(FINGERS[k]);
-  if (held && held.fret === fret && held.string !== string) k += k < 3 ? 1 : -1;
+  // A guitarist puts the lower finger on the lower (bass) string, as in an
+  // A chord, so the fingers sit side by side instead of crossing.
+  if (held && held.fret === fret && held.string !== string) {
+    const step = string < held.string ? -1 : 1;
+    k = k + step >= 0 && k + step <= 3 ? k + step : k - step;
+  }
   return FINGERS[k];
 }
 
@@ -198,12 +203,17 @@ function planRightHand(notes) {
 // ----------------------------------------------------------------- motion
 
 /** Fingertip target for a fretting finger at time t: pressed, lifting, travelling or landing. */
-function leftTip(finger, t, intervals, position) {
+function leftTip(finger, t, intervals, positionAt) {
   const mine = intervals.filter((i) => i.finger === finger);
   const k = FINGERS.indexOf(finger);
-  const rest = v(slotX(position + k), pressPoint(Math.min(5, 2 + k), position + k)[1], GUITAR.stringZ + HOVER + 0.006);
+  /** The finger's resting place by the hand when the hand is at time `at`. */
+  const restAt = (at) => {
+    const p = positionAt(at);
+    return v(slotX(p + k), pressPoint(Math.min(5, 2 + k), p + k)[1], GUITAR.stringZ + HOVER + 0.006);
+  };
+  const rest = restAt(t);
   const hover = (p) => [p[0], p[1], GUITAR.stringZ + HOVER];
-  const pointOf = (i) => pressPoint(i.string, i.fret);
+  const pointOf = (i) => pressPoint(i.string, i.fret, i.fraction ?? 0.35);
 
   const now = mine.find((i) => t >= i.on && t < i.off);
   if (now) return { tip: pointOf(now), flatToward: now.flatToward };
@@ -214,13 +224,28 @@ function leftTip(finger, t, intervals, position) {
   const t0 = prev ? prev.off : -Infinity;
   const t1 = next ? next.on : Infinity;
 
-  // Lift off, travel above the strings (early, then wait over the target), land.
+  // Lift off, then either go straight over to the next note when it is
+  // close, or relax back to the finger's place by the hand and only reach
+  // for the next note shortly before it (as the hand gets there). A finger
+  // never flies ahead to a note the hand is not near yet.
   if (prev && t < t0 + LIFT_TIME) return { tip: lerp(from, hover(from), smooth((t - t0) / LIFT_TIME)) };
   if (next && t > t1 - LAND_TIME) return { tip: lerp(hover(to), to, smooth(1 - (t1 - t) / LAND_TIME)) };
-  const travelStart = prev ? t0 + LIFT_TIME : t1 - 0.4;
-  const travelEnd = next ? Math.min(t1 - LAND_TIME, travelStart + 0.22) : travelStart + 0.3;
-  const u = smooth((t - travelStart) / Math.max(0.01, travelEnd - travelStart));
-  return { tip: lerp(prev ? hover(from) : rest, next ? hover(to) : rest, u) };
+  const after = prev ? t0 + LIFT_TIME : -Infinity;
+  const before = next ? t1 - LAND_TIME : Infinity;
+  if (prev && next && before - after < 0.45) {
+    return { tip: lerp(hover(from), hover(to), smooth((t - after) / Math.max(0.01, before - after))) };
+  }
+  const settle = 0.18;
+  const reach = 0.22;
+  if (prev && t < after + settle) {
+    // Relax relative to the hand: the offset from the hand fades, so the
+    // finger travels with a shifting hand instead of trailing behind it.
+    const offset = [hover(from)[0] - restAt(after)[0], hover(from)[1] - restAt(after)[1], hover(from)[2] - restAt(after)[2]];
+    const fade = 1 - smooth((t - after) / settle);
+    return { tip: [rest[0] + offset[0] * fade, rest[1] + offset[1] * fade, rest[2] + offset[2] * fade] };
+  }
+  if (next && t > before - reach) return { tip: lerp(rest, hover(to), smooth(1 - (before - t) / reach)) };
+  return { tip: rest };
 }
 
 /** Index fingertip target for the picking hand at time t. */
@@ -248,11 +273,12 @@ function rightTip(t, strokes) {
 
 // -------------------------------------------------------------- performing
 
-export async function perform(song, { tempo = song.tempo, onEvent = () => {} } = {}) {
-  // Wait for the synth to finish pre-rendering its notes: rendering during
-  // the performance would stall frames and the hands would skip.
-  const guitarSystem = Array.from(window.FRAMEWORK_MCP_RUNTIME.world.systems ?? []).find((s) => s?.synth);
-  await guitarSystem?.synth.warm;
+/**
+ * Plans a performance: every note's timing, hand position and finger, the
+ * fretting fingers' pressed intervals, the picking strokes and the hand's
+ * glide along the neck.
+ */
+export function planPerformance(song, tempo = song.tempo) {
   const beat = 60 / tempo;
   const first = Math.min(...song.events.map((e) => e.beat));
   const LEAD_IN = 1.0;
@@ -285,6 +311,15 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
     }
   }
   const intervals = planLeftHand(notes);
+  // Two fingers down on the same fret at once sit one behind the other in
+  // it (the lower finger further from the fret wire), not on top of each other.
+  for (const a of intervals) {
+    for (const b of intervals) {
+      if (a === b || a.fret !== b.fret || a.finger === b.finger) continue;
+      if (a.on >= b.off || b.on >= a.off) continue;
+      a.fraction = FINGERS.indexOf(a.finger) < FINGERS.indexOf(b.finger) ? 0.62 : 0.16;
+    }
+  }
   const strokes = planRightHand(notes);
   const end = notes.at(-1).time + 2.5;
 
@@ -299,6 +334,54 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
     }
     return p;
   };
+  return { notes, intervals, strokes, end, positionAt };
+}
+
+/**
+ * Both hands' joints (guitar space) at time t for a planned performance.
+ * Returns a function of (t, dt); it keeps the picking wrist's spring state.
+ */
+export function handsFor(plan) {
+  const { intervals, strokes, positionAt } = plan;
+  // The picking wrist rides above and behind the fingertip, so the finger
+  // reaches down and forward to the strings instead of curling under.
+  const WRIST_BEHIND = 0.11;
+  const WRIST_HEIGHT = 0.1;
+  let wristY = gapY(3, PICK_X) + WRIST_BEHIND;
+  return (t, dt) => {
+    const position = positionAt(t);
+    const tips = {};
+    const flat = {};
+    for (const f of FINGERS) {
+      const { tip, flatToward } = leftTip(f, t, intervals, positionAt);
+      tips[f] = tip;
+      if (flatToward) flat[f] = flatToward;
+    }
+    const left = leftHand({ position, tips, flat });
+
+    const indexTip = rightTip(t, strokes);
+    // The wrist follows the fingertip across the strings on a spring; a
+    // strum moves the whole hand.
+    const strumming = strokes.some((s) => s.strum && t >= s.start - 0.06 && t <= s.end + 0.06);
+    const wanted = indexTip[1] + WRIST_BEHIND;
+    wristY = strumming ? wanted : wristY + (wanted - wristY) * (1 - Math.exp(-dt / 0.12));
+    // Lifting over the strings lifts the whole hand, not just the fingertip.
+    const wristZ = indexTip[2] + PICK_DEPTH + WRIST_HEIGHT;
+    // The index knuckle rides over the pick point, so the resting fingers
+    // hang beside the index rather than against it.
+    const right = rightHand({ wrist: v(PICK_X - 0.027, wristY, wristZ), indexTip });
+    return { left, right };
+  };
+}
+
+export async function perform(song, { tempo = song.tempo, onEvent = () => {} } = {}) {
+  // Wait for the synth to finish pre-rendering its notes: rendering during
+  // the performance would stall frames and the hands would skip.
+  const guitarSystem = Array.from(window.FRAMEWORK_MCP_RUNTIME.world.systems ?? []).find((s) => s?.synth);
+  await guitarSystem?.synth.warm;
+  const plan = planPerformance(song, tempo);
+  const { notes, end } = plan;
+  const handsAt = handsFor(plan);
 
   // A live pose for each hand, updated in place every frame.
   const hands = { left: window.IWER_DEVICE.hands.left, right: window.IWER_DEVICE.hands.right };
@@ -318,25 +401,10 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
     if (hand.poseId !== `performer-${side}`) hand.poseId = `performer-${side}`;
     hand.setPin({ anchor: 'wrist', target: w.position, wristRotation: quatFromAxes(w.x, w.y, w.z) });
   };
-  let wristY = gapY(3, PICK_X) + 0.075;
   const pose = (t, dt) => {
-    const position = positionAt(t);
-    const tips = {};
-    const flat = {};
-    for (const f of FINGERS) {
-      const { tip, flatToward } = leftTip(f, t, intervals, position);
-      tips[f] = tip;
-      if (flatToward) flat[f] = flatToward;
-    }
-    pin('left', leftHand({ position, tips, flat }), false);
-
-    const indexTip = rightTip(t, strokes);
-    // The wrist follows the fingertip across the strings on a spring; a
-    // strum moves the whole hand.
-    const strumming = strokes.some((s) => s.strum && t >= s.start - 0.06 && t <= s.end + 0.06);
-    const wanted = indexTip[1] + 0.075;
-    wristY = strumming ? wanted : wristY + (wanted - wristY) * (1 - Math.exp(-dt / 0.12));
-    pin('right', rightHand({ wrist: v(PICK_X - 0.02, wristY, GUITAR.stringZ + 0.064), indexTip }), true);
+    const { left, right } = handsAt(t, dt);
+    pin('left', left, false);
+    pin('right', right, true);
   };
 
   // Settle both hands into their starting pose before the clock starts, so

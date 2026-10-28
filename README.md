@@ -84,9 +84,10 @@ components holding data, and systems update them every frame.
   frets, pluck and damp counts, tone, volume), which the panel writes to and
   the tests read.
 - `src/guitar/fretting.ts` reads frets from finger points: fingertip pads
-  always press, the rest of a finger only where it lies flat (a barre), and a
-  fret must stay released for 60 ms before it drops, so tracking flicker cannot
-  cut a note.
+  always press, the rest of a finger only where it lies flat (a barre). A
+  lifted finger releases its fret after 25 ms (quick enough for pull-offs and
+  open notes straight after fretted ones), and frets hold for a moment if hand
+  tracking drops out, so a tracking hiccup cannot cut a note.
 - `src/guitar/pluck-detector.ts` plucks a string when the fingertip crosses it.
   It smooths tracking jitter with a One Euro filter, checks each crossing where
   it happens, keeps a fast strum going through brief tracking dropouts, and
@@ -137,9 +138,14 @@ npm run play:william-tell
   and hand-tracking loss. Results and screenshots go to `test-results/`.
   Set `E2E_PACE=2` to slow it down to watch.
 - `tests/william-tell.mjs` performs the galop theme of the *William Tell*
-  Overture finale (bars 243–275) with the emulated hands and reports each note
-  asked for, the note the app played and when the app registered it. Set
-  `WT_TEMPO=110` for a slower take.
+  Overture finale (bars 243–275) the way a guitarist would, and reports each
+  note asked for, the finger and hand position used, the note the app played
+  and when it registered. `tests/performer.js` plans the fingering (hand
+  positions with lookahead, one finger per fret, fingers kept down until they
+  are in the way, shifts with fingers lifted) and the picking (economy strokes
+  across each string), then drives both emulated hands every frame through
+  `tests/hand-rig.js`, which solves each finger's joints to reach its
+  fingertip target. Set `WT_TEMPO=110` for a slower take.
 - `tests/render-audio.mjs` (`npm run render:audio`) renders strummed chords,
   a melody and single notes straight from the synth into
   `test-results/audio/<label>-*.wav`, with spectrum statistics, for comparing
@@ -161,7 +167,7 @@ public/scenes/         the room the guitar is played in
 public/ui/             the panel layout (UIKitML)
 tests/unit/            unit tests
 tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand poses
-tests/william-tell.mjs, tests/performer.js, tests/songs/   song playback
+tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
 ```
 
 ## Credits

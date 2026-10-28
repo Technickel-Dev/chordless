@@ -363,7 +363,7 @@ export class AirGuitarSystem extends createSystem({
       }
     }
 
-    if (!reader.commit(dt) && this.shownFrets !== '') {
+    if (!reader.commit(dt, this.left.tracked) && this.shownFrets !== '') {
       this.updateFingerShadows();
       return;
     }

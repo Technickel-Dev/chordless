@@ -77,10 +77,15 @@ export default async function run({ page, frame }) {
   await banner(`♪ Done: ${result.notes.filter((n) => n.ok !== false).length}/${result.notes.length} notes right`);
   await dispatch('end_session');
 
-  const late = result.notes.map((n) => Math.abs(n.lateMs));
+  const late = result.notes.filter((n) => n.lateMs != null).map((n) => Math.abs(n.lateMs));
   return {
     audio,
     plucks: result.plucks,
+    extraPlucks: result.extraPlucks,
+    fps: result.fps,
+    stalls: result.stalls,
+    tempoDragPct: result.tempoDragPct,
+    slowestFrameMs: result.slowestFrameMs,
     damps: result.damps,
     notesRight: result.notes.filter((n) => n.ok !== false).length,
     notesTotal: result.notes.length,

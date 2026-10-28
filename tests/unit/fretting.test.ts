@@ -5,10 +5,15 @@ import { FretReader, PRESS } from '../../src/guitar/fretting.js';
 const onString = (s: number, fret: number, height = 0) =>
   [fretMidX(fret), stringY(s, fretMidX(fret)), GUITAR.stringZ + height] as const;
 
-function read(reader: FretReader, points: (readonly [number, number, number])[], dt = 1 / 72) {
+function read(
+  reader: FretReader,
+  points: (readonly [number, number, number])[],
+  dt = 1 / 72,
+  tracked = true,
+) {
   reader.begin();
   for (const [x, y, z] of points) reader.addPoint(x, y, z);
-  reader.commit(dt);
+  reader.commit(dt, tracked);
   return Array.from(reader.frets);
 }
 
@@ -69,16 +74,37 @@ describe('FretReader', () => {
     expect(read(reader, [onString(3, 4, PRESS.release + 0.005)], PRESS.releaseSeconds + 0.01)[3]).toBe(0);
   });
 
-  it('rides out a brief tracking flicker off a held fret', () => {
+  it('holds frets through a brief loss of hand tracking', () => {
     const reader = new FretReader();
     read(reader, [onString(2, 3)]);
-    // Two frames with the finger lost, then back.
-    expect(read(reader, [])[2]).toBe(3);
-    expect(read(reader, [])[2]).toBe(3);
+    // Ten frames (140 ms) untracked, then back.
+    for (let i = 0; i < 10; i++) expect(read(reader, [], 1 / 72, false)[2]).toBe(3);
     expect(read(reader, [onString(2, 3)])[2]).toBe(3);
-    // A real lift releases once it has lasted long enough.
-    for (let i = 0; i < 6; i++) read(reader, []);
+  });
+
+  it('releases after a long loss of hand tracking', () => {
+    const reader = new FretReader();
+    read(reader, [onString(2, 3)]);
+    for (let i = 0; i < 25; i++) read(reader, [], 1 / 72, false);
+    for (let i = 0; i < 3; i++) read(reader, [], 1 / 72, false);
     expect(reader.frets[2]).toBe(0);
+  });
+
+  it('rides out a one-frame wobble off a held fret', () => {
+    const reader = new FretReader();
+    read(reader, [onString(2, 3)]);
+    expect(read(reader, [onString(2, 3, PRESS.release + 0.004)])[2]).toBe(3);
+    expect(read(reader, [onString(2, 3)])[2]).toBe(3);
+  });
+
+  it('releases a clean lift quickly, ready for an open note', () => {
+    const reader = new FretReader();
+    read(reader, [onString(5, 2)]);
+    const lifted = onString(5, 2, 0.03);
+    let frames = 0;
+    while (read(reader, [lifted])[5] !== 0 && frames < 20) frames++;
+    // Well under a sixteenth note at 152 bpm (99 ms).
+    expect(frames / 72).toBeLessThan(0.05);
   });
 
   it('presses a higher fret immediately (hammer-on)', () => {

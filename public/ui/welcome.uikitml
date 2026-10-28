@@ -60,13 +60,13 @@
 </style>
 <Panel class="panel-root">
   <div class="panel-content">
-    <div class="eyebrow">CHORDLESS · AIR GUITAR</div>
+    <div class="eyebrow">CHORDLESS - AIR GUITAR</div>
     <div class="heading">Grab your air guitar</div>
     <div class="body">Left hand: slide along the neck to change chords.</div>
-    <div class="body">Squeeze = minor/major · X = power · Y = 7th · Trigger = mute</div>
+    <div class="body">Squeeze = minor/major / X = power / Y = 7th / Trigger = mute</div>
     <div class="body">Thumbstick left/right changes key.</div>
     <div class="body">Right hand: swing the pick through the strings.</div>
-    <div class="body">Trigger = strum down · A = strum up · B = overdrive</div>
+    <div class="body">Trigger = strum down / A = strum up / B = overdrive</div>
     <div class="body">Thumbstick up/down sets volume.</div>
   </div>
   <Button id="xr-button" class="button">

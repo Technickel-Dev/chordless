@@ -35,7 +35,7 @@ import { GuitarSynth } from './synth.js';
 
 const UP = new Vector3(0, 1, 0);
 /** How far the body tilts its top face up toward the player. */
-const FACE_TILT = (15 * Math.PI) / 180;
+const FACE_TILT = (30 * Math.PI) / 180;
 
 /** Body placement relative to the head, in metres (yaw-only frame). */
 const BODY_OFFSET = { down: 0.58, forward: 0.2, right: 0.06 };
@@ -44,7 +44,7 @@ const BODY_OFFSET = { down: 0.58, forward: 0.2, right: 0.06 };
 const PICK_OFFSET = new Vector3(0, -0.015, -0.075);
 
 /** Where the pick counts as being "on the strings", in guitar space. */
-const STRUM_ZONE = { minX: -0.24, maxX: 0.26, halfY: 0.14, halfZ: 0.15 };
+const STRUM_ZONE = { minX: -0.24, maxX: 0.26, halfY: 0.16, halfZ: 0.22 };
 /** Dead band around each string so jitter does not re-pluck it. */
 const STRING_HYSTERESIS = 0.003;
 
@@ -308,7 +308,7 @@ export class AirGuitarSystem extends createSystem({
     this.hud.draw(
       [
         next.name,
-        `Key of ${noteName(key)}  ·  ${toneLabel}  ·  vol ${Math.round(volume * 100)}%`,
+        `Key ${noteName(key)} · ${toneLabel} · ${Math.round(volume * 100)}%`,
         this.muted ? 'PALM MUTE' : shapeText(next),
       ],
       hex(ZONE_COLORS[zone]),
@@ -336,14 +336,11 @@ export class AirGuitarSystem extends createSystem({
       Math.abs(p.y) < STRUM_ZONE.halfY &&
       Math.abs(p.z - GUITAR.stringZ) < STRUM_ZONE.halfZ;
 
-    if (!inZone) {
-      this.stringSide.fill(0);
-      this.wasInStrumZone = false;
-      this.prevPickLocal.copy(p);
-      return;
-    }
-
-    const speed = this.wasInStrumZone && dt > 0 ? Math.abs(p.y - this.prevPickLocal.y) / dt : 0;
+    // Sides are tracked even outside the zone, and a crossing counts when
+    // either end of this frame's motion is in the zone. Otherwise a fast
+    // swing that enters the zone already past the top strings would skip them.
+    const canPluck = inZone || this.wasInStrumZone;
+    const speed = dt > 0 ? Math.abs(p.y - this.prevPickLocal.y) / dt : 0;
     const velocity = Math.min(1, 0.25 + speed / 2.2);
     let plucked = 0;
     for (let s = 0; s < STRING_COUNT; s++) {
@@ -354,7 +351,7 @@ export class AirGuitarSystem extends createSystem({
       const side = delta > 0 ? 1 : -1;
       const prevSide = this.stringSide[s];
       this.stringSide[s] = side;
-      if (prevSide === 0 || prevSide === side) continue;
+      if (!canPluck || prevSide === 0 || prevSide === side) continue;
 
       // Fraction of the last frame at which the crossing happened, so the
       // notes of a strum keep their spacing.
@@ -364,7 +361,7 @@ export class AirGuitarSystem extends createSystem({
     }
     if (plucked > 0) pulse(right, 0.2 + 0.4 * velocity, 18);
 
-    this.wasInStrumZone = true;
+    this.wasInStrumZone = inZone;
     this.prevPickLocal.copy(p);
   }
 

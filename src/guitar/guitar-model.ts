@@ -264,7 +264,7 @@ export class LabelSprite {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     const big = lines.length > 1 ? height * 0.42 : height * 0.55;
-    const small = height * 0.15;
+    const small = height * 0.12;
     const total = big + (lines.length - 1) * small * 1.3;
     let y = height / 2 - total / 2 + big / 2;
     lines.forEach((line, i) => {

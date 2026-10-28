@@ -300,6 +300,34 @@ export default async function run({ page, frame, workspaceRoot }) {
       return `6 plucks, ringing chord ${g.chord}; ${await shot('02-strum')}`;
     });
 
+    await test('A very fast strum (0.04 s) still plays all six strings', async () => {
+      await approach({ string: 0, across: 0.02 });
+      const before = (await guitar()).plucks;
+      await sweepTip({ string: 5, across: -0.02 }, 0.04);
+      const plucked = (await guitar()).plucks - before;
+      expectEq(plucked, 6, 'plucks');
+      return '6 plucks in 40 ms';
+    });
+
+    await test('A fast strum that sinks 6 cm on the follow-through plays all six', async () => {
+      await approach({ string: 0, across: 0.02 });
+      const before = (await guitar()).plucks;
+      await sweepTip({ string: 5, across: -0.02, height: -0.06 }, 0.06);
+      const plucked = (await guitar()).plucks - before;
+      expectEq(plucked, 6, 'plucks');
+      return '6 plucks, ending 6 cm below the strings';
+    });
+
+    await test('A very slow strum (1.5 s) plays all six and damps none', async () => {
+      await approach({ string: 0, across: 0.02 });
+      const g0 = await guitar();
+      await sweepTip({ string: 5, across: -0.02 }, 1.5);
+      await wait(200);
+      const g1 = await guitar();
+      expectEq([g1.plucks - g0.plucks, g1.damps - g0.damps], [6, 0], '[plucks, damps]');
+      return '6 plucks over 1.5 s, 0 strings cut off';
+    });
+
     await test('Moving back above the strings plays nothing', async () => {
       const before = (await guitar()).plucks;
       await sweepTip({ string: 5, across: -0.02, height: 0.05 }, 0.1);

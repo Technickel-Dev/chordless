@@ -187,7 +187,7 @@ export class AirGuitarSystem extends createSystem({
     this.synth.setTone(tone === GuitarToneMode.Drive ? 'drive' : 'clean');
     this.synth.setVolume(e.getValue(AirGuitar, 'volume') ?? 0.8);
 
-    this.updateFretting();
+    this.updateFretting(dt);
     this.updatePicking(dt);
     this.animateStrings(dt, time);
     this.updateHud(placing, tone);
@@ -325,7 +325,7 @@ export class AirGuitarSystem extends createSystem({
   }
 
   /** Reads the left hand into frets, with hammer-ons, pull-offs and damping. */
-  private updateFretting(): void {
+  private updateFretting(dt: number): void {
     const reader = this.fretReader;
     reader.begin();
     if (this.left.tracked) {
@@ -359,7 +359,7 @@ export class AirGuitarSystem extends createSystem({
       }
     }
 
-    if (!reader.commit() && this.shownFrets !== '') {
+    if (!reader.commit(dt) && this.shownFrets !== '') {
       this.updateFingerShadows();
       return;
     }
@@ -385,8 +385,7 @@ export class AirGuitarSystem extends createSystem({
             this.entity.setValue(AirGuitar, 'lastNote', midiName(OPEN_MIDI[s] + fret));
           } else {
             // Lifting a finger off a ringing string damps it.
-            this.synth.choke(s);
-            this.amp[s] = 0;
+            this.damp(s);
           }
         }
       }
@@ -429,7 +428,9 @@ export class AirGuitarSystem extends createSystem({
   private updatePicking(dt: number): void {
     const shadow = this.model.pickShadow;
     if (!this.right.tracked) {
-      this.plucker.reset();
+      // Fast motion often drops hand tracking for a frame or two; the
+      // detector bridges short gaps so the strum does not lose strings.
+      this.plucker.lost(dt);
       shadow.visible = false;
       return;
     }
@@ -439,7 +440,7 @@ export class AirGuitarSystem extends createSystem({
       const event = this.plucker.events[i];
       const s = event.string;
       const midi = OPEN_MIDI[s] + this.fretReader.frets[s];
-      this.synth.pluck(s, midi, event.velocity, this.synth.now + event.frac * dt, false);
+      this.synth.pluck(s, midi, event.velocity, this.synth.now + event.delay, false);
       this.soundingMidi[s] = midi;
       this.amp[s] = Math.max(this.amp[s], event.velocity);
       this.entity.setValue(AirGuitar, 'plucks', (this.entity.getValue(AirGuitar, 'plucks') ?? 0) + 1);
@@ -447,10 +448,7 @@ export class AirGuitarSystem extends createSystem({
     }
     // A fingertip resting on a ringing string stops it.
     for (let s = 0; s < STRING_COUNT; s++) {
-      if (this.plucker.damping[s] && this.amp[s] > 0) {
-        this.synth.choke(s);
-        this.amp[s] = 0;
-      }
+      if (this.plucker.damping[s] && this.amp[s] > 0) this.damp(s);
     }
 
     const height = tip.z - GUITAR.stringZ;
@@ -467,6 +465,13 @@ export class AirGuitarSystem extends createSystem({
         ? 0.95
         : 0.2 + 0.5 * (1 - Math.min(1, Math.max(0, height) / 0.08));
     }
+  }
+
+  /** Stops a ringing string, counting it so damping can be inspected. */
+  private damp(s: number): void {
+    this.synth.choke(s);
+    this.amp[s] = 0;
+    this.entity.setValue(AirGuitar, 'damps', (this.entity.getValue(AirGuitar, 'damps') ?? 0) + 1);
   }
 
   private animateStrings(dt: number, time: number): void {

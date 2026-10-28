@@ -15,6 +15,7 @@ export const AirGuitar = createComponent('AirGuitar', {
   chord: { type: Types.String, default: '', label: 'Chord ringing (or fretted shape)' },
   frets: { type: Types.String, default: '0 0 0 0 0 0', label: 'Fret per string, low E first' },
   plucks: { type: Types.Int32, default: 0, label: 'Strings plucked so far' },
+  damps: { type: Types.Int32, default: 0, label: 'Ringing strings damped so far' },
   lastNote: { type: Types.String, default: '', label: 'Last plucked note' },
   leftHand: { type: Types.Boolean, default: false, label: 'Fretting hand tracked' },
   rightHand: { type: Types.Boolean, default: false, label: 'Picking hand tracked' },

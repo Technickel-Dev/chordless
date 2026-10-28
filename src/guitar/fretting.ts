@@ -15,6 +15,8 @@ export const PRESS = {
   below: 0.04,
   /** Extra reach, in string spacings, beyond the outer strings (above the board only). */
   edgeSpacings: 0.3,
+  /** A string must stay released this long before its fret drops. */
+  releaseSeconds: 0.06,
 };
 
 /**
@@ -31,6 +33,8 @@ export class FretReader {
   private readonly strict = new Int8Array(STRING_COUNT);
   /** Bitmask per string of frets that have a point within the release zone. */
   private readonly held = new Uint32Array(STRING_COUNT);
+  /** How long each string has wanted to drop to a lower fret. */
+  private readonly releaseTime = new Float32Array(STRING_COUNT);
 
   begin(): void {
     this.strict.fill(0);
@@ -58,17 +62,30 @@ export class FretReader {
     return height <= PRESS.above ? s : -1;
   }
 
-  /** Settles this frame's frets; returns true when any string changed. */
-  commit(): boolean {
+  /**
+   * Settles this frame's frets; returns true when any string changed.
+   * Pressing a higher fret takes effect at once (hammer-ons stay snappy);
+   * dropping to a lower fret or the open string must persist for
+   * `PRESS.releaseSeconds`, so a one-frame tracking flicker cannot cut a
+   * ringing note.
+   */
+  commit(dt = 1 / 72): boolean {
     let changed = false;
     for (let s = 0; s < STRING_COUNT; s++) {
       const current = this.frets[s];
       let next = this.strict[s];
       // Hysteresis: a held fret survives small lifts within the release zone.
       if (next < current && current > 0 && this.held[s] & (1 << current)) next = current;
+      if (next < current) {
+        this.releaseTime[s] += dt;
+        if (this.releaseTime[s] < PRESS.releaseSeconds) next = current;
+      } else {
+        this.releaseTime[s] = 0;
+      }
       this.pressed[s] = next > 0 ? 1 : 0;
       if (next !== current) {
         this.frets[s] = next;
+        this.releaseTime[s] = 0;
         changed = true;
       }
     }
@@ -78,5 +95,6 @@ export class FretReader {
   reset(): void {
     this.frets.fill(0);
     this.pressed.fill(0);
+    this.releaseTime.fill(0);
   }
 }

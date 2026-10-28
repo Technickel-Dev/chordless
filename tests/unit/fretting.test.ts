@@ -5,10 +5,10 @@ import { FretReader, PRESS } from '../../src/guitar/fretting.js';
 const onString = (s: number, fret: number, height = 0) =>
   [fretMidX(fret), stringY(s, fretMidX(fret)), GUITAR.stringZ + height] as const;
 
-function read(reader: FretReader, points: (readonly [number, number, number])[]) {
+function read(reader: FretReader, points: (readonly [number, number, number])[], dt = 1 / 72) {
   reader.begin();
   for (const [x, y, z] of points) reader.addPoint(x, y, z);
-  reader.commit();
+  reader.commit(dt);
   return Array.from(reader.frets);
 }
 
@@ -66,6 +66,24 @@ describe('FretReader', () => {
     const reader = new FretReader();
     read(reader, [onString(3, 4)]);
     expect(read(reader, [onString(3, 4, PRESS.above + 0.004)])[3]).toBe(4);
-    expect(read(reader, [onString(3, 4, PRESS.release + 0.005)])[3]).toBe(0);
+    expect(read(reader, [onString(3, 4, PRESS.release + 0.005)], PRESS.releaseSeconds + 0.01)[3]).toBe(0);
+  });
+
+  it('rides out a brief tracking flicker off a held fret', () => {
+    const reader = new FretReader();
+    read(reader, [onString(2, 3)]);
+    // Two frames with the finger lost, then back.
+    expect(read(reader, [])[2]).toBe(3);
+    expect(read(reader, [])[2]).toBe(3);
+    expect(read(reader, [onString(2, 3)])[2]).toBe(3);
+    // A real lift releases once it has lasted long enough.
+    for (let i = 0; i < 6; i++) read(reader, []);
+    expect(reader.frets[2]).toBe(0);
+  });
+
+  it('presses a higher fret immediately (hammer-on)', () => {
+    const reader = new FretReader();
+    read(reader, [onString(1, 2)]);
+    expect(read(reader, [onString(1, 2), onString(1, 4)])[1]).toBe(4);
   });
 });

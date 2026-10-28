@@ -10,7 +10,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [iwsdkDev()],
-  server: { host: '0.0.0.0', port: 8081, open: false },
+  // PORT lets a second checkout (say, a git worktree) run beside the first.
+  server: { host: '0.0.0.0', port: Number(process.env.PORT ?? 8081), open: false },
   build: {
     outDir: 'dist',
     sourcemap: process.env.NODE_ENV !== 'production',

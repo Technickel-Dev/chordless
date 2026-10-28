@@ -6,14 +6,10 @@
  */
 
 import { AssetType, defineAssets } from '@iwsdk/core';
-import {
-  createGallerySet,
-  createSideboardSet,
-} from './scene-assets/decor.scene-asset.js';
-import {
-  createStage,
-  createStudioFloor,
-} from './scene-assets/studio.scene-asset.js';
+import { createTheatreMaterials } from './scene-assets/lib/theatre-kit.js';
+import { createTheatreHouse } from './scene-assets/theatre-house.scene-asset.js';
+import { createLightingRig } from './scene-assets/theatre-rig.scene-asset.js';
+import { createTheatreStage } from './scene-assets/theatre-stage.scene-asset.js';
 
 const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
@@ -24,10 +20,12 @@ const uikitml = (fileName: string, name: string) => ({
   name,
 });
 
+// One material set shared by the theatre's three pieces.
+const theatre = createTheatreMaterials();
+
 export default defineAssets({
-  'studio-floor': createStudioFloor(),
-  stage: createStage(),
-  'gallery-set': createGallerySet(),
-  'sideboard-set': createSideboardSet(),
+  'theatre-stage': createTheatreStage(theatre),
+  'theatre-house': createTheatreHouse(theatre),
+  'theatre-rig': createLightingRig(theatre),
   'welcome-panel': uikitml('welcome.uikitml', 'Welcome Panel'),
 });

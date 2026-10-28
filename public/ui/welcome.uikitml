@@ -1,18 +1,22 @@
 <!--
-  Panel, Button, ButtonIcon, and ButtonLabel come from the bundled Horizon kit.
+  Panel, Button and ButtonLabel come from the bundled Horizon kit.
   RectangleGoggles and LogIn are bundled Lucide icon components. The :dark
   styles apply because iwsdk.config.json prefers the dark color scheme.
+  PanelSystem wires every button id below to the AirGuitar component.
 -->
 <style>
   .panel-root {
     flex-direction: column;
-    width: 600px;
+    width: 640px;
   }
 
   .panel-content {
     flex-direction: column;
-    gap: 7px;
-    padding: 22px;
+    gap: 6px;
+    padding-top: 22px;
+    padding-right: 22px;
+    padding-bottom: 12px;
+    padding-left: 22px;
   }
 
   .eyebrow {
@@ -30,7 +34,7 @@
     color: #1c1d20;
     font-size: 30px;
     font-weight: 700;
-    line-height: 36px;
+    line-height: 1.2;
   }
 
   .heading:dark {
@@ -39,12 +43,20 @@
 
   .body {
     color: #3a3b40;
-    font-size: 19px;
-    line-height: 26px;
+    font-size: 18px;
+    line-height: 1.35;
   }
 
   .body:dark {
     color: #dddfe3;
+  }
+
+  .row {
+    flex-direction: row;
+    gap: 10px;
+    padding-right: 22px;
+    padding-bottom: 14px;
+    padding-left: 22px;
   }
 
   .button {
@@ -61,13 +73,29 @@
 <Panel class="panel-root">
   <div class="panel-content">
     <div class="eyebrow">CHORDLESS - AIR GUITAR</div>
-    <div class="heading">Grab your air guitar</div>
-    <div class="body">Left hand: slide along the neck to change chords.</div>
-    <div class="body">Squeeze = minor/major / X = power / Y = 7th / Trigger = mute</div>
-    <div class="body">Thumbstick left/right changes key.</div>
-    <div class="body">Right hand: swing the pick through the strings.</div>
-    <div class="body">Trigger = strum down / A = strum up / B = overdrive</div>
-    <div class="body">Thumbstick up/down sets volume.</div>
+    <div class="heading">Play with your hands</div>
+    <div class="body">Put the controllers down. The guitar hangs in front of you.</div>
+    <div class="body">Left fingertips press the strings between the frets.</div>
+    <div class="body">Right index fingertip plucks: sweep to strum, flick for one string.</div>
+    <div class="body">Lift above the strings to move back silently; rest on one to mute it.</div>
+    <div class="body">Pinch both hands for a second to move the guitar to them.</div>
+  </div>
+  <div class="row">
+    <Button id="tone-clean" variant="primary">
+      <ButtonLabel>Clean</ButtonLabel>
+    </Button>
+    <Button id="tone-drive" variant="secondary">
+      <ButtonLabel>Overdrive</ButtonLabel>
+    </Button>
+    <Button id="volume-down" variant="secondary">
+      <ButtonLabel>Vol -</ButtonLabel>
+    </Button>
+    <Button id="volume-up" variant="secondary">
+      <ButtonLabel>Vol +</ButtonLabel>
+    </Button>
+    <Button id="reset-guitar" variant="secondary">
+      <ButtonLabel>Reset guitar</ButtonLabel>
+    </Button>
   </div>
   <Button id="xr-button" class="button">
     <ButtonIcon>

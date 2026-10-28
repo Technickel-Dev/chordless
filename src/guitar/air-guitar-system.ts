@@ -1,128 +1,133 @@
 import {
   createSystem,
   Entity,
-  InputComponent,
   Matrix4,
-  Mesh,
   Quaternion,
-  StatefulGamepad,
   Vector3,
   VisibilityState,
 } from '@iwsdk/core';
 import { AirGuitar, GuitarToneMode } from './air-guitar-component.js';
+import { midiName, recognizeChord } from './chords.js';
+import { FretReader, PRESS } from './fretting.js';
 import {
-  ChordSpec,
-  chordName,
-  diatonicChord,
-  flipQuality,
-  noteName,
-  STRING_COUNT,
-  voiceChord,
-  Voicing,
-  ZONE_COUNT,
-  ZONE_DEGREES,
-} from './chords.js';
-import {
-  createGuitarModel,
-  createPick,
+  fretMidX,
+  fretX,
   GUITAR,
-  GuitarModel,
-  LabelSprite,
+  OPEN_MIDI,
+  STRING_COUNT,
+  stringSpan,
   stringY,
-  ZONE_COLORS,
-} from './guitar-model.js';
+} from './geometry.js';
+import { ACCENT, createGuitarModel, GuitarModel, placeString } from './guitar-model.js';
+import { JOINT, TrackedHand } from './hands.js';
+import { PLUCK_ZONE, PluckDetector } from './pluck-detector.js';
 import { GuitarSynth } from './synth.js';
 
 const UP = new Vector3(0, 1, 0);
-/** How far the body tilts its top face up toward the player. */
-const FACE_TILT = (30 * Math.PI) / 180;
-
-/** Body placement relative to the head, in metres (yaw-only frame). */
-const BODY_OFFSET = { down: 0.58, forward: 0.2, right: 0.06 };
-
-/** Pick position in the right controller's grip space. */
-const PICK_OFFSET = new Vector3(0, -0.015, -0.075);
-
-/** Where the pick counts as being "on the strings", in guitar space. */
-const STRUM_ZONE = { minX: -0.24, maxX: 0.26, halfY: 0.16, halfZ: 0.22 };
-/** Dead band around each string so jitter does not re-pluck it. */
-const STRING_HYSTERESIS = 0.003;
-
-const AUTO_STRUM_GAP = 0.012;
-
-type HapticGamepad = Gamepad & {
-  hapticActuators?: readonly { pulse?: (value: number, ms: number) => Promise<boolean> }[];
-};
+/**
+ * How far the top face tilts up toward the player. Much more than a real
+ * guitar: with nothing to feel, players need to see the fretboard.
+ */
+const FACE_TILT = (60 * Math.PI) / 180;
 
 /**
- * Air guitar: the body hangs at the player's hip, the neck points at the left
- * controller, the left hand's position along the neck picks the chord, and
- * sweeping the right-hand pick through the strings plucks them.
- *
- * Left controller: slide along the neck to pick one of six chords in the
- * key (I IV V vi ii iii), squeeze swaps major/minor, X makes a power chord,
- * Y adds a seventh, trigger palm-mutes, thumbstick left/right changes key.
- * Right controller: strum through the strings, trigger strums down, A strums
- * up, B toggles clean/overdrive, thumbstick up/down sets volume.
+ * Where the guitar sits relative to the player's torso. `right` and
+ * `forward` are horizontal offsets of the body (sound hole) from the head,
+ * `drop` how far below the head it hangs, and `neck` the neck direction as
+ * components along the torso's right, up and forward axes.
+ */
+interface Placement {
+  right: number;
+  forward: number;
+  drop: number;
+  neck: [number, number, number];
+}
+
+const DEFAULT_PLACEMENT: Placement = {
+  right: 0.07,
+  forward: 0.24,
+  drop: 0.6,
+  neck: [-0.88, 0.3, 0.3],
+};
+const PLACEMENT_KEY = 'chordless.placement';
+
+/** The torso turns with the head only past this yaw, so glancing at the neck is free. */
+const YAW_DEADBAND = (45 * Math.PI) / 180;
+/** The torso moves with the head only past this distance, so leaning in is free. */
+const LEAN_RADIUS = 0.2;
+
+/** Both hands pinched this long re-places the guitar. */
+const PLACE_HOLD_SECONDS = 1;
+const PINCH_DISTANCE = 0.018;
+
+/** Joints sampled along each fretting finger, tip first. The index can barre. */
+const FRET_FINGERS = [
+  [JOINT.indexTip, JOINT.indexDistal, JOINT.indexIntermediate, JOINT.indexProximal],
+  [JOINT.middleTip, JOINT.middleDistal],
+  [JOINT.ringTip, JOINT.ringDistal],
+  [JOINT.pinkyTip, JOINT.pinkyDistal],
+] as const;
+const SAMPLE_SPACING = 0.006;
+
+/** A string counts as ringing above this level of the visual envelope. */
+const RINGING = 0.06;
+
+/**
+ * Hand-played air guitar. The guitar is worn: it hangs in front of the
+ * player and follows their body, not their hands. Left fingertips fret real
+ * strings at real fret positions; the right index fingertip plucks or
+ * strums whatever strings it crosses. Pinch both hands for a second to move
+ * the guitar: the body goes to the right pinch, the neck toward the left.
  */
 export class AirGuitarSystem extends createSystem({
   guitars: { required: [AirGuitar] },
 }) {
   private model!: GuitarModel;
   private entity!: Entity;
-  private hud!: LabelSprite;
-  private pick!: Mesh;
   private synth!: GuitarSynth;
+
+  private readonly left = new TrackedHand();
+  private readonly right = new TrackedHand();
+  private readonly fretReader = new FretReader();
+  private readonly plucker = new PluckDetector();
+
+  private placement: Placement = { ...DEFAULT_PLACEMENT, neck: [...DEFAULT_PLACEMENT.neck] };
+  private readonly torso = new Vector3();
+  private torsoYaw = 0;
+  private bodyHeight = 1;
+  private placed = false;
+  private placeHold = 0;
+  private placeLatched = false;
 
   private readonly headPos = new Vector3();
   private readonly headQuat = new Quaternion();
-  private readonly forward = new Vector3();
-  private readonly smoothForward = new Vector3(0, 0, -1);
-  private readonly right = new Vector3();
-  private readonly anchorTarget = new Vector3();
-  private readonly anchor = new Vector3();
-  private readonly leftPos = new Vector3();
-  private readonly pickPos = new Vector3();
-  private readonly pickLocal = new Vector3();
-  private readonly prevPickLocal = new Vector3();
-  private readonly leftLocal = new Vector3();
-  private readonly axisX = new Vector3(1, 0, 0);
+  private readonly fwd = new Vector3();
+  private readonly rgt = new Vector3();
+  private readonly target = new Vector3();
+  private readonly axisX = new Vector3();
   private readonly axisY = new Vector3();
   private readonly axisZ = new Vector3();
-  private readonly faceTarget = new Vector3();
   private readonly basis = new Matrix4();
-  private readonly inverse = new Matrix4();
   private readonly targetQuat = new Quaternion();
-  private placed = false;
+  private readonly inverse = new Matrix4();
+  private readonly tmp = new Vector3();
+  private readonly tmp2 = new Vector3();
+  private readonly leftLocal = new Float32Array(25 * 3);
 
-  private readonly stringSide = new Int8Array(STRING_COUNT);
-  private readonly stringDelta = new Float32Array(STRING_COUNT);
-  private readonly stringAmp = new Float32Array(STRING_COUNT);
-  private wasInStrumZone = false;
-
-  private chordKey = -1;
-  private zone = 0;
-  private muted = false;
-  private voicing: Voicing = { name: '', frets: [], midi: [] };
-  private readonly zoneSpec: ChordSpec = { root: 0, quality: 'maj', seventh: false, power: false };
+  private readonly amp = new Float32Array(STRING_COUNT);
+  private readonly soundingMidi = new Int16Array(STRING_COUNT);
+  private readonly lastFrets = new Int8Array(STRING_COUNT);
+  private readonly ringingNotes: number[] = [];
+  private readonly shapeNotes: number[] = [];
+  private shownFrets = '';
 
   init(): void {
     this.synth = new GuitarSynth(STRING_COUNT);
-
     this.model = createGuitarModel();
     this.entity = this.world.createTransformEntity(this.model.root, { persistent: true });
     this.entity.addComponent(AirGuitar);
+    this.placement = loadPlacement();
 
-    this.hud = new LabelSprite(512, 256);
-    this.hud.sprite.name = 'ChordDisplay';
-    this.hud.sprite.scale.set(0.3, 0.15, 1);
-    this.world.createTransformEntity(this.hud.sprite, { persistent: true });
-
-    this.pick = createPick();
-    this.pick.position.copy(PICK_OFFSET);
-    this.player.gripSpaces.right.add(this.pick);
-
-    // Audio can only start from a user gesture: entering XR is one.
     const unlock = () => this.synth.resume();
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
@@ -131,74 +136,118 @@ export class AirGuitarSystem extends createSystem({
       () => window.removeEventListener('keydown', unlock),
       this.world.visibilityState.subscribe((state) => {
         const immersive = state !== VisibilityState.NonImmersive;
+        // Entering XR is a user gesture, so audio can start here.
         if (immersive) this.synth.resume();
         else this.synth.chokeAll();
         this.model.root.visible = immersive;
-        this.hud.sprite.visible = immersive;
-        this.pick.visible = immersive;
         this.placed = false;
       }),
-      () => {
-        this.pick.removeFromParent();
-        void this.synth.ctx.close();
-      },
+      () => void this.synth.ctx.close(),
     );
   }
 
   update(delta: number, time: number): void {
     if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
     const dt = Math.min(delta, 0.1);
-    const left = this.input.xr.gamepads.left;
-    const right = this.input.xr.gamepads.right;
+    const e = this.entity;
 
-    this.placeGuitar(dt);
-    this.readControls(left, right);
-    this.updateChord(left);
-    this.detectStrum(dt, right);
+    const hands = this.input.xr.visualAdapters.hand;
+    this.left.update(hands.left, this.player.gripSpaces.left);
+    this.right.update(hands.right, this.player.gripSpaces.right);
+    if (e.getValue(AirGuitar, 'leftHand') !== this.left.tracked) {
+      e.setValue(AirGuitar, 'leftHand', this.left.tracked);
+    }
+    if (e.getValue(AirGuitar, 'rightHand') !== this.right.tracked) {
+      e.setValue(AirGuitar, 'rightHand', this.right.tracked);
+    }
+
+    this.readHead();
+    if (!this.placed || e.getValue(AirGuitar, 'resetPlacement')) {
+      if (e.getValue(AirGuitar, 'resetPlacement')) {
+        this.placement = { ...DEFAULT_PLACEMENT, neck: [...DEFAULT_PLACEMENT.neck] };
+        savePlacement(this.placement);
+        e.setValue(AirGuitar, 'resetPlacement', false);
+      }
+      this.anchorTorso();
+    }
+    const placing = this.updatePlaceGesture(dt);
+    this.followTorso(dt);
+    this.poseGuitar(dt);
+
+    const tone = e.getValue(AirGuitar, 'tone') ?? GuitarToneMode.Clean;
+    this.synth.setTone(tone === GuitarToneMode.Drive ? 'drive' : 'clean');
+    this.synth.setVolume(e.getValue(AirGuitar, 'volume') ?? 0.8);
+
+    this.updateFretting();
+    this.updatePicking(dt);
     this.animateStrings(dt, time);
+    this.updateHud(placing, tone);
   }
 
-  /** Hangs the body off the head (yaw only) and aims the neck at the left hand. */
-  private placeGuitar(dt: number): void {
+  private readHead(): void {
     const head = this.player.head;
     head.updateWorldMatrix(true, false);
     head.getWorldPosition(this.headPos);
     head.getWorldQuaternion(this.headQuat);
+  }
 
-    this.forward.set(0, 0, -1).applyQuaternion(this.headQuat);
-    this.forward.y = 0;
-    if (this.forward.lengthSq() > 1e-4) {
-      this.forward.normalize();
-      // The body follows head yaw slowly, so glancing at the neck does not
-      // swing the whole guitar around.
-      if (this.placed) this.smoothForward.lerp(this.forward, 1 - Math.exp(-dt * 2.5));
-      else this.smoothForward.copy(this.forward);
-      this.smoothForward.normalize();
+  private headYaw(): number {
+    this.tmp.set(0, 0, -1).applyQuaternion(this.headQuat);
+    return Math.atan2(-this.tmp.x, -this.tmp.z);
+  }
+
+  /** Puts the torso frame under the head, facing where the head faces. */
+  private anchorTorso(): void {
+    this.torso.set(this.headPos.x, 0, this.headPos.z);
+    this.torsoYaw = this.headYaw();
+    this.bodyHeight = this.headPos.y - this.placement.drop;
+    this.placed = true;
+  }
+
+  /** Steps and big turns carry the guitar along; glances and leans do not. */
+  private followTorso(dt: number): void {
+    const dx = this.headPos.x - this.torso.x;
+    const dz = this.headPos.z - this.torso.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist > LEAN_RADIUS) {
+      const k = ((dist - LEAN_RADIUS) / dist) * (1 - Math.exp(-dt * 6));
+      this.torso.x += dx * k;
+      this.torso.z += dz * k;
     }
-    this.right.crossVectors(this.smoothForward, UP);
+    const diff = wrapAngle(this.headYaw() - this.torsoYaw);
+    if (Math.abs(diff) > YAW_DEADBAND) {
+      this.torsoYaw += (diff - Math.sign(diff) * YAW_DEADBAND) * (1 - Math.exp(-dt * 4));
+    }
+  }
 
-    this.anchorTarget
-      .copy(this.headPos)
-      .addScaledVector(UP, -BODY_OFFSET.down)
-      .addScaledVector(this.smoothForward, BODY_OFFSET.forward)
-      .addScaledVector(this.right, BODY_OFFSET.right);
-    if (this.placed) this.anchor.lerp(this.anchorTarget, 1 - Math.exp(-dt * 10));
-    else this.anchor.copy(this.anchorTarget);
+  /** Torso basis: forward and right, horizontal. */
+  private torsoAxes(): void {
+    this.fwd.set(-Math.sin(this.torsoYaw), 0, -Math.cos(this.torsoYaw));
+    this.rgt.set(Math.cos(this.torsoYaw), 0, -Math.sin(this.torsoYaw));
+  }
 
-    const leftGrip = this.player.gripSpaces.left;
-    leftGrip.updateWorldMatrix(true, false);
-    leftGrip.getWorldPosition(this.leftPos);
-    this.axisZ.subVectors(this.leftPos, this.anchor);
-    if (this.axisZ.lengthSq() > 0.15 * 0.15) this.axisX.copy(this.axisZ).normalize();
-    else if (!this.placed) this.axisX.copy(this.right).negate();
+  private poseGuitar(dt: number): void {
+    const p = this.placement;
+    this.torsoAxes();
+    this.target
+      .copy(this.torso)
+      .addScaledVector(this.rgt, p.right)
+      .addScaledVector(this.fwd, p.forward);
+    this.target.y = this.bodyHeight;
 
+    this.axisX
+      .set(0, 0, 0)
+      .addScaledVector(this.rgt, p.neck[0])
+      .addScaledVector(UP, p.neck[1])
+      .addScaledVector(this.fwd, p.neck[2])
+      .normalize();
     // Top face points away from the player, tilted up so they can see it.
-    this.faceTarget
-      .copy(this.smoothForward)
+    this.tmp
+      .copy(this.fwd)
       .multiplyScalar(Math.cos(FACE_TILT))
       .addScaledVector(UP, Math.sin(FACE_TILT));
-    this.axisZ.copy(this.faceTarget).addScaledVector(this.axisX, -this.faceTarget.dot(this.axisX));
-    if (this.axisZ.lengthSq() < 0.01) this.axisZ.copy(UP);
+    this.axisZ.copy(this.tmp).addScaledVector(this.axisX, -this.tmp.dot(this.axisX));
+    if (this.axisZ.lengthSq() < 1e-4) this.axisZ.copy(UP);
     this.axisZ.normalize();
     this.axisY.crossVectors(this.axisZ, this.axisX).normalize();
     this.axisZ.crossVectors(this.axisX, this.axisY);
@@ -206,206 +255,271 @@ export class AirGuitarSystem extends createSystem({
     this.targetQuat.setFromRotationMatrix(this.basis);
 
     const root = this.model.root;
-    root.position.copy(this.anchor);
-    if (this.placed) root.quaternion.slerp(this.targetQuat, 1 - Math.exp(-dt * 18));
-    else root.quaternion.copy(this.targetQuat);
+    const k = 1 - Math.exp(-dt * 12);
+    if (root.userData.posed) {
+      root.position.lerp(this.target, k);
+      root.quaternion.slerp(this.targetQuat, k);
+    } else {
+      root.position.copy(this.target);
+      root.quaternion.copy(this.targetQuat);
+      root.userData.posed = true;
+    }
     root.updateMatrixWorld(true);
     this.inverse.copy(root.matrixWorld).invert();
-
-    this.hud.sprite.position
-      .copy(this.anchor)
-      .addScaledVector(this.smoothForward, 0.45)
-      .addScaledVector(UP, 0.42);
-
-    this.placed = true;
-  }
-
-  private readControls(left: StatefulGamepad | undefined, right: StatefulGamepad | undefined): void {
-    const e = this.entity;
-    if (left?.getAxesEnteringLeft(InputComponent.Thumbstick)) {
-      e.setValue(AirGuitar, 'key', ((e.getValue(AirGuitar, 'key') ?? 7) + 11) % 12);
-    }
-    if (left?.getAxesEnteringRight(InputComponent.Thumbstick)) {
-      e.setValue(AirGuitar, 'key', ((e.getValue(AirGuitar, 'key') ?? 7) + 1) % 12);
-    }
-    if (right?.getButtonDown(InputComponent.B_Button)) {
-      const drive = e.getValue(AirGuitar, 'tone') === GuitarToneMode.Drive;
-      e.setValue(AirGuitar, 'tone', drive ? GuitarToneMode.Clean : GuitarToneMode.Drive);
-    }
-    const volume = e.getValue(AirGuitar, 'volume') ?? 0.8;
-    if (right?.getAxesEnteringUp(InputComponent.Thumbstick)) {
-      e.setValue(AirGuitar, 'volume', Math.min(1, volume + 0.1));
-    }
-    if (right?.getAxesEnteringDown(InputComponent.Thumbstick)) {
-      e.setValue(AirGuitar, 'volume', Math.max(0, volume - 0.1));
-    }
-
-    const wasMuted = this.muted;
-    this.muted = left?.getButtonPressed(InputComponent.Trigger) ?? false;
-    if (this.muted && !wasMuted) this.synth.chokeAll();
-
-    if (right?.getButtonDown(InputComponent.Trigger)) this.autoStrum(true, 0.85, right);
-    if (right?.getButtonDown(InputComponent.A_Button)) this.autoStrum(false, 0.7, right);
-  }
-
-  private updateChord(left: StatefulGamepad | undefined): void {
-    const e = this.entity;
-    this.leftLocal.copy(this.leftPos).applyMatrix4(this.inverse);
-    const zoneLen = (GUITAR.zoneStartX - GUITAR.zoneEndX) / ZONE_COUNT;
-    const zone = Math.max(
-      0,
-      Math.min(ZONE_COUNT - 1, Math.floor((GUITAR.zoneStartX - this.leftLocal.x) / zoneLen)),
-    );
-
-    const flip = left?.getButtonPressed(InputComponent.Squeeze) ?? false;
-    const power = left?.getButtonPressed(InputComponent.X_Button) ?? false;
-    const seventh = left?.getButtonPressed(InputComponent.Y_Button) ?? false;
-    const key = e.getValue(AirGuitar, 'key') ?? 7;
-    const tone = e.getValue(AirGuitar, 'tone') ?? GuitarToneMode.Clean;
-    const volume = e.getValue(AirGuitar, 'volume') ?? 0.8;
-    const chordKey =
-      key * 10000 +
-      zone * 1000 +
-      (flip ? 100 : 0) +
-      (power ? 10 : 0) +
-      (seventh ? 1 : 0) +
-      (tone === GuitarToneMode.Drive ? 0.5 : 0) +
-      volume * 0.01 +
-      (this.muted ? 0.001 : 0);
-    if (chordKey === this.chordKey) return;
-    const zoneChanged = zone !== this.zone || this.chordKey < 0;
-    this.chordKey = chordKey;
-    this.zone = zone;
-
-    this.synth.setTone(tone === GuitarToneMode.Drive ? 'drive' : 'clean');
-    this.synth.setVolume(volume);
-
-    const spec = this.zoneSpec;
-    for (let z = ZONE_COUNT - 1; z >= 0; z--) {
-      Object.assign(spec, diatonicChord(key, ZONE_DEGREES[z]));
-      if (flip) spec.quality = flipQuality(spec.quality);
-      spec.power = power;
-      spec.seventh = seventh;
-      const active = z === zone;
-      this.model.zoneLabels[z].draw([chordName(spec)], hex(ZONE_COLORS[z]), active);
-      this.model.zoneMaterials[z].emissiveIntensity = active ? 1.4 : 0.12;
-    }
-    // The loop ends on z = 0; rebuild the active zone's chord.
-    Object.assign(spec, diatonicChord(key, ZONE_DEGREES[zone]));
-    if (flip) spec.quality = flipQuality(spec.quality);
-    spec.power = power;
-    spec.seventh = seventh;
-
-    const next = voiceChord(spec);
-    // Changing the fretting shape stops strings whose note changes.
-    for (let s = 0; s < STRING_COUNT; s++) {
-      if (next.midi[s] !== this.voicing.midi[s]) this.synth.choke(s);
-    }
-    this.voicing = next;
-    this.synth.prepare(next.midi);
-
-    const toneLabel = tone === GuitarToneMode.Drive ? 'OVERDRIVE' : 'CLEAN';
-    this.hud.draw(
-      [
-        next.name,
-        `Key ${noteName(key)} · ${toneLabel} · ${Math.round(volume * 100)}%`,
-        this.muted ? 'PALM MUTE' : shapeText(next),
-      ],
-      hex(ZONE_COLORS[zone]),
-      true,
-    );
-    e.setValue(AirGuitar, 'zone', zone);
-    e.setValue(AirGuitar, 'chord', next.name);
-    if (zoneChanged) pulse(left, 0.25, 12);
   }
 
   /**
-   * Tracks which side of every string the pick is on. Crossing a string
-   * plucks it, so a fast sweep becomes a natural strum and a slow one an
-   * arpeggio. Speed sets loudness.
+   * Pinching both hands for a second re-places the guitar: the sound hole
+   * goes to the right pinch and the neck points at the left one.
+   * Returns the hold progress 0..1, or -1 when not pinching.
    */
-  private detectStrum(dt: number, right: StatefulGamepad | undefined): void {
-    this.pick.updateWorldMatrix(true, false);
-    this.pick.getWorldPosition(this.pickPos);
-    this.pickLocal.copy(this.pickPos).applyMatrix4(this.inverse);
-    const p = this.pickLocal;
+  private updatePlaceGesture(dt: number): number {
+    const pinching =
+      this.left.tracked &&
+      this.right.tracked &&
+      this.left.pinchDistance() < PINCH_DISTANCE &&
+      this.right.pinchDistance() < PINCH_DISTANCE;
+    if (!pinching) {
+      this.placeHold = 0;
+      this.placeLatched = false;
+      return -1;
+    }
+    if (this.placeLatched) return -1;
+    this.placeHold += dt;
+    if (this.placeHold < PLACE_HOLD_SECONDS) return this.placeHold / PLACE_HOLD_SECONDS;
 
-    const inZone =
-      p.x > STRUM_ZONE.minX &&
-      p.x < STRUM_ZONE.maxX &&
-      Math.abs(p.y) < STRUM_ZONE.halfY &&
-      Math.abs(p.z - GUITAR.stringZ) < STRUM_ZONE.halfZ;
+    this.torso.set(this.headPos.x, 0, this.headPos.z);
+    this.torsoYaw = this.headYaw();
+    this.torsoAxes();
+    // Midpoints between thumb and index tips.
+    const rightPinch = this.right
+      .get(JOINT.thumbTip, this.tmp)
+      .add(this.right.get(JOINT.indexTip, this.tmp2))
+      .multiplyScalar(0.5);
+    const leftPinch = this.left
+      .get(JOINT.thumbTip, this.target)
+      .add(this.left.get(JOINT.indexTip, this.tmp2))
+      .multiplyScalar(0.5);
+    const neck = this.tmp2.subVectors(leftPinch, rightPinch).normalize();
+    const offset = this.target.subVectors(rightPinch, this.torso);
+    this.placement = {
+      right: offset.dot(this.rgt),
+      forward: offset.dot(this.fwd),
+      drop: this.headPos.y - rightPinch.y,
+      neck: [neck.dot(this.rgt), neck.y, neck.dot(this.fwd)],
+    };
+    this.bodyHeight = rightPinch.y;
+    savePlacement(this.placement);
+    this.placeLatched = true;
+    this.model.root.userData.posed = false;
+    return 1;
+  }
 
-    // Sides are tracked even outside the zone, and a crossing counts when
-    // either end of this frame's motion is in the zone. Otherwise a fast
-    // swing that enters the zone already past the top strings would skip them.
-    const canPluck = inZone || this.wasInStrumZone;
-    const speed = dt > 0 ? Math.abs(p.y - this.prevPickLocal.y) / dt : 0;
-    const velocity = Math.min(1, 0.25 + speed / 2.2);
-    let plucked = 0;
+  /** Reads the left hand into frets, with hammer-ons, pull-offs and damping. */
+  private updateFretting(): void {
+    const reader = this.fretReader;
+    reader.begin();
+    if (this.left.tracked) {
+      const src = this.left.positions;
+      const local = this.leftLocal;
+      for (let j = 0; j < 25; j++) {
+        this.tmp.fromArray(src, j * 3).applyMatrix4(this.inverse).toArray(local, j * 3);
+      }
+      for (const joints of FRET_FINGERS) {
+        for (let k = 0; k < joints.length - 1; k++) {
+          const a = joints[k] * 3;
+          const b = joints[k + 1] * 3;
+          const len = Math.hypot(local[b] - local[a], local[b + 1] - local[a + 1], local[b + 2] - local[a + 2]);
+          const n = Math.min(8, Math.ceil(len / SAMPLE_SPACING));
+          for (let i = 0; i < n; i++) {
+            const t = i / n;
+            reader.addPoint(
+              local[a] + (local[b] - local[a]) * t,
+              local[a + 1] + (local[b + 1] - local[a + 1]) * t,
+              local[a + 2] + (local[b + 2] - local[a + 2]) * t,
+            );
+          }
+        }
+      }
+    }
+
+    if (!reader.commit() && this.shownFrets !== '') {
+      this.updateFingerShadows();
+      return;
+    }
+
     for (let s = 0; s < STRING_COUNT; s++) {
-      const delta = p.y - stringY(s, p.x);
-      const prevDelta = this.stringDelta[s];
-      this.stringDelta[s] = delta;
-      if (Math.abs(delta) < STRING_HYSTERESIS) continue;
-      const side = delta > 0 ? 1 : -1;
-      const prevSide = this.stringSide[s];
-      this.stringSide[s] = side;
-      if (!canPluck || prevSide === 0 || prevSide === side) continue;
+      const fret = reader.frets[s];
+      const was = this.lastFrets[s];
+      this.lastFrets[s] = fret;
+      if (fret !== was || this.shownFrets === '') {
+        placeString(this.model.vibrations[s], s, fret > 0 ? fretX(fret) : GUITAR.nutX);
+        const dot = this.model.pressDots[s];
+        dot.visible = fret > 0;
+        if (fret > 0) dot.position.set(fretMidX(fret), stringY(s, fretMidX(fret)), GUITAR.stringZ + 0.0012);
 
-      // Fraction of the last frame at which the crossing happened, so the
-      // notes of a strum keep their spacing.
-      const frac =
-        Math.sign(prevDelta) !== side ? Math.min(1, Math.max(0, prevDelta / (prevDelta - delta))) : 1;
-      if (this.pluckString(s, velocity, this.synth.now + frac * dt)) plucked++;
+        if (this.amp[s] > RINGING && this.synth.isRinging(s)) {
+          if (fret > 0) {
+            // Hammer-on, pull-off to another fret, or slide: the string
+            // keeps vibrating at the new length.
+            const v = this.amp[s] * 0.7;
+            this.synth.pluck(s, OPEN_MIDI[s] + fret, v, this.synth.now, false, true);
+            this.soundingMidi[s] = OPEN_MIDI[s] + fret;
+            this.amp[s] = v;
+            this.entity.setValue(AirGuitar, 'lastNote', midiName(OPEN_MIDI[s] + fret));
+          } else {
+            // Lifting a finger off a ringing string damps it.
+            this.synth.choke(s);
+            this.amp[s] = 0;
+          }
+        }
+      }
     }
-    if (plucked > 0) pulse(right, 0.2 + 0.4 * velocity, 18);
-
-    this.wasInStrumZone = inZone;
-    this.prevPickLocal.copy(p);
+    this.shownFrets = Array.from(reader.frets).join(' ');
+    this.entity.setValue(AirGuitar, 'frets', this.shownFrets);
+    this.updateFingerShadows();
   }
 
-  private autoStrum(down: boolean, velocity: number, right: StatefulGamepad): void {
-    const start = this.synth.now + 0.005;
-    let i = 0;
-    for (let k = 0; k < STRING_COUNT; k++) {
-      const s = down ? k : STRING_COUNT - 1 - k;
-      if (this.pluckString(s, velocity, start + i * AUTO_STRUM_GAP)) i++;
+  /** Discs under each left fingertip: brighter as it nears, green when pressing. */
+  private updateFingerShadows(): void {
+    const local = this.leftLocal;
+    for (let f = 0; f < 4; f++) {
+      const shadow = this.model.fingerShadows[f];
+      const mat = this.model.fingerShadowMaterials[f];
+      if (!this.left.tracked) {
+        shadow.visible = false;
+        continue;
+      }
+      const j = FRET_FINGERS[f][0] * 3;
+      const x = local[j];
+      const y = local[j + 1];
+      const height = local[j + 2] - GUITAR.stringZ;
+      const overNeck =
+        x < GUITAR.nutX + 0.02 &&
+        x > GUITAR.boardEndX &&
+        Math.abs(y) < stringSpan(x) / 2 + 0.015 &&
+        height < 0.06 &&
+        height > -(GUITAR.stringZ - GUITAR.boardTopZ) - PRESS.below;
+      shadow.visible = overNeck;
+      if (!overNeck) continue;
+      const pressing = height <= PRESS.above;
+      shadow.position.set(x, y, GUITAR.boardTopZ + 0.0007);
+      mat.color.setHex(pressing ? 0x3dff8f : 0xffffff);
+      mat.opacity = pressing ? 0.9 : 0.15 + 0.55 * (1 - Math.min(1, Math.max(0, height) / 0.06));
     }
-    pulse(right, 0.5, 30);
   }
 
-  private pluckString(s: number, velocity: number, when: number): boolean {
-    const midi = this.voicing.midi[s];
-    if (midi == null) return false;
-    this.synth.pluck(s, midi, velocity, when, this.muted);
-    this.stringAmp[s] = Math.max(this.stringAmp[s], velocity);
-    const strums = this.entity.getValue(AirGuitar, 'strums') ?? 0;
-    this.entity.setValue(AirGuitar, 'strums', strums + 1);
-    return true;
+  /** Plucks the strings the right index fingertip crosses. */
+  private updatePicking(dt: number): void {
+    const shadow = this.model.pickShadow;
+    if (!this.right.tracked) {
+      this.plucker.reset();
+      shadow.visible = false;
+      return;
+    }
+    const tip = this.right.get(JOINT.indexTip, this.tmp).applyMatrix4(this.inverse);
+    const count = this.plucker.update(tip.x, tip.y, tip.z, dt);
+    for (let i = 0; i < count; i++) {
+      const event = this.plucker.events[i];
+      const s = event.string;
+      const midi = OPEN_MIDI[s] + this.fretReader.frets[s];
+      this.synth.pluck(s, midi, event.velocity, this.synth.now + event.frac * dt, false);
+      this.soundingMidi[s] = midi;
+      this.amp[s] = Math.max(this.amp[s], event.velocity);
+      this.entity.setValue(AirGuitar, 'plucks', (this.entity.getValue(AirGuitar, 'plucks') ?? 0) + 1);
+      this.entity.setValue(AirGuitar, 'lastNote', midiName(midi));
+    }
+    // A fingertip resting on a ringing string stops it.
+    for (let s = 0; s < STRING_COUNT; s++) {
+      if (this.plucker.damping[s] && this.amp[s] > 0) {
+        this.synth.choke(s);
+        this.amp[s] = 0;
+      }
+    }
+
+    const height = tip.z - GUITAR.stringZ;
+    const near =
+      tip.x > PLUCK_ZONE.minX - 0.02 &&
+      tip.x < PLUCK_ZONE.maxX + 0.02 &&
+      Math.abs(tip.y) < stringSpan(tip.x) / 2 + PLUCK_ZONE.edge + 0.02 &&
+      height < 0.08 &&
+      height > -PLUCK_ZONE.below;
+    shadow.visible = near;
+    if (near) {
+      shadow.position.set(tip.x, tip.y, GUITAR.stringZ + 0.001);
+      this.model.pickShadowMaterial.opacity = this.plucker.inZone
+        ? 0.95
+        : 0.2 + 0.5 * (1 - Math.min(1, Math.max(0, height) / 0.08));
+    }
   }
 
   private animateStrings(dt: number, time: number): void {
-    const decay = Math.exp(-dt * (this.muted ? 14 : 3));
+    const decay = Math.exp(-dt * 1.6);
     for (let s = 0; s < STRING_COUNT; s++) {
-      const amp = (this.stringAmp[s] *= decay);
-      const string = this.model.strings[s];
-      string.position.z = this.model.stringRestZ + amp * 0.003 * Math.sin(time * 95 + s * 1.7);
-      this.model.stringMaterials[s].emissiveIntensity = amp * 1.6;
+      const amp = (this.amp[s] *= decay);
+      const glow = this.model.vibrations[s];
+      glow.visible = amp > 0.01;
+      if (!glow.visible) continue;
+      this.model.vibrationMaterials[s].opacity = Math.min(0.9, amp * 1.2);
+      glow.position.z = GUITAR.stringZ + Math.sin(time * 90 + s * 1.7) * amp * 0.0012;
     }
+  }
+
+  private updateHud(placing: number, tone: string): void {
+    const hud = this.model.hud;
+    if (placing >= 0 && placing < 1) {
+      hud.draw(['Placing…', `Keep pinching: ${Math.round(placing * 100)}%`], ACCENT.placing);
+      return;
+    }
+    if (!this.left.tracked && !this.right.tracked) {
+      hud.draw(['Show your hands', 'Put the controllers down to play'], ACCENT.idle);
+      return;
+    }
+
+    this.ringingNotes.length = 0;
+    this.shapeNotes.length = 0;
+    for (let s = 0; s < STRING_COUNT; s++) {
+      if (this.amp[s] > RINGING) this.ringingNotes.push(this.soundingMidi[s]);
+      this.shapeNotes.push(OPEN_MIDI[s] + this.fretReader.frets[s]);
+    }
+    const playing = this.ringingNotes.length > 0;
+    const chord = recognizeChord(playing ? this.ringingNotes : this.shapeNotes) ?? '?';
+    if (this.entity.getValue(AirGuitar, 'chord') !== chord) {
+      this.entity.setValue(AirGuitar, 'chord', chord);
+    }
+    const volume = Math.round((this.entity.getValue(AirGuitar, 'volume') ?? 0.8) * 100);
+    hud.draw(
+      [
+        chord,
+        this.shownFrets,
+        `${tone === GuitarToneMode.Drive ? 'OVERDRIVE' : 'CLEAN'} · ${volume}%`,
+      ],
+      playing ? ACCENT.playing : ACCENT.idle,
+    );
   }
 }
 
-function pulse(pad: StatefulGamepad | undefined, intensity: number, ms: number): void {
-  const actuator = (pad?.gamepad as HapticGamepad | undefined)?.hapticActuators?.[0];
-  void actuator?.pulse?.(intensity, ms)?.catch(() => {});
+function wrapAngle(a: number): number {
+  return Math.atan2(Math.sin(a), Math.cos(a));
 }
 
-function hex(color: number): string {
-  return `#${color.toString(16).padStart(6, '0')}`;
+function loadPlacement(): Placement {
+  try {
+    const raw = localStorage.getItem(PLACEMENT_KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as Placement;
+      if ([p.right, p.forward, p.drop, ...p.neck].every(Number.isFinite)) return p;
+    }
+  } catch {
+    // Storage can be unavailable; the default placement still works.
+  }
+  return { ...DEFAULT_PLACEMENT, neck: [...DEFAULT_PLACEMENT.neck] };
 }
 
-/** Chord diagram text, low E to high E: "x 3 2 0 1 0". */
-function shapeText(voicing: Voicing): string {
-  return voicing.frets.map((f) => (f == null ? 'x' : String(f))).join(' ');
+function savePlacement(p: Placement): void {
+  try {
+    localStorage.setItem(PLACEMENT_KEY, JSON.stringify(p));
+  } catch {
+    // Not persisting is fine.
+  }
 }

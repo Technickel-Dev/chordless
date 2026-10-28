@@ -99,16 +99,16 @@
       },
       "transform": {
         "position": [
-          0,
-          1.95,
-          -3.2
+          0.95,
+          1.5,
+          -1.6
         ],
         "rotationDeg": [
           0,
-          0,
+          -30,
           0
         ],
-        "scale": 0.5
+        "scale": 0.32
       },
       "components": {
         "RayInteractable": {}

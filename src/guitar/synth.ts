@@ -127,6 +127,8 @@ export class GuitarSynth {
   /**
    * Plays `midi` on `stringIndex` at audio time `when`, cutting off whatever
    * that string was already playing (a real string sounds one note at a time).
+   * Harder plucks are brighter. A legato note (hammer-on, pull-off, slide)
+   * starts past the pick attack, since the string is already vibrating.
    */
   pluck(
     stringIndex: number,
@@ -134,22 +136,33 @@ export class GuitarSynth {
     velocity: number,
     when: number,
     muted: boolean,
+    legato = false,
   ): void {
     if (this.ctx.state !== 'running') return;
     this.choke(stringIndex, when);
 
     const source = this.ctx.createBufferSource();
     source.buffer = this.getBuffer(midi, muted);
+    const tone = this.ctx.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = (legato ? 700 : 1100) + 9000 * velocity ** 1.5;
+    tone.Q.value = 0.5;
     const gain = this.ctx.createGain();
     gain.gain.value = (muted ? 0.9 : 0.55) * velocity;
-    source.connect(gain).connect(this.input);
-    source.start(when);
+    source.connect(tone).connect(gain).connect(this.input);
+    source.start(when, legato ? 0.04 : 0);
     const voice: Voice = { source, gain };
     source.onended = () => {
+      tone.disconnect();
       gain.disconnect();
       if (this.voices[stringIndex] === voice) this.voices[stringIndex] = null;
     };
     this.voices[stringIndex] = voice;
+  }
+
+  /** Whether a string currently has a note sounding. */
+  isRinging(stringIndex: number): boolean {
+    return this.voices[stringIndex] != null;
   }
 
   /** Damps a string quickly, like resting a palm on it. */

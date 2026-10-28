@@ -21,7 +21,7 @@ import {
 import { ACCENT, createGuitarModel, GuitarModel, placeString } from './guitar-model.js';
 import { JOINT, TrackedHand } from './hands.js';
 import { PLUCK_ZONE, PluckDetector } from './pluck-detector.js';
-import { GuitarSynth } from './synth.js';
+import { decaySeconds, GuitarSynth, midiToHz } from './synth.js';
 
 const UP = new Vector3(0, 1, 0);
 /**
@@ -69,8 +69,10 @@ const FRET_FINGERS = [
 ] as const;
 const SAMPLE_SPACING = 0.006;
 
-/** A string counts as ringing above this level of the visual envelope. */
+/** A string counts toward the chord display above this envelope level. */
 const RINGING = 0.06;
+/** Hammer-ons and pull-offs work while the note is still audible (about -40 dB). */
+const AUDIBLE = 0.01;
 
 /**
  * Hand-played air guitar. The guitar is worn: it hangs in front of the
@@ -170,7 +172,8 @@ export class AirGuitarSystem extends createSystem({
       }
       this.anchorTorso();
     }
-    const placing = this.updatePlaceGesture(dt);
+    // The hold is wall-clock time, so a slow frame cannot stretch it.
+    const placing = this.updatePlaceGesture(delta);
     this.followTorso(dt);
     this.poseGuitar(dt);
 
@@ -358,7 +361,7 @@ export class AirGuitarSystem extends createSystem({
         dot.visible = fret > 0;
         if (fret > 0) dot.position.set(fretMidX(fret), stringY(s, fretMidX(fret)), GUITAR.stringZ + 0.0012);
 
-        if (this.amp[s] > RINGING && this.synth.isRinging(s)) {
+        if (this.amp[s] > AUDIBLE && this.synth.isRinging(s)) {
           if (fret > 0) {
             // Hammer-on, pull-off to another fret, or slide: the string
             // keeps vibrating at the new length.
@@ -454,9 +457,10 @@ export class AirGuitarSystem extends createSystem({
   }
 
   private animateStrings(dt: number, time: number): void {
-    const decay = Math.exp(-dt * 1.6);
     for (let s = 0; s < STRING_COUNT; s++) {
-      const amp = (this.amp[s] *= decay);
+      // Follow the synth's per-note decay so "still ringing" means audible.
+      const t60 = decaySeconds(midiToHz(this.soundingMidi[s] || OPEN_MIDI[s]));
+      const amp = (this.amp[s] *= Math.exp((-dt * 6.91) / t60));
       const glow = this.model.vibrations[s];
       glow.visible = amp > 0.01;
       if (!glow.visible) continue;

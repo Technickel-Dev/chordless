@@ -192,7 +192,15 @@ export class GuitarSynth {
   }
 }
 
-function midiToHz(midi: number): number {
+/**
+ * Seconds for a plucked note to fall by 60 dB. Low strings ring longer than
+ * high ones; palm-muted notes die fast.
+ */
+export function decaySeconds(freq: number, muted = false): number {
+  return muted ? 0.12 : 2.2 + 3.5 * Math.min(1, 110 / freq);
+}
+
+export function midiToHz(midi: number): number {
   return 440 * 2 ** ((midi - 69) / 12);
 }
 
@@ -212,8 +220,7 @@ function renderPluck(ctx: BaseAudioContext, freq: number, muted: boolean): Audio
   const frac = loopDelay - n;
   const c = (1 - frac) / (1 + frac);
 
-  // Low strings ring longer than high ones; palm-muted notes die fast.
-  const t60 = muted ? 0.12 : 2.2 + 3.5 * Math.min(1, 110 / freq);
+  const t60 = decaySeconds(freq, muted);
   const loss = 0.001 ** (1 / (t60 * freq));
 
   // Excitation: lowpassed noise with a pick-position notch.

@@ -24,7 +24,30 @@ export default async function run({ page, frame, workspaceRoot }) {
   };
   const onPageError = (err) => errors.push(String(err));
 
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  // E2E_PACE > 1 slows the run down to watch it (e.g. E2E_PACE=3).
+  const pace = Math.max(1, Number(process.env.E2E_PACE) || 1);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms * pace));
+  /** Shows the running step over the page, for anyone watching. */
+  const banner = (text, color = '#ffb000') =>
+    frame
+      .evaluate(
+        ([t, c]) => {
+          let el = document.getElementById('e2e-banner');
+          if (!el) {
+            el = document.createElement('div');
+            el.id = 'e2e-banner';
+            el.style.cssText =
+              'position:fixed;left:16px;top:16px;z-index:99999;padding:10px 16px;border-radius:10px;' +
+              'font:600 18px system-ui,sans-serif;color:#fff;background:rgba(20,20,24,.85);pointer-events:none;';
+            document.body.appendChild(el);
+          }
+          el.style.borderLeft = `6px solid ${c}`;
+          el.textContent = t;
+          el.style.display = t ? 'block' : 'none';
+        },
+        [text, color],
+      )
+      .catch(() => {});
   const dispatch = (method, params = {}) =>
     frame.evaluate(([m, p]) => window.IWER_MCP.dispatch(m, p), [method, params]);
   const guitar = async () => {
@@ -80,6 +103,8 @@ export default async function run({ page, frame, workspaceRoot }) {
 
   const results = [];
   const test = async (name, fn) => {
+    const step = `${results.length + 1}. ${name}`;
+    await banner(step);
     const started = Date.now();
     try {
       results.push({ name, pass: true, ms: Date.now() - started, detail: (await fn()) ?? '' });
@@ -87,12 +112,18 @@ export default async function run({ page, frame, workspaceRoot }) {
     } catch (err) {
       results.push({ name, pass: false, ms: Date.now() - started, detail: err.message });
     }
+    const r = results.at(-1);
+    await banner(`${r.pass ? '✓' : '✗'} ${step}`, r.pass ? '#3dff8f' : '#ff4d4f');
+    await wait(pace > 1 ? 500 : 0);
   };
   const expectEq = (actual, expected, label) => {
     if (JSON.stringify(actual) !== JSON.stringify(expected)) {
       throw new Error(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
     }
   };
+
+  // A window behind other windows renders at about 1 fps; bring it forward.
+  await page.bringToFront();
 
   // Fresh page so every run starts from the app's initial state.
   await frame.evaluate(() => {
@@ -177,6 +208,8 @@ export default async function run({ page, frame, workspaceRoot }) {
     });
 
     await test('Hammer-on to fret 4 changes the ringing note without a pluck', async () => {
+      await placeTip('hand-right', { string: 2, across: 0.012 });
+      await sweepTip({ string: 2, across: -0.006 }, 0.05);
       const before = (await guitar()).plucks;
       await placeTip('hand-left', { string: 2, fret: 4 });
       const g = await guitar();
@@ -199,12 +232,17 @@ export default async function run({ page, frame, workspaceRoot }) {
       await dispatch('set_hand_pose', { device: 'hand-right', poseId: 'pinch' });
       await dispatch('set_transform', { device: 'hand-right', position: { x: 0.15, y: 1.15, z: -0.3 }, anchor: 'grasp' });
       await dispatch('set_transform', { device: 'hand-left', position: { x: -0.45, y: 1.3, z: -0.45 }, anchor: 'grasp' });
-      await wait(1800);
-      const after = await frame.evaluate(() => {
-        const p = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName('AirGuitar').position;
-        return [p.x, p.y, p.z];
-      });
-      const moved = Math.hypot(after[0] - 0.15, after[1] - 1.15, after[2] + 0.3);
+      // Poll: the hold takes a second, then the guitar eases into place.
+      let after = before;
+      let moved = Infinity;
+      for (let i = 0; i < 20 && moved > 0.03; i++) {
+        await wait(250);
+        after = await frame.evaluate(() => {
+          const p = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName('AirGuitar').position;
+          return [p.x, p.y, p.z];
+        });
+        moved = Math.hypot(after[0] - 0.15, after[1] - 1.15, after[2] + 0.3);
+      }
       if (moved > 0.03) throw new Error(`body ended ${moved.toFixed(3)} m from the right pinch`);
       const file = await shot('03-placed');
       await dispatch('set_hand_pose', { device: 'hand-left', poseId: 'point' });
@@ -272,6 +310,10 @@ export default async function run({ page, frame, workspaceRoot }) {
   }
 
   const passed = results.filter((r) => r.pass).length;
+  await banner(
+    `${passed}/${results.length} passed`,
+    passed === results.length ? '#3dff8f' : '#ff4d4f',
+  );
   const summary = { passed, failed: results.length - passed, total: results.length, results };
   await writeFile(path.join(outDir, 'results.json'), JSON.stringify(summary, null, 2));
   return summary;

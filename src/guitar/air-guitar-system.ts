@@ -131,6 +131,10 @@ export class AirGuitarSystem extends createSystem({
 
   init(): void {
     this.synth = new GuitarSynth(STRING_COUNT);
+    // Every note the fretboard can play, open strings to the top fret.
+    const playable = new Set<number>();
+    for (const open of OPEN_MIDI) for (let f = 0; f <= GUITAR.fretCount; f++) playable.add(open + f);
+    this.synth.prewarm(playable);
     this.model = createGuitarModel();
     this.entity = this.world.createTransformEntity(this.model.root, { persistent: true });
     this.entity.addComponent(AirGuitar);
@@ -150,7 +154,7 @@ export class AirGuitarSystem extends createSystem({
         this.model.root.visible = immersive;
         this.placed = false;
       }),
-      () => void this.synth.ctx.close(),
+      () => this.synth.dispose(),
     );
   }
 

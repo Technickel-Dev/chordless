@@ -15,7 +15,8 @@
     "preview": "vite preview",
     "test:e2e": "iwsdk browser run tests/air-guitar.e2e.mjs --timeout 110000",
     "test:unit": "vitest run",
-    "play:william-tell": "iwsdk browser run tests/william-tell.mjs --timeout 110000"
+    "play:william-tell": "iwsdk browser run tests/william-tell.mjs --timeout 110000",
+    "render:audio": "iwsdk browser run tests/render-audio.mjs --timeout 110000"
   },
   "dependencies": {
     "@iwsdk/core": "1.1.0-rc.2",

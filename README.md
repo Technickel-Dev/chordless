@@ -92,7 +92,11 @@ components holding data, and systems update them every frame.
   it happens, keeps a fast strum going through brief tracking dropouts, and
   only mutes a string the fingertip deliberately rests on.
 - `src/guitar/synth.ts` renders each note with the Karplus–Strong plucked-string
-  algorithm, with clean and overdrive chains, reverb and a limiter.
+  algorithm: the string starts from its plucked shape, vibrates in two
+  slightly detuned directions (a quick bright attack into a long, shimmering
+  tail), and is heard through a modelled acoustic body (air and plate
+  resonances, light bass, a 1–3 kHz presence), a small room and a limiter.
+  An overdrive chain is the alternative tone.
 - `src/guitar/geometry.ts` holds the guitar's dimensions: a 25.5" scale, 19
   frets at their true positions, strings a little wider apart than a real
   guitar so a tracked fingertip lands on one string.
@@ -113,7 +117,9 @@ npm run test:unit
 
 Unit tests ([Vitest](https://vitest.dev/)) cover the fretboard geometry, fret
 reading (chords, barres, flicker), pluck detection (single strings, fast and
-slow strums, tracking noise and dropouts, muting) and chord naming.
+slow strums, tracking noise and dropouts, muting), chord naming, and the
+synth (every string in tune within 2 cents, matched loudness, no DC offset,
+a steel-string harmonic balance).
 
 The end-to-end test and the song script run inside IWSDK's managed browser and
 drive the emulator's hands, so start the dev server with browser automation
@@ -130,9 +136,14 @@ npm run play:william-tell
   deep and slow strums, hammer-ons, re-placing the guitar, the panel buttons
   and hand-tracking loss. Results and screenshots go to `test-results/`.
   Set `E2E_PACE=2` to slow it down to watch.
-- `tests/william-tell.mjs` performs the opening of the *William Tell* Overture
-  finale with the emulated hands and reports each note asked for, the note the
-  app played and the timing error. Set `WT_TEMPO=110` for a slower take.
+- `tests/william-tell.mjs` performs the galop theme of the *William Tell*
+  Overture finale (bars 243–275) with the emulated hands and reports each note
+  asked for, the note the app played and when the app registered it. Set
+  `WT_TEMPO=110` for a slower take.
+- `tests/render-audio.mjs` (`npm run render:audio`) renders strummed chords,
+  a melody and single notes straight from the synth into
+  `test-results/audio/<label>-*.wav`, with spectrum statistics, for comparing
+  sound changes by ear. Set `AUDIO_LABEL` to name the run.
 
 Both bring the browser window to the front; a window behind others renders at
 about 1 fps. Each script must finish within IWSDK's 110-second limit.

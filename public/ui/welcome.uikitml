@@ -6,7 +6,7 @@
 <style>
   .panel-root {
     flex-direction: column;
-    width: 420px;
+    width: 600px;
   }
 
   .panel-content {
@@ -39,8 +39,8 @@
 
   .body {
     color: #3a3b40;
-    font-size: 20px;
-    line-height: 27px;
+    font-size: 19px;
+    line-height: 26px;
   }
 
   .body:dark {
@@ -60,10 +60,14 @@
 </style>
 <Panel class="panel-root">
   <div class="panel-content">
-    <div class="eyebrow">IMMERSIVE WEB SDK</div>
-    <div class="heading">Hello, Immersive Web!</div>
-    <div class="body">Try each station around you,</div>
-    <div class="body">then make this scene your own.</div>
+    <div class="eyebrow">CHORDLESS · AIR GUITAR</div>
+    <div class="heading">Grab your air guitar</div>
+    <div class="body">Left hand: slide along the neck to change chords.</div>
+    <div class="body">Squeeze = minor/major · X = power · Y = 7th · Trigger = mute</div>
+    <div class="body">Thumbstick left/right changes key.</div>
+    <div class="body">Right hand: swing the pick through the strings.</div>
+    <div class="body">Trigger = strum down · A = strum up · B = overdrive</div>
+    <div class="body">Thumbstick up/down sets volume.</div>
   </div>
   <Button id="xr-button" class="button">
     <ButtonIcon>

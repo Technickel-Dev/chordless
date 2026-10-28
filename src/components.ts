@@ -6,6 +6,6 @@
  */
 
 import { defineComponents } from '@iwsdk/core';
-import { Robot } from './robot-component.js';
+import { AirGuitar } from './guitar/air-guitar-component.js';
 
-export default defineComponents([Robot]);
+export default defineComponents([AirGuitar]);

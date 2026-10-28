@@ -1,48 +1,157 @@
-# IWSDK App
+# Chordless
 
-This project uses `iwsdk.config.json` for declarative scene, asset, component,
-XR, and emulator configuration. Application systems remain explicit in
-`src/index.ts`.
+An air guitar for Meta Quest, played with your bare hands. Your left fingers
+fret real strings at real fret positions on a full-size steel-string guitar,
+and your right index fingertip plucks: sweep across the strings to strum,
+flick one string to pick a single note. The sound is synthesized in the
+browser, so there are no audio files.
+
+It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
+SDK. WebXR is the browser standard for VR and AR, so the app runs in the Quest
+browser with no install.
+
+## Run it
+
+Requires Node.js 20.19+ (or 22.12+, or 24+).
 
 ```sh
 npm install
 npm run dev
 ```
 
-Use the Runtime and Editor controls in the managed browser to switch between
-the running experience and its authored scene.
+`npm run dev` starts the dev server and opens a managed browser window. On a
+desktop, IWSDK's emulator (IWER, which fakes a Quest headset, controllers and
+hands in the browser) lets you enter XR without a headset; see the
+[emulator controls](https://iwsdk.dev/guides/02-testing-experience.html#iwer-controls).
 
-## Starter content
+To play on a Quest on the same Wi-Fi network:
 
-The robot and welcome panel are small examples of authored scene content plus
-runtime systems. The robot turns toward the player's head and plays a sound
-when pressed. To remove the robot, delete its scene node, its `RobotSystem`
-registration from `src/index.ts` or `src/index.js`, and its `Robot` registration
-from `src/components.ts` or `src/components.js`; you can then delete the unused
-robot component and system files. To remove the welcome panel, delete its scene
-node and its `PanelSystem` registration from the application entry point.
+```sh
+npm run dev:status
+```
 
-The robot stands on the second of three numbered stations. The first holds dark
-pieces you can grab and move, and the third holds a ring you can spin in place.
-The studio props (the plinths and the dark pieces, plus the floor and stage in VR
-and Desktop 3D) are built in code in `src/scene-assets/studio.scene-asset.ts` or
-`.js`. The VR and Desktop 3D background furniture is built the same way in
-`src/scene-assets/decor.scene-asset.ts` or `.js`, so the starter downloads no
-extra models. To remove any of them, delete their scene nodes and their entries
-in `src/assets.ts` or `src/assets.js`, then delete the files you no longer use.
-The station labels are `public/ui/label-*.uikitml`.
+Open the network URL it prints (`runtimeUrls.network`, an `https://` address
+on port 8081) in the Quest browser, accept the local certificate warning, press
+**Enter XR**, then put the controllers down so hand tracking takes over.
+`npm run dev:down` stops the server.
 
-The rest of the look is built-in components in the scene, which you can edit in
-the editor without code. The soft light on every object is the scene root's
-`IBLGradient` (select the Level Root to edit it), and the soft shadows under
-each object are `ContactShadow` nodes. In VR and Desktop 3D, the sky is the
-scene root's `DomeGradient` (its colors, tilt and dither are also on the Level
-Root), and the floor fades into it through the `DomeFade` on the floor node. AR
-projects have no sky or floor, so passthrough stays visible, and a
-`ShadowCatcher` node grounds the stations.
+## How to play
 
-- Minimal scene walkthrough: https://iwsdk.dev/guides/01b-minimal-scene.html
-- XR-enabled projects — IWER emulator controls: https://iwsdk.dev/guides/02-testing-experience.html#iwer-controls
+The guitar hangs in front of you like it is on a strap. It follows you when
+you step or turn your body, but not when you glance or lean toward the neck,
+so your fingers can find the same fret again.
+
+**Left hand (fretting).** Press a fingertip onto a string between two frets.
+The highest fret held on a string is the one that sounds, as on a real guitar.
+Lay your index finger flat across the strings to barre. Hammer-ons and
+pull-offs work: pressing a higher fret on a ringing string changes the note
+without a new pluck, and lifting a finger off a ringing string damps it.
+
+**Right hand (picking).** Your index fingertip plucks every string it crosses.
+Sweep across several strings to strum, faster for louder. Lift the fingertip
+about 2 cm above the strings to move back without playing. To mute a ringing
+string, rest your fingertip on it and hold still for a moment.
+
+**Visual cues.** With nothing to touch, the guitar shows you where your hands
+are:
+
+- a shadow under each left fingertip, brighter as it nears the strings and
+  green when it is pressing;
+- a green dot on every pressed string;
+- an amber ring under your picking fingertip;
+- a glow along each string's vibrating length;
+- a display past the headstock naming the chord that is ringing (C, Am7, C/E…)
+  and the fret held on each string.
+
+**Fitting the guitar to you.** Pinch thumb and index on both hands and hold for
+a second: the sound hole moves to your right pinch and the neck points toward
+your left. The placement is remembered.
+
+**Panel.** Point a hand at the panel and pinch to press **Clean** or
+**Overdrive**, **Vol −** / **Vol +**, or **Reset guitar** (back to the default
+position).
+
+## How it works
+
+IWSDK apps are built on an ECS (entity–component–system): entities carry
+components holding data, and systems update them every frame.
+
+- `src/guitar/air-guitar-system.ts` is the main system. Each frame it reads
+  both hands' 25 tracked joints, keeps the guitar placed on the player, turns
+  the left hand into frets, the right index fingertip into plucks, and drives
+  the synth and the visual cues.
+- `src/guitar/air-guitar-component.ts` holds the guitar's live state (chord,
+  frets, pluck and damp counts, tone, volume), which the panel writes to and
+  the tests read.
+- `src/guitar/fretting.ts` reads frets from finger points: fingertip pads
+  always press, the rest of a finger only where it lies flat (a barre), and a
+  fret must stay released for 60 ms before it drops, so tracking flicker cannot
+  cut a note.
+- `src/guitar/pluck-detector.ts` plucks a string when the fingertip crosses it.
+  It smooths tracking jitter with a One Euro filter, checks each crossing where
+  it happens, keeps a fast strum going through brief tracking dropouts, and
+  only mutes a string the fingertip deliberately rests on.
+- `src/guitar/synth.ts` renders each note with the Karplus–Strong plucked-string
+  algorithm, with clean and overdrive chains, reverb and a limiter.
+- `src/guitar/geometry.ts` holds the guitar's dimensions: a 25.5" scale, 19
+  frets at their true positions, strings a little wider apart than a real
+  guitar so a tracked fingertip lands on one string.
+- `src/guitar/chords.ts` names chords from the notes ringing.
+- `src/guitar/guitar-model.ts` builds the guitar model in code.
+
+Feel can be tuned in a few constants: how close a finger must be to press
+(`PRESS` in `fretting.ts`), the picking zone, re-pluck lockout and mute timing
+(`pluck-detector.ts`), and where the guitar hangs and how far it tilts toward
+you (`DEFAULT_PLACEMENT` and `FACE_TILT` in `air-guitar-system.ts`).
+
+## Tests
+
+```sh
+npm run typecheck
+npm run test:unit
+```
+
+Unit tests ([Vitest](https://vitest.dev/)) cover the fretboard geometry, fret
+reading (chords, barres, flicker), pluck detection (single strings, fast and
+slow strums, tracking noise and dropouts, muting) and chord naming.
+
+The end-to-end test and the song script run inside IWSDK's managed browser and
+drive the emulator's hands, so start the dev server with browser automation
+allowed first:
+
+```sh
+npx iwsdk dev up --headed --allow-browser-automation
+npm run test:e2e
+npm run play:william-tell
+```
+
+- `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
+  an F barre) formed by an emulated left hand, single-string picking, fast,
+  deep and slow strums, hammer-ons, re-placing the guitar, the panel buttons
+  and hand-tracking loss. Results and screenshots go to `test-results/`.
+  Set `E2E_PACE=2` to slow it down to watch.
+- `tests/william-tell.mjs` performs the opening of the *William Tell* Overture
+  finale with the emulated hands and reports each note asked for, the note the
+  app played and the timing error. Set `WT_TEMPO=110` for a slower take.
+
+Both bring the browser window to the front; a window behind others renders at
+about 1 fps. Each script must finish within IWSDK's 110-second limit.
+
+## Project layout
+
+```
+iwsdk.config.json      IWSDK project settings: scene, assets, components, XR
+src/index.ts           creates the world and registers the systems
+src/guitar/            the air guitar (see How it works)
+src/panel.ts           the panel's buttons
+src/assets.ts          asset catalog for the scene
+src/components.ts      component catalog
+public/scenes/         the room the guitar is played in
+public/ui/             the panel layout (UIKitML)
+tests/unit/            unit tests
+tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand poses
+tests/william-tell.mjs, tests/performer.js, tests/songs/   song playback
+```
 
 ## Credits
 
@@ -53,3 +162,5 @@ Max Wilkinson (2008), [IMSLP #22579](https://imslp.org/wiki/Guillaume_Tell_(Ross
 licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/).
 Changes: melody only, without articulation or dynamics, arranged for guitar,
 with an added closing E major chord.
+
+Built with [IWSDK](https://iwsdk.dev/).

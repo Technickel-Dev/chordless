@@ -2,7 +2,8 @@
   Panel, Button and ButtonLabel come from the bundled Horizon kit.
   RectangleGoggles and LogIn are bundled Lucide icon components. The :dark
   styles apply because iwsdk.config.json prefers the dark color scheme.
-  PanelSystem wires every button id below to the AirGuitar component.
+  PanelSystem wires the guitar button ids below to the AirGuitar component
+  and scene-prev / scene-next to the level list in src/scene-list.ts.
 -->
 <style>
   .panel-root {
@@ -59,6 +60,27 @@
     padding-left: 22px;
   }
 
+  .scene-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding-right: 22px;
+    padding-bottom: 14px;
+    padding-left: 22px;
+  }
+
+  .scene-name {
+    flex-grow: 1;
+    justify-content: center;
+    color: #1c1d20;
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .scene-name:dark {
+    color: #f5d90a;
+  }
+
   .button {
     justify-content: flex-start;
     margin-left: 22px;
@@ -95,6 +117,15 @@
     </Button>
     <Button id="reset-guitar" variant="secondary">
       <ButtonLabel>Reset guitar</ButtonLabel>
+    </Button>
+  </div>
+  <div class="scene-row">
+    <Button id="scene-prev" variant="secondary">
+      <ButtonLabel>Prev scene</ButtonLabel>
+    </Button>
+    <div id="scene-name" class="scene-name">Theatre</div>
+    <Button id="scene-next" variant="secondary">
+      <ButtonLabel>Next scene</ButtonLabel>
     </Button>
   </div>
   <Button id="xr-button" class="button">

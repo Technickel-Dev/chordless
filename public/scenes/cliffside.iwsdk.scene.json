@@ -1,0 +1,174 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.DomeGradient": {
+      "sky": [
+        0.24,
+        0.17,
+        0.42,
+        1
+      ],
+      "equator": [
+        1,
+        0.56,
+        0.3,
+        1
+      ],
+      "ground": [
+        0.12,
+        0.08,
+        0.12,
+        1
+      ],
+      "intensity": 1
+    },
+    "com.iwsdk.components.IBLGradient": {
+      "sky": [
+        0.264,
+        0.18700000000000003,
+        0.462,
+        1
+      ],
+      "equator": [
+        1,
+        0.56,
+        0.3,
+        1
+      ],
+      "ground": [
+        0.12,
+        0.08,
+        0.12,
+        1
+      ],
+      "intensity": 0.8
+    }
+  },
+  "environment": {
+    "toneMapping": "aces",
+    "exposure": 1,
+    "shadows": false
+  },
+  "resources": {},
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [
+          0,
+          1.6,
+          1
+        ],
+        "target": [
+          0,
+          1.3,
+          -6
+        ],
+        "fov": 70
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "cliffside-set",
+      "name": "Cliffside Set",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "cliffside-set"
+      }
+    },
+    {
+      "id": "welcome-panel",
+      "name": "Welcome Panel",
+      "content": {
+        "type": "asset",
+        "asset": "welcome-panel"
+      },
+      "transform": {
+        "position": [
+          0.95,
+          1.5,
+          -1.6
+        ],
+        "rotationDeg": [
+          0,
+          -30,
+          0
+        ],
+        "scale": 0.32
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "sunset",
+      "name": "sunset",
+      "transform": {
+        "rotationDeg": [
+          -6,
+          180,
+          0
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.DirectionalLight": {
+          "color": [
+            1,
+            0.66,
+            0.4,
+            1
+          ],
+          "intensity": 2.6
+        }
+      }
+    },
+    {
+      "id": "sky-key",
+      "name": "sky-key",
+      "transform": {
+        "rotationDeg": [
+          -45,
+          20,
+          0
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.DirectionalLight": {
+          "color": [
+            0.75,
+            0.65,
+            0.9,
+            1
+          ],
+          "intensity": 0.8
+        }
+      }
+    },
+    {
+      "id": "fill",
+      "name": "Fill",
+      "components": {
+        "com.iwsdk.components.HemisphereLight": {
+          "skyColor": [
+            0.65,
+            0.5,
+            0.65,
+            1
+          ],
+          "groundColor": [
+            0.22,
+            0.13,
+            0.1,
+            1
+          ],
+          "intensity": 0.9
+        }
+      }
+    }
+  ]
+}

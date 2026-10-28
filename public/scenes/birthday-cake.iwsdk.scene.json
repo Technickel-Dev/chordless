@@ -1,0 +1,202 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.DomeGradient": {
+      "sky": [
+        0.08,
+        0.03,
+        0.13,
+        1
+      ],
+      "equator": [
+        0.2,
+        0.07,
+        0.22,
+        1
+      ],
+      "ground": [
+        0.02,
+        0.01,
+        0.03,
+        1
+      ],
+      "intensity": 1
+    },
+    "com.iwsdk.components.IBLGradient": {
+      "sky": [
+        0.08800000000000001,
+        0.033,
+        0.14300000000000002,
+        1
+      ],
+      "equator": [
+        0.2,
+        0.07,
+        0.22,
+        1
+      ],
+      "ground": [
+        0.02,
+        0.01,
+        0.03,
+        1
+      ],
+      "intensity": 0.4
+    }
+  },
+  "environment": {
+    "toneMapping": "aces",
+    "exposure": 1,
+    "shadows": false
+  },
+  "resources": {},
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [
+          0,
+          1.6,
+          1
+        ],
+        "target": [
+          0,
+          1.3,
+          -6
+        ],
+        "fov": 70
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "birthday-cake-set",
+      "name": "Birthday Cake Set",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "birthday-cake-set"
+      }
+    },
+    {
+      "id": "welcome-panel",
+      "name": "Welcome Panel",
+      "content": {
+        "type": "asset",
+        "asset": "welcome-panel"
+      },
+      "transform": {
+        "position": [
+          0.95,
+          1.5,
+          -1.6
+        ],
+        "rotationDeg": [
+          0,
+          -30,
+          0
+        ],
+        "scale": 0.32
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "candle-glow-front",
+      "name": "candle-glow-front",
+      "transform": {
+        "position": [
+          0,
+          4.5,
+          -3
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.7,
+            0.4,
+            1
+          ],
+          "intensity": 30,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "candle-glow-left",
+      "name": "candle-glow-left",
+      "transform": {
+        "position": [
+          -4,
+          4.5,
+          1
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.7,
+            0.4,
+            1
+          ],
+          "intensity": 14,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "candle-glow-right",
+      "name": "candle-glow-right",
+      "transform": {
+        "position": [
+          4,
+          4.5,
+          1
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.7,
+            0.4,
+            1
+          ],
+          "intensity": 14,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "fill",
+      "name": "Fill",
+      "components": {
+        "com.iwsdk.components.HemisphereLight": {
+          "skyColor": [
+            0.9,
+            0.6,
+            0.85,
+            1
+          ],
+          "groundColor": [
+            0.2,
+            0.1,
+            0.15,
+            1
+          ],
+          "intensity": 0.6
+        }
+      }
+    }
+  ]
+}

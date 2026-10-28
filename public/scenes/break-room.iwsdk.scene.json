@@ -1,0 +1,202 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.DomeGradient": {
+      "sky": [
+        0.7,
+        0.7,
+        0.68,
+        1
+      ],
+      "equator": [
+        0.8,
+        0.78,
+        0.74,
+        1
+      ],
+      "ground": [
+        0.5,
+        0.48,
+        0.45,
+        1
+      ],
+      "intensity": 1
+    },
+    "com.iwsdk.components.IBLGradient": {
+      "sky": [
+        0.77,
+        0.77,
+        0.7480000000000001,
+        1
+      ],
+      "equator": [
+        0.8,
+        0.78,
+        0.74,
+        1
+      ],
+      "ground": [
+        0.5,
+        0.48,
+        0.45,
+        1
+      ],
+      "intensity": 0.6
+    }
+  },
+  "environment": {
+    "toneMapping": "aces",
+    "exposure": 1,
+    "shadows": false
+  },
+  "resources": {},
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [
+          0,
+          1.6,
+          1
+        ],
+        "target": [
+          0,
+          1.3,
+          -6
+        ],
+        "fov": 70
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "break-room-set",
+      "name": "Break Room Set",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "break-room-set"
+      }
+    },
+    {
+      "id": "welcome-panel",
+      "name": "Welcome Panel",
+      "content": {
+        "type": "asset",
+        "asset": "welcome-panel"
+      },
+      "transform": {
+        "position": [
+          0.95,
+          1.5,
+          -1.6
+        ],
+        "rotationDeg": [
+          0,
+          -30,
+          0
+        ],
+        "scale": 0.32
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "panel-light-left",
+      "name": "panel-light-left",
+      "transform": {
+        "position": [
+          -1.6,
+          2.5,
+          -2
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.98,
+            0.92,
+            1
+          ],
+          "intensity": 5,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "panel-light-right",
+      "name": "panel-light-right",
+      "transform": {
+        "position": [
+          1.6,
+          2.5,
+          -2
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.98,
+            0.92,
+            1
+          ],
+          "intensity": 5,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "vending-glow",
+      "name": "vending-glow",
+      "transform": {
+        "position": [
+          -1.6,
+          1.2,
+          -3.6
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            0.8,
+            0.9,
+            1,
+            1
+          ],
+          "intensity": 1.2,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "fill",
+      "name": "Fill",
+      "components": {
+        "com.iwsdk.components.HemisphereLight": {
+          "skyColor": [
+            0.95,
+            0.94,
+            0.9,
+            1
+          ],
+          "groundColor": [
+            0.48,
+            0.46,
+            0.42,
+            1
+          ],
+          "intensity": 0.75
+        }
+      }
+    }
+  ]
+}

@@ -16,7 +16,12 @@ import { midiName } from '/src/guitar/chords.ts';
 
 /** Half the length of a picking stroke, across the string. */
 const STROKE = 0.0055;
-const STROKE_MS = 22;
+/**
+ * Stroke time by dynamic: the app sets loudness and brightness from how
+ * fast the fingertip crosses the string.
+ */
+const STROKE_MS = { pp: 28, p: 24, mf: 20, f: 15, ff: 12 };
+const strokeMs = (event) => STROKE_MS[event.dynamic] ?? STROKE_MS.mf;
 /** Above the widened depth window a strum keeps for its follow-through. */
 const LIFT = 0.05;
 /** Fretted notes go down this long before the pluck. */
@@ -124,6 +129,7 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
   const report = [];
   const start = performance.now() + 600;
   const before = await guitarState();
+  let plucked = before.plucks;
   const timeOf = (k) => start + song.events[k].beat * beatMs;
 
   /**
@@ -182,11 +188,12 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
       await dispatch('animate_to', {
         device: 'hand-right',
         anchor: 'index-tip',
-        duration: 0.06,
+        duration: event.dynamic === 'ff' ? 0.04 : 0.06,
         ...spot({ y: stringY(5, 0) - 0.02 }),
       });
       await nextFrames(2);
       const g = await guitarState();
+      plucked = g.plucks;
       report.push({ beat: event.beat, want: `${event.chord} chord`, heard: g.chord, lateMs: Math.round(played) });
       onEvent(i, event, g);
       continue;
@@ -195,29 +202,35 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
     await moveTo(event.string);
     if (event.fret > 0 && (event.string !== leftString || event.fret !== leftFret)) {
       // Press just before the pluck, so a ringing string barely hammers on.
-      await sleepUntil(at - PRESS_LEAD_MS - STROKE_MS / 2);
+      await sleepUntil(at - PRESS_LEAD_MS - strokeMs(event) / 2);
       await fretLeft(event.string, event.fret);
     } else if (event.fret === 0 && event.string === leftString) {
       await fretLeft(event.string, 0);
     }
 
     // The stroke crosses the string halfway through, on the beat.
-    await sleepUntil(at - STROKE_MS / 2);
-    const played = performance.now() + STROKE_MS / 2 - at;
+    const stroke = strokeMs(event);
+    await sleepUntil(at - stroke / 2);
     side = -side;
     await dispatch('animate_to', {
       device: 'hand-right',
       anchor: 'index-tip',
-      duration: STROKE_MS / 1000,
+      duration: stroke / 1000,
       ...spot({ y: stringY(event.string, 0) + side * STROKE }),
     });
-    await nextFrames(1);
-    const g = await guitarState();
+    // Wait for the app to register the pluck, and time when it did.
+    let g = await guitarState();
+    for (let f = 0; f < 12 && g.plucks <= plucked; f++) {
+      await nextFrames(1);
+      g = await guitarState();
+    }
+    const heardAt = performance.now();
+    plucked = g.plucks;
     report.push({
       beat: event.beat,
       want: event.note,
       heard: g.lastNote,
-      lateMs: Math.round(played),
+      lateMs: Math.round(heardAt - at),
       ok: g.lastNote === midiName(OPEN_MIDI[event.string] + event.fret),
     });
     onEvent(i, event, g);

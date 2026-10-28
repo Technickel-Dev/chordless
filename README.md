@@ -156,11 +156,11 @@ tests/william-tell.mjs, tests/performer.js, tests/songs/   song playback
 ## Credits
 
 `tests/songs/william-tell.js` transcribes the first-violin melody of the finale
-(bars 243–251) of Gioachino Rossini's *William Tell* Overture (1829, public
+(bars 243–275) of Gioachino Rossini's *William Tell* Overture (1829, public
 domain) from "William Tell: Overture to the Opera", full score typeset by
 Max Wilkinson (2008), [IMSLP #22579](https://imslp.org/wiki/Guillaume_Tell_(Rossini,_Gioacchino)),
 licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/).
-Changes: melody only, without articulation or dynamics, arranged for guitar,
-with an added closing E major chord.
+Changes: melody only, without articulation, arranged for guitar with the loud
+section an octave lower, and an added closing E major chord.
 
 Built with [IWSDK](https://iwsdk.dev/).

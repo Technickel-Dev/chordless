@@ -43,6 +43,20 @@ describe('FretReader', () => {
     expect(read(reader, [behind])).toEqual([0, 0, 0, 0, 0, 0]);
   });
 
+  it('ignores a finger base tucked beside the neck under the treble edge', () => {
+    const reader = new FretReader();
+    const x = fretMidX(1);
+    const besideNeck = [x, stringY(5, x) - 0.006, GUITAR.boardTopZ - 0.01] as const;
+    expect(read(reader, [besideNeck])).toEqual([0, 0, 0, 0, 0, 0]);
+  });
+
+  it('accepts a fingertip just past the low E on top of the board', () => {
+    const reader = new FretReader();
+    const x = fretMidX(2);
+    const overhang = [x, stringY(0, x) + 0.006, GUITAR.stringZ] as const;
+    expect(read(reader, [overhang])).toEqual([2, 0, 0, 0, 0, 0]);
+  });
+
   it('accepts fingers pushed through the virtual fretboard', () => {
     const reader = new FretReader();
     expect(read(reader, [onString(2, 2, -0.03)])).toEqual([0, 0, 2, 0, 0, 0]);

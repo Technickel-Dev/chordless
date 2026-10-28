@@ -13,8 +13,8 @@ export const PRESS = {
   release: 0.02,
   /** Points further than this below the fretboard are behind the neck. */
   below: 0.04,
-  /** Points beyond the outer strings still count within this many spacings. */
-  edgeSpacings: 0.75,
+  /** Extra reach, in string spacings, beyond the outer strings (above the board only). */
+  edgeSpacings: 0.3,
 };
 
 /**
@@ -44,8 +44,15 @@ export class FretReader {
     if (z < GUITAR.boardTopZ - PRESS.below) return -1;
     const height = z - GUITAR.stringZ;
     if (height > PRESS.release) return -1;
-    const s = nearestString(x, y, PRESS.edgeSpacings);
-    if (s < 0) return -1;
+    let s = nearestString(x, y);
+    if (s < 0) {
+      // Beyond the outer strings only counts on top of the fretboard; below
+      // it, the point is beside the neck (say, the base of the index finger
+      // tucked under the treble edge).
+      if (z < GUITAR.boardTopZ) return -1;
+      s = nearestString(x, y, 0.5 + PRESS.edgeSpacings);
+      if (s < 0) return -1;
+    }
     this.held[s] |= 1 << fret;
     if (height <= PRESS.above && fret > this.strict[s]) this.strict[s] = fret;
     return height <= PRESS.above ? s : -1;

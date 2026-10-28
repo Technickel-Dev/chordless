@@ -60,13 +60,19 @@ const LEAN_RADIUS = 0.2;
 const PLACE_HOLD_SECONDS = 1;
 const PINCH_DISTANCE = 0.018;
 
-/** Joints sampled along each fretting finger, tip first. The index can barre. */
+/** Joints along each fretting finger, tip first, down to the knuckle. */
 const FRET_FINGERS = [
   [JOINT.indexTip, JOINT.indexDistal, JOINT.indexIntermediate, JOINT.indexProximal],
-  [JOINT.middleTip, JOINT.middleDistal],
-  [JOINT.ringTip, JOINT.ringDistal],
-  [JOINT.pinkyTip, JOINT.pinkyDistal],
+  [JOINT.middleTip, JOINT.middleDistal, JOINT.middleIntermediate, JOINT.middleProximal],
+  [JOINT.ringTip, JOINT.ringDistal, JOINT.ringIntermediate, JOINT.ringProximal],
+  [JOINT.pinkyTip, JOINT.pinkyDistal, JOINT.pinkyIntermediate, JOINT.pinkyProximal],
 ] as const;
+/**
+ * The fingertip pad (the first half of the last segment) always frets.
+ * The rest of a finger only frets where it lies flat on the strings, as in
+ * a barre: an arched finger passes over strings without touching them.
+ */
+const PAD_FRACTION = 0.5;
 const SAMPLE_SPACING = 0.006;
 
 /** A string counts toward the chord display above this envelope level. */
@@ -328,14 +334,21 @@ export class AirGuitarSystem extends createSystem({
       for (let j = 0; j < 25; j++) {
         this.tmp.fromArray(src, j * 3).applyMatrix4(this.inverse).toArray(local, j * 3);
       }
-      for (const joints of FRET_FINGERS) {
+      for (let f = 0; f < FRET_FINGERS.length; f++) {
+        const joints = FRET_FINGERS[f];
         for (let k = 0; k < joints.length - 1; k++) {
           const a = joints[k] * 3;
           const b = joints[k + 1] * 3;
+          const flat =
+            local[a + 2] - GUITAR.stringZ <= PRESS.above &&
+            local[b + 2] - GUITAR.stringZ <= PRESS.above;
+          // Past the pad, stop at the first segment that lifts off.
+          if (k > 0 && !flat) break;
+          const reach = flat ? 1 : PAD_FRACTION;
           const len = Math.hypot(local[b] - local[a], local[b + 1] - local[a + 1], local[b + 2] - local[a + 2]);
-          const n = Math.min(8, Math.ceil(len / SAMPLE_SPACING));
-          for (let i = 0; i < n; i++) {
-            const t = i / n;
+          const n = Math.max(1, Math.min(8, Math.ceil((len * reach) / SAMPLE_SPACING)));
+          for (let i = 0; i <= n; i++) {
+            const t = (i / n) * reach;
             reader.addPoint(
               local[a] + (local[b] - local[a]) * t,
               local[a + 1] + (local[b + 1] - local[a + 1]) * t,

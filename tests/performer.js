@@ -23,6 +23,7 @@ const LIFT = 0.05;
 const PRESS_LEAD_MS = 20;
 /** Lifting to an open string must outlast the app's 60 ms release debounce. */
 const RELEASE_LEAD_MS = 110;
+const RELEASE_MIN_LEAD_MS = 75;
 
 const dispatch = (method, params = {}) => window.IWER_MCP.dispatch(method, params);
 const nextFrames = (n = 2) =>
@@ -77,12 +78,14 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
   // low E, -1 toward the high E).
   let string = null;
   let side = 1;
-  let leftFret = -1;
-  const lastLeftX = { x: fretSpotX(3) };
+  // Left index: the string and fret it holds (fret 0 = lifted).
+  let leftString = 5;
+  let leftFret = 0;
+  let leftX = fretSpotX(3);
 
   await dispatch('set_hand_pose', { device: 'hand-left', poseId: 'point' });
   await dispatch('set_hand_pose', { device: 'hand-right', poseId: 'point' });
-  await placeLeft({ x: lastLeftX.x, string: 5, height: 0.04 });
+  await placeLeft({ x: leftX, string: leftString, height: 0.04 });
   await placeRight({ string: 2, height: LIFT });
   await nextFrames(3);
 
@@ -103,14 +106,18 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
     string = target;
   };
 
-  const fretLeft = async (fret) => {
-    if (fret === leftFret) return;
-    if (fret > 0) {
-      lastLeftX.x = fretSpotX(fret);
-      await placeLeft({ x: lastLeftX.x, string: 5 });
-    } else {
-      await placeLeft({ x: lastLeftX.x, string: 5, height: 0.04 });
+  /** Frets `fret` on string `s` with the left index, or lifts it for 0. */
+  const fretLeft = async (s, fret) => {
+    if (fret === 0) {
+      if (leftFret === 0) return;
+      await placeLeft({ x: leftX, string: leftString, height: 0.04 });
+      leftFret = 0;
+      return;
     }
+    if (s === leftString && fret === leftFret) return;
+    leftX = fretSpotX(fret);
+    await placeLeft({ x: leftX, string: s });
+    leftString = s;
     leftFret = fret;
   };
 
@@ -120,11 +127,13 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
   const timeOf = (k) => start + song.events[k].beat * beatMs;
 
   /**
-   * When to lift the fretting finger before open-string note `k`: early
-   * enough to outlast the app's release debounce, but not so early that it
-   * cuts the previous note on that string straight after it sounded.
+   * When to let go before note `k`, which is lower on the string the left
+   * finger holds (a lower fret or the open string). The app only drops to a
+   * lower fret after its release debounce, so this must come early enough,
+   * but not so early that it cuts the previous note on that string as soon
+   * as it sounded.
    */
-  const liftTime = (k) => {
+  const releaseTime = (k) => {
     let prev = -Infinity;
     for (let j = k - 1; j >= 0; j--) {
       if (song.events[j].string === song.events[k].string) {
@@ -132,24 +141,29 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
         break;
       }
     }
-    return Math.max(timeOf(k) - 2 * RELEASE_LEAD_MS, prev + 90);
+    return Math.min(timeOf(k) - RELEASE_MIN_LEAD_MS, Math.max(timeOf(k) - 2 * RELEASE_LEAD_MS, prev + 90));
   };
-  const liftIfDue = (now) => {
-    const k = song.events.findIndex((e, j) => timeOf(j) > now && e.string === 5);
-    if (k < 0 || song.events[k].fret !== 0 || leftFret <= 0) return null;
-    return liftTime(k);
+  /** The next note on the held string, if it needs the finger to let go first. */
+  const releaseDue = (from) => {
+    if (leftFret === 0) return null;
+    for (let k = from; k < song.events.length; k++) {
+      const e = song.events[k];
+      if (e.chord || e.string !== leftString) continue;
+      return e.fret < leftFret ? { k, at: releaseTime(k), fret: e.fret } : null;
+    }
+    return null;
   };
 
   for (let i = 0; i < song.events.length; i++) {
     const event = song.events[i];
     const at = start + event.beat * beatMs;
 
-    // Lift for an upcoming open-string note now if it is due, before this
-    // event's own hand movements take up the time.
-    const lift = liftIfDue(performance.now());
-    if (lift != null && lift <= at) {
-      await sleepUntil(lift);
-      await fretLeft(0);
+    // Let go for an upcoming lower note on the held string now if it is
+    // due, before this event's own hand movements take up the time.
+    const release = releaseDue(i);
+    if (release && release.at <= at) {
+      await sleepUntil(release.at);
+      await fretLeft(leftString, release.fret);
     }
 
     if (event.chord) {
@@ -179,9 +193,12 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
     }
 
     await moveTo(event.string);
-    if (event.string === 5) {
-      if (event.fret > 0) await sleepUntil(at - PRESS_LEAD_MS - STROKE_MS / 2);
-      await fretLeft(event.fret);
+    if (event.fret > 0 && (event.string !== leftString || event.fret !== leftFret)) {
+      // Press just before the pluck, so a ringing string barely hammers on.
+      await sleepUntil(at - PRESS_LEAD_MS - STROKE_MS / 2);
+      await fretLeft(event.string, event.fret);
+    } else if (event.fret === 0 && event.string === leftString) {
+      await fretLeft(event.string, 0);
     }
 
     // The stroke crosses the string halfway through, on the beat.

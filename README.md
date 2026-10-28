@@ -43,3 +43,13 @@ projects have no sky or floor, so passthrough stays visible, and a
 
 - Minimal scene walkthrough: https://iwsdk.dev/guides/01b-minimal-scene.html
 - XR-enabled projects — IWER emulator controls: https://iwsdk.dev/guides/02-testing-experience.html#iwer-controls
+
+## Credits
+
+`tests/songs/william-tell.js` transcribes the first-violin melody of the finale
+(bars 243–251) of Gioachino Rossini's *William Tell* Overture (1829, public
+domain) from "William Tell: Overture to the Opera", full score typeset by
+Max Wilkinson (2008), [IMSLP #22579](https://imslp.org/wiki/Guillaume_Tell_(Rossini,_Gioacchino)),
+licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/).
+Changes: melody only, without articulation or dynamics, arranged for guitar,
+with an added closing E major chord.

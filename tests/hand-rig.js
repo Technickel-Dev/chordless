@@ -12,7 +12,8 @@
  * knuckles to reach frets further apart than the hand is wide.
  */
 
-import { fretX, GUITAR, stringSpan, stringY } from '/src/guitar/geometry.ts';
+import { fretAt, fretX, GUITAR, nearestString, stringSpacing, stringSpan, stringY } from '/src/guitar/geometry.ts';
+import { PRESS } from '/src/guitar/fretting.ts';
 
 export const FINGERS = ['index', 'middle', 'ring', 'pinky'];
 
@@ -102,10 +103,6 @@ function flexion(u, w, hinge) {
   return Math.atan2(dot(cross(u, w), hinge), dot(u, w)) * DEG;
 }
 
-/** The axis fingers bend about: rotating forward about it turns toward the palm. */
-function hingeOf(forward, palm) {
-  return norm(cross(forward, palm));
-}
 
 /** How far each joint angle is outside its limit, in degrees (0 when all are in range). */
 function violation(mcp, pip, dip) {
@@ -114,14 +111,41 @@ function violation(mcp, pip, dip) {
 }
 
 /**
+ * How many points of a fingertip's pad (the half of the end bone nearest the
+ * tip, as the app samples it) press somewhere other than the string and
+ * fret under the tip: the pad touching the next string, or lying over the
+ * next fret wire, sounds the wrong note. Points must keep a margin (a third
+ * of a string spacing to either side, 2 mm from the wires) because tracked
+ * hands are never exactly where they were posed.
+ */
+export function padStrays(tip, dip) {
+  const fret = fretAt(tip[0]);
+  if (fret === 0 || tip[2] - GUITAR.stringZ > PRESS.above) return 0;
+  const string = nearestString(tip[0], tip[1]);
+  let strays = 0;
+  for (let i = 1; i <= 4; i++) {
+    const p = lerp(tip, dip, i / 8);
+    // Once a string is held it stays held up to the release height.
+    if (p[2] - GUITAR.stringZ > PRESS.release) break;
+    const off = Math.abs(p[1] - stringY(string, p[0])) / stringSpacing(p[0]);
+    if (fretAt(p[0] - 0.002) !== fret || fretAt(p[0] + 0.002) !== fret || off > 0.33) strays++;
+  }
+  return strays;
+}
+
+/** How far a knuckle swings a finger sideways out of the hand's plane, in degrees. */
+const ROLLS = [0, -8, 8, -16, 16, -24, 24];
+/** Postures of the last bone, by its angle back from in line with the finger. */
+const DIRECTIONS = Array.from({ length: 21 }, (_, i) => [Math.cos((i / 20) * (150 / DEG)), Math.sin((i / 20) * (150 / DEG))]);
+
+/**
  * Solves one finger. `pressing` (0..1) prefers an upright fingertip, as on
  * a string; otherwise the finger takes a relaxed curl, its end joint
  * bending about two thirds as much as its middle joint.
  */
-function solveFinger(name, metacarpal, knuckle, target, hand, pressing, flatToward) {
+function solveFinger(name, metacarpal, knuckle, target, hand, pressing) {
   const [l1, l2, l3] = BONES[name];
   const { back, upright } = hand;
-  const hinge = hingeOf(hand.forward, hand.palm);
 
   // A fingertip can only be where the straight finger reaches.
   let tip = target;
@@ -135,44 +159,69 @@ function solveFinger(name, metacarpal, knuckle, target, hand, pressing, flatTowa
     tip = across > 1e-6 && keep > 0 ? [knuckle[0] + (d[0] * keep) / across, knuckle[1] + (d[1] * keep) / across, target[2]] : add(knuckle, scale(norm(d), reach));
   }
 
+  // The finger's middle and end joints are hinges, so all three bones lie in
+  // one plane through the knuckle and fingertip. It faces the back of the
+  // hand, rolled a little either way as the knuckle swings the finger
+  // sideways. Every posture is solved inside one such plane.
+  const plane = fingerPlane(knuckle, tip, back);
+  const { along } = plane;
   const forward = norm(sub(knuckle, metacarpal));
   let best = null;
-  // Postures from fingertip curled a little under (s < 0), through upright
-  // (s = 0), to finger straight (s = 1).
-  const straight = norm(sub(knuckle, tip));
-  const steps = Array.from({ length: 17 }, (_, i) => -0.6 + (1.6 * i) / 16);
-  const directions = flatToward
-    ? [norm(sub(flatToward, tip))]
-    : steps.map((s) => norm(add(upright, scale(sub(straight, upright), s))));
-  for (let i = 0; i < directions.length; i++) {
-    const dip = add(tip, scale(directions[i], l3));
-    const span = len(sub(dip, knuckle));
-    if (span > l1 + l2 - 1e-4 || span < Math.abs(l1 - l2) + 1e-4) continue;
-    const pip = bend(knuckle, dip, l1, l2, back);
-    const mcp = flexion(forward, norm(sub(pip, knuckle)), hinge);
-    const pipA = flexion(norm(sub(pip, knuckle)), norm(sub(dip, pip)), hinge);
-    const dipA = flexion(norm(sub(dip, pip)), norm(sub(tip, dip)), hinge);
-    const bad = violation(mcp, pipA, dipA);
-    const style = pressing * Math.abs(steps[i] ?? 0) + (1 - pressing) * Math.abs(dipA - 0.66 * pipA) / 60;
-    const cost = bad * 10 + style;
-    if (!best || cost < best.cost) best = { cost, pip, dip, mcp, pipA, dipA, bad };
+  for (const roll of ROLLS) {
+    const dorsal = add(scale(plane.dorsal, Math.cos(roll / DEG)), scale(plane.axis, Math.sin(roll / DEG)));
+    const axis = norm(cross(dorsal, along));
+    const inPlane = norm(sub(forward, scale(axis, dot(forward, axis))));
+    // Postures by the angle of the last bone: from in line with the finger
+    // (straight) to folded well back over the tip (curled).
+    for (const [c, s] of DIRECTIONS) {
+      const dir = add(scale(along, -c), scale(dorsal, s));
+      const dip = add(tip, scale(dir, l3));
+      const span = len(sub(dip, knuckle));
+      if (span > l1 + l2 - 1e-4 || span < Math.abs(l1 - l2) + 1e-4) continue;
+      const pip = bend(knuckle, dip, l1, l2, dorsal);
+      const mcp = flexion(inPlane, norm(sub(pip, knuckle)), axis);
+      const pipA = flexion(norm(sub(pip, knuckle)), norm(sub(dip, pip)), axis);
+      const dipA = flexion(norm(sub(dip, pip)), norm(sub(tip, dip)), axis);
+      const bad = violation(mcp, pipA, dipA);
+      // Pressing: the last bone as close to upright as the plane allows.
+      // Relaxed: the end joint bending about two thirds as much as the middle.
+      const style = pressing * (1 - dot(dir, upright)) + (1 - pressing) * (Math.abs(dipA - 0.66 * pipA) / 60);
+      // A pressing pad must stay on its own string and fret, as a player
+      // arches the finger to keep it off the next string. Swinging the
+      // finger sideways is the last resort.
+      const cost = bad * 10 + padStrays(tip, dip) + style + Math.abs(roll) / 200;
+      if (!best || cost < best.cost) best = { cost, pip, dip, axis };
+    }
   }
   if (!best) {
     // Out of reach in every posture: point the finger straight at the tip.
-    const dir = norm(sub(tip, knuckle));
-    const pip = add(knuckle, scale(dir, l1));
-    const dip = add(pip, scale(dir, l2));
-    tip = add(dip, scale(dir, l3));
-    best = { pip, dip, bad: 0 };
+    const pip = add(knuckle, scale(along, l1));
+    const dip = add(pip, scale(along, l2));
+    tip = add(dip, scale(along, l3));
+    best = { pip, dip, axis: plane.axis };
   }
   const chain = [metacarpal, knuckle, best.pip, best.dip, tip];
   const names = ['metacarpal', 'phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal', 'tip'];
   const joints = {};
   chain.forEach((p, i) => {
-    const fwd = i < chain.length - 1 ? sub(chain[i + 1], p) : sub(p, chain[i - 1]);
-    joints[`${name}-finger-${names[i]}`] = frame(p, norm(fwd), back);
+    const fwd = norm(i < chain.length - 1 ? sub(chain[i + 1], p) : sub(p, chain[i - 1]));
+    // The palm bone takes the hand's back; the phalanges take the finger's
+    // own, so no bone is twisted about its length.
+    joints[`${name}-finger-${names[i]}`] = frame(p, fwd, i === 0 ? back : cross(fwd, best.axis));
   });
   return joints;
+}
+
+/**
+ * A finger's bending plane: `along` from knuckle to tip, `dorsal` the back
+ * of the finger within the plane, and `axis` the hinge the joints turn
+ * about (bending toward the palm is positive about it).
+ */
+export function fingerPlane(knuckle, tip, back) {
+  const along = norm(sub(tip, knuckle));
+  let dorsal = sub(back, scale(along, dot(back, along)));
+  dorsal = len(dorsal) < 1e-6 ? v(0, 0, 1) : norm(dorsal);
+  return { along, dorsal, axis: norm(cross(dorsal, along)) };
 }
 
 /** The thumb: a fixed metacarpal direction, then two bones that reach for the tip target. */
@@ -183,13 +232,15 @@ function solveThumb(base, metacarpalDir, target, hand) {
   const d = sub(target, proximal);
   if (len(d) > (lp + ld) * 0.97) tip = add(proximal, scale(norm(d), (lp + ld) * 0.97));
   if (len(d) < Math.abs(lp - ld) + 0.002) tip = add(proximal, scale(norm(d), Math.abs(lp - ld) + 0.002));
-  const distal = bend(proximal, tip, lp, ld, hand.back);
+  // The thumb's two outer joints are hinges too: solve in its own plane.
+  const { dorsal, axis } = fingerPlane(proximal, tip, hand.back);
+  const distal = bend(proximal, tip, lp, ld, dorsal);
   const chain = [base, proximal, distal, tip];
   const names = ['metacarpal', 'phalanx-proximal', 'phalanx-distal', 'tip'];
   const joints = {};
   chain.forEach((p, i) => {
-    const fwd = i < chain.length - 1 ? sub(chain[i + 1], p) : sub(p, chain[i - 1]);
-    joints[`thumb-${names[i]}`] = frame(p, norm(fwd), hand.back);
+    const fwd = norm(i < chain.length - 1 ? sub(chain[i + 1], p) : sub(p, chain[i - 1]));
+    joints[`thumb-${names[i]}`] = frame(p, fwd, i === 0 ? hand.back : cross(fwd, axis));
   });
   return joints;
 }
@@ -234,10 +285,9 @@ function spaceFreeFingers(tips, pressedOf, axis, gap = 0.017) {
 
 /**
  * Fretting hand. `position` is the (fractional) fret the index covers;
- * `tips` maps each finger to its fingertip target in guitar space;
- * `flat` maps a finger to a point its last joint lies flat toward (a barre).
+ * `tips` maps each finger to its fingertip target in guitar space.
  */
-export function leftHand({ position, tips, flat = {} }) {
+export function leftHand({ position, tips }) {
   const hx = (slotX(position) + slotX(position + 3)) / 2;
   const edge = -stringSpan(hx) / 2;
   const pressingOf = (f) => Math.min(1, Math.max(0, (GUITAR.stringZ + 0.02 - tips[f][2]) / 0.02));
@@ -261,11 +311,12 @@ export function leftHand({ position, tips, flat = {} }) {
   spaceFreeFingers(targets, (f) => pressingOf(f) > 0.5, v(1, 0, 0));
   const joints = { wrist: frame(wrist, hand.forward, hand.back) };
   for (const f of FINGERS) {
-    const toHand = norm(v(0, hand.knuckles[f][1] - targets[f][1], 0));
-    const upright = norm(add(v(0, 0, 1), scale(toHand, 0.35)));
+    // A pressing fingertip comes straight down on its string, so its pad
+    // stays off the neighbouring ones.
+    const upright = v(0, 0, 1);
     Object.assign(
       joints,
-      solveFinger(f, hand.metacarpals[f], hand.knuckles[f], targets[f], { ...hand, upright }, pressingOf(f), flat[f]),
+      solveFinger(f, hand.metacarpals[f], hand.knuckles[f], targets[f], { ...hand, upright }, pressingOf(f)),
     );
   }
   // Thumb behind the neck (or as far round it as it reaches), on the nut side.
@@ -345,25 +396,50 @@ export function measureHand(joints) {
       }
     }
   }
-  // Joint angles, with the palm as the bend direction.
-  const w = joints.wrist;
-  const hinge = hingeOf(scale(w.z, -1), scale(w.y, -1));
+  // Joint angles in each finger's own bending plane; how far the joints sit
+  // out of that plane (a kinked finger); how far the plane swings sideways
+  // from the hand's; how twisted each bone is.
+  const back = joints.wrist.y;
   let worstAngle = 0;
   let worstJoint = '';
+  let kinkMm = 0;
+  let rollDeg = 0;
+  let twistDeg = 0;
   for (const f of FINGERS) {
     const meta = joints[`${f}-finger-metacarpal`].position;
     const [k, p, d, t] = chainOf(f);
-    const u0 = norm(sub(k, meta));
     const u1 = norm(sub(p, k));
     const u2 = norm(sub(d, p));
     const u3 = norm(sub(t, d));
-    const bad = violation(flexion(u0, u1, hinge), flexion(u1, u2, hinge), flexion(u2, u3, hinge));
+    // The two hinged joints share one axis. Find it from whichever joint is
+    // bent enough to show it (else the finger is straight and any plane
+    // facing the hand's back will do).
+    const handAxis = fingerPlane(k, d, back).axis;
+    const bentAxis = [cross(u1, u2), cross(u2, u3)].find((n) => len(n) > 0.17);
+    let axis = bentAxis ? norm(bentAxis) : handAxis;
+    if (dot(axis, handAxis) < 0) axis = scale(axis, -1);
+    kinkMm = Math.max(kinkMm, Math.max(Math.abs(dot(sub(p, k), axis)), Math.abs(dot(sub(t, k), axis))) * 1000);
+    rollDeg = Math.max(rollDeg, Math.acos(Math.min(1, dot(axis, handAxis))) * DEG);
+    const u0 = norm(sub(k, meta));
+    const u0p = norm(sub(u0, scale(axis, dot(u0, axis))));
+    const bad = violation(flexion(u0p, u1, axis), flexion(u1, u2, axis), flexion(u2, u3, axis));
     if (bad > worstAngle) {
       worstAngle = bad;
       worstJoint = f;
     }
+    // Each phalanx's back should face the finger's own back.
+    for (const n of ['phalanx-proximal', 'phalanx-intermediate', 'phalanx-distal']) {
+      const j = joints[`${f}-finger-${n}`];
+      const expected = cross(scale(j.z, -1), axis);
+      twistDeg = Math.max(twistDeg, Math.acos(Math.min(1, Math.max(-1, dot(j.y, norm(expected))))) * DEG);
+    }
   }
-  return { boneError, closest, pair, worstAngle, worstJoint };
+  let strays = 0;
+  for (const f of FINGERS) {
+    const [, , d, tip] = chainOf(f);
+    strays += padStrays(tip, d);
+  }
+  return { boneError, closest, pair, worstAngle, worstJoint, kinkMm, rollDeg, twistDeg, strays };
 }
 
 /** Column-major 4x4 from a joint frame. */

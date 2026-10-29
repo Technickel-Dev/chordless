@@ -1,7 +1,8 @@
 /**
  * Checks that the performer's hands stay anatomically plausible through a
  * whole song: bones keep their lengths, fingers do not pass through each
- * other, and joints bend only within human limits. Poses are computed in
+ * other, joints bend only within human limits, and a pressing pad stays on
+ * its own string and fret. Poses are computed in
  * the page (loaded through Vite) without touching the emulated headset.
  *
  *   npx iwsdk dev up --allow-browser-automation
@@ -18,7 +19,7 @@ export default async function run({ frame }) {
     const handsAt = handsFor(plan);
     const dt = 1 / 90;
     const worst = {};
-    const tally = { frames: 0, overlaps: 0, badAngles: 0 };
+    const tally = { frames: 0, overlaps: 0, badAngles: 0, strayPads: 0 };
     // Stretches of time where two fingers overlap, for finding causes.
     const episodes = [];
     const open = {};
@@ -29,8 +30,11 @@ export default async function run({ frame }) {
       tally.frames++;
       for (const side of ['left', 'right']) {
         const m = measureHand(hands[side]);
-        const w = (worst[side] ??= { boneErrorMm: 0, closestMm: Infinity, worstAngleDeg: 0 });
+        const w = (worst[side] ??= { boneErrorMm: 0, closestMm: Infinity, worstAngleDeg: 0, kinkMm: 0, rollDeg: 0, twistDeg: 0 });
         w.boneErrorMm = Math.max(w.boneErrorMm, m.boneError * 1000);
+        w.kinkMm = Math.max(w.kinkMm, m.kinkMm);
+        w.rollDeg = Math.max(w.rollDeg, m.rollDeg);
+        w.twistDeg = Math.max(w.twistDeg, m.twistDeg);
         if (m.closest * 1000 < w.closestMm) {
           w.closestMm = m.closest * 1000;
           w.closestPair = m.pair;
@@ -51,12 +55,17 @@ export default async function run({ frame }) {
           for (const k of Object.keys(open)) if (k.startsWith(side + ':')) delete open[k];
         }
         if (m.worstAngle > 2) tally.badAngles++;
+        // A pad touching the next string or over the next fret sounds wrong.
+        if (m.strays > 0) tally.strayPads++;
       }
     }
     for (const w of Object.values(worst)) {
       w.boneErrorMm = +w.boneErrorMm.toFixed(2);
       w.closestMm = +w.closestMm.toFixed(1);
       w.worstAngleDeg = +w.worstAngleDeg.toFixed(1);
+      w.kinkMm = +w.kinkMm.toFixed(2);
+      w.rollDeg = +w.rollDeg.toFixed(1);
+      w.twistDeg = +w.twistDeg.toFixed(1);
     }
     return { ...tally, worst, episodes: episodes.sort((a, b) => b.to - b.from - (a.to - a.from)).slice(0, 12) };
   });

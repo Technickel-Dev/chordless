@@ -118,7 +118,8 @@ function fingerFor(fret, string, position, holding) {
   return FINGERS[k];
 }
 
-/** Each fretting finger's pressed intervals: { finger, string, fret, on, off, flatToward }. */
+/** Each fretting finger's pressed intervals: { finger, string, fret, on, off }. */
+
 function planLeftHand(notes) {
   const intervals = [];
   const holding = new Map(); // finger -> open interval
@@ -158,7 +159,6 @@ function planLeftHand(notes) {
         finger: p.finger,
         string: p.string,
         fret: p.fret,
-        flatToward: p.flatToward,
         on: n.time - PRESS_LEAD,
         off: Infinity,
         minOff: n.time + 0.03,
@@ -216,7 +216,7 @@ function leftTip(finger, t, intervals, positionAt) {
   const pointOf = (i) => pressPoint(i.string, i.fret, i.fraction ?? 0.35);
 
   const now = mine.find((i) => t >= i.on && t < i.off);
-  if (now) return { tip: pointOf(now), flatToward: now.flatToward };
+  if (now) return { tip: pointOf(now) };
   const prev = mine.filter((i) => i.off <= t).at(-1);
   const next = mine.find((i) => i.on > t);
   const from = prev ? pointOf(prev) : rest;
@@ -302,6 +302,13 @@ export function planPerformance(song, tempo = song.tempo) {
       holding.clear();
       n.presses.forEach((p) => holding.set(p.finger, p));
     } else if (n.fret > 0) {
+      // Holds don't survive a shift of hand position, and a finger only
+      // stays down where it belongs in the current one (index on the
+      // position's fret, middle on the next, and so on, give or take one).
+      if (n.glide) holding.clear();
+      for (const [f, h] of [...holding]) {
+        if (Math.abs(h.fret - n.position - FINGERS.indexOf(f)) > 1) holding.delete(f);
+      }
       const finger = fingerFor(n.fret, n.string, n.position, holding);
       n.presses = [{ finger, string: n.string, fret: n.fret }];
       for (const [f, h] of [...holding]) if (h.string === n.string && f !== finger) holding.delete(f);
@@ -317,7 +324,7 @@ export function planPerformance(song, tempo = song.tempo) {
     for (const b of intervals) {
       if (a === b || a.fret !== b.fret || a.finger === b.finger) continue;
       if (a.on >= b.off || b.on >= a.off) continue;
-      a.fraction = FINGERS.indexOf(a.finger) < FINGERS.indexOf(b.finger) ? 0.62 : 0.16;
+      a.fraction = FINGERS.indexOf(a.finger) < FINGERS.indexOf(b.finger) ? 0.72 : 0.36;
     }
   }
   const strokes = planRightHand(notes);
@@ -351,13 +358,8 @@ export function handsFor(plan) {
   return (t, dt) => {
     const position = positionAt(t);
     const tips = {};
-    const flat = {};
-    for (const f of FINGERS) {
-      const { tip, flatToward } = leftTip(f, t, intervals, positionAt);
-      tips[f] = tip;
-      if (flatToward) flat[f] = flatToward;
-    }
-    const left = leftHand({ position, tips, flat });
+    for (const f of FINGERS) tips[f] = leftTip(f, t, intervals, positionAt).tip;
+    const left = leftHand({ position, tips });
 
     const indexTip = rightTip(t, strokes);
     // The wrist follows the fingertip across the strings on a spring; a

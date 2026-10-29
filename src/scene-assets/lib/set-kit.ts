@@ -181,6 +181,19 @@ export function instances(
   return mesh;
 }
 
+/** Placement that stretches a unit-height, Y-up primitive from a to b. */
+export function span(a: V3, b: V3, thickness = 1): Placement {
+  const d = new Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  const len = d.length();
+  const e = new Euler().setFromQuaternion(new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), d.normalize()));
+  const k = 180 / Math.PI;
+  return {
+    pos: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2],
+    rotDeg: [e.x * k, e.y * k, e.z * k],
+    scale: [thickness, len, thickness],
+  };
+}
+
 /** Points evenly spread on an arc of radius r, each yawed to face the center. */
 export function arc(count: number, r: number, fromDeg: number, toDeg: number, y = 0): Placement[] {
   const out: Placement[] = [];
@@ -280,6 +293,121 @@ export function blobTexture(bg: RGB, colors: readonly RGB[], count: number, radi
     o[0] = c[0];
     o[1] = c[1];
     o[2] = c[2];
+  });
+}
+
+/** Horizontal rock strata: bands of the given colors with wavy edges. */
+export function bandTexture(colors: readonly RGB[], bands: number, seed: number, size = 256): Texture {
+  const rand = seededRandom(seed);
+  const order = Array.from({ length: bands }, () => colors[Math.floor(rand() * colors.length)]);
+  const grit = Array.from({ length: size * 4 }, () => rand() - 0.5);
+  return fill(size, (x, y, o) => {
+    const edge = Math.sin((x / size) * Math.PI * 6) * 3 + Math.sin((x / size) * Math.PI * 22) * 1.2;
+    const b = Math.floor((((y + edge + size) % size) / size) * bands);
+    const c = order[Math.min(bands - 1, b)];
+    const n = grit[(x * 7 + y * 13) % grit.length] * 22;
+    o[0] = clamp8(c[0] + n);
+    o[1] = clamp8(c[1] + n);
+    o[2] = clamp8(c[2] + n);
+  });
+}
+
+/** Running-bond brickwork with per-brick tone. */
+export function brickTexture(brick: RGB, mortar: RGB, rows: number, seed: number, size = 256): Texture {
+  const rand = seededRandom(seed);
+  const tone = Array.from({ length: rows * rows }, () => 0.75 + rand() * 0.4);
+  const rowH = size / rows;
+  const brickW = rowH * 2;
+  return fill(size, (x, y, o) => {
+    const row = Math.floor(y / rowH);
+    const shifted = x + (row % 2) * (brickW / 2);
+    const col = Math.floor(shifted / brickW) % (size / brickW);
+    const joint = y % rowH < 2 || shifted % brickW < 2;
+    const k = tone[(row * rows + col) % tone.length];
+    const c = joint ? mortar : brick;
+    o[0] = clamp8(joint ? c[0] : c[0] * k);
+    o[1] = clamp8(joint ? c[1] : c[1] * k);
+    o[2] = clamp8(joint ? c[2] : c[2] * k);
+  });
+}
+
+/** One bookshelf bay seen from the front: spines of mixed height and color on a board. */
+export function spineTexture(seed: number, size = 256): Texture {
+  const rand = seededRandom(seed);
+  const palette: RGB[] = [[120, 30, 30], [30, 60, 110], [40, 80, 50], [150, 110, 50], [70, 40, 80], [180, 160, 120], [30, 30, 34], [110, 60, 30]];
+  const spines: { end: number; top: number; c: RGB }[] = [];
+  let x = 0;
+  while (x < size) {
+    const w = 3 + Math.floor(rand() * 7);
+    x += w;
+    spines.push({ end: x, top: Math.floor(size * (0.55 + rand() * 0.37)), c: palette[Math.floor(rand() * palette.length)] });
+  }
+  const board = Math.floor(size * 0.07);
+  return fill(size, (px, py, o) => {
+    let c: RGB = [24, 16, 12];
+    if (py < board) c = [92, 62, 40];
+    else {
+      const s = spines.find((sp) => px < sp.end) ?? spines[spines.length - 1];
+      if (py < board + s.top * 0.93) {
+        const band = Math.abs(py - (board + s.top * 0.75)) < 3;
+        const edge = px === s.end - 1;
+        c = band ? [200, 170, 90] : edge ? [s.c[0] * 0.6, s.c[1] * 0.6, s.c[2] * 0.6] : s.c;
+      }
+    }
+    o[0] = clamp8(c[0]);
+    o[1] = clamp8(c[1]);
+    o[2] = clamp8(c[2]);
+  });
+}
+
+/** A night facade: a grid of windows, some lit warm. Use as map and emissiveMap. */
+export function windowTexture(seed: number, litChance: number, size = 128): Texture {
+  const rand = seededRandom(seed);
+  const cols = 8;
+  const rows = 16;
+  const lit = Array.from({ length: cols * rows }, () => rand() < litChance);
+  const warmth = Array.from({ length: cols * rows }, () => rand());
+  const cw = size / cols;
+  const ch = size / rows;
+  return fill(size, (x, y, o) => {
+    const cx = Math.floor(x / cw);
+    const cy = Math.floor(y / ch);
+    const inWin = x % cw > cw * 0.25 && x % cw < cw * 0.8 && y % ch > ch * 0.3 && y % ch < ch * 0.85;
+    let c: RGB = [16, 17, 22];
+    if (inWin) {
+      const i = cy * cols + cx;
+      c = lit[i] ? (warmth[i] > 0.7 ? [200, 220, 255] : [255, 200, 120]) : [28, 32, 44];
+    }
+    o[0] = c[0];
+    o[1] = c[1];
+    o[2] = c[2];
+  });
+}
+
+/** A round clock dial for CircleGeometry UVs: rim, twelve ticks and two hands. */
+export function clockFaceTexture(face: RGB, ink: RGB, hourDeg = -60, minuteDeg = 60, size = 256): Texture {
+  const c = size / 2;
+  const onLine = (x: number, y: number, deg: number, len: number, width: number) => {
+    const a = (deg * Math.PI) / 180;
+    const dx = Math.sin(a);
+    const dy = Math.cos(a);
+    const along = (x - c) * dx + (y - c) * dy;
+    const across = Math.abs((x - c) * dy - (y - c) * dx);
+    return along > -len * 0.12 && along < len && across < width;
+  };
+  return fill(size, (x, y, o) => {
+    const r = Math.hypot(x - c, y - c) / c;
+    let col: RGB = face;
+    if (r > 0.9) col = ink;
+    else if (r > 0.72 && r < 0.84) {
+      const a = (Math.atan2(x - c, y - c) * 180) / Math.PI;
+      const nearest = Math.round(a / 30) * 30;
+      if (Math.abs(a - nearest) * r * c * (Math.PI / 180) < 3) col = ink;
+    }
+    if (onLine(x, y, hourDeg, c * 0.45, 5) || onLine(x, y, minuteDeg, c * 0.68, 3) || r < 0.05) col = ink;
+    o[0] = col[0];
+    o[1] = col[1];
+    o[2] = col[2];
   });
 }
 

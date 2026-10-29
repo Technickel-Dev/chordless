@@ -42,12 +42,12 @@
         0.03,
         1
       ],
-      "intensity": 0.4
+      "intensity": 0.7
     }
   },
   "environment": {
     "toneMapping": "aces",
-    "exposure": 1,
+    "exposure": 1.1,
     "shadows": false
   },
   "resources": {},
@@ -194,7 +194,31 @@
             0.15,
             1
           ],
-          "intensity": 0.6
+          "intensity": 1.1
+        }
+      }
+    },
+    {
+      "id": "performer-key",
+      "name": "Performer Key",
+      "transform": {
+        "position": [
+          0,
+          2.8,
+          -1.2
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.88,
+            0.78,
+            1
+          ],
+          "intensity": 8,
+          "distance": 0,
+          "decay": 2
         }
       }
     }

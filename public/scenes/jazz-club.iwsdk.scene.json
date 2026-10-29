@@ -1,0 +1,281 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.DomeGradient": {
+      "sky": [
+        0.02,
+        0.015,
+        0.01,
+        1
+      ],
+      "equator": [
+        0.03,
+        0.02,
+        0.015,
+        1
+      ],
+      "ground": [
+        0.01,
+        0.008,
+        0.005,
+        1
+      ],
+      "intensity": 1
+    },
+    "com.iwsdk.components.IBLGradient": {
+      "sky": [
+        0.022000000000000002,
+        0.0165,
+        0.011000000000000001,
+        1
+      ],
+      "equator": [
+        0.03,
+        0.02,
+        0.015,
+        1
+      ],
+      "ground": [
+        0.01,
+        0.008,
+        0.005,
+        1
+      ],
+      "intensity": 0.6
+    }
+  },
+  "environment": {
+    "toneMapping": "aces",
+    "exposure": 1.3,
+    "shadows": false
+  },
+  "resources": {},
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [
+          0,
+          1.6,
+          1
+        ],
+        "target": [
+          0,
+          1.3,
+          -6
+        ],
+        "fov": 70
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "jazz-club-set",
+      "name": "Jazz Club Set",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "jazz-club-set"
+      }
+    },
+    {
+      "id": "welcome-panel",
+      "name": "Welcome Panel",
+      "content": {
+        "type": "asset",
+        "asset": "welcome-panel"
+      },
+      "transform": {
+        "position": [
+          0.95,
+          1.5,
+          -1.6
+        ],
+        "rotationDeg": [
+          0,
+          -30,
+          0
+        ],
+        "scale": 0.32
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "spotlight",
+      "name": "spotlight",
+      "transform": {
+        "position": [
+          0,
+          3,
+          -8.6
+        ],
+        "rotationDeg": [
+          11.8,
+          180,
+          0
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.SpotLight": {
+          "color": [
+            1,
+            0.88,
+            0.7,
+            1
+          ],
+          "intensity": 400,
+          "distance": 0,
+          "decay": 2,
+          "angleDeg": 9,
+          "penumbra": 0.5
+        }
+      }
+    },
+    {
+      "id": "candle-glow",
+      "name": "candle-glow",
+      "transform": {
+        "position": [
+          0,
+          1.2,
+          -5
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.6,
+            0.3,
+            1
+          ],
+          "intensity": 6,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "sconces-left",
+      "name": "sconces-left",
+      "transform": {
+        "position": [
+          -5,
+          2.2,
+          -4.5
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.7,
+            0.4,
+            1
+          ],
+          "intensity": 3,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "sconces-right",
+      "name": "sconces-right",
+      "transform": {
+        "position": [
+          5,
+          2.2,
+          -4.5
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.7,
+            0.4,
+            1
+          ],
+          "intensity": 3,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "neon-glow",
+      "name": "neon-glow",
+      "transform": {
+        "position": [
+          -5,
+          2,
+          -4
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            0.3,
+            0.5,
+            1,
+            1
+          ],
+          "intensity": 1,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "fill",
+      "name": "Fill",
+      "components": {
+        "com.iwsdk.components.HemisphereLight": {
+          "skyColor": [
+            0.25,
+            0.15,
+            0.1,
+            1
+          ],
+          "groundColor": [
+            0.05,
+            0.03,
+            0.02,
+            1
+          ],
+          "intensity": 1.2
+        }
+      }
+    },
+    {
+      "id": "performer-key",
+      "name": "Performer Key",
+      "transform": {
+        "position": [
+          0,
+          2.8,
+          -1.2
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.86,
+            0.7,
+            1
+          ],
+          "intensity": 8,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    }
+  ]
+}

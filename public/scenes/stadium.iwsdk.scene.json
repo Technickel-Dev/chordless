@@ -1,0 +1,226 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.DomeGradient": {
+      "sky": [
+        0.01,
+        0.01,
+        0.03,
+        1
+      ],
+      "equator": [
+        0.04,
+        0.025,
+        0.06,
+        1
+      ],
+      "ground": [
+        0,
+        0,
+        0.01,
+        1
+      ],
+      "intensity": 1
+    },
+    "com.iwsdk.components.IBLGradient": {
+      "sky": [
+        0.011000000000000001,
+        0.011000000000000001,
+        0.033,
+        1
+      ],
+      "equator": [
+        0.04,
+        0.025,
+        0.06,
+        1
+      ],
+      "ground": [
+        0,
+        0,
+        0.01,
+        1
+      ],
+      "intensity": 0.6
+    }
+  },
+  "environment": {
+    "toneMapping": "aces",
+    "exposure": 1.1,
+    "shadows": false
+  },
+  "resources": {},
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [
+          0,
+          1.6,
+          1
+        ],
+        "target": [
+          0,
+          1.3,
+          -6
+        ],
+        "fov": 70
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "stadium-set",
+      "name": "Stadium Set",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "stadium-set"
+      }
+    },
+    {
+      "id": "welcome-panel",
+      "name": "Welcome Panel",
+      "content": {
+        "type": "asset",
+        "asset": "welcome-panel"
+      },
+      "transform": {
+        "position": [
+          0.95,
+          1.5,
+          -1.6
+        ],
+        "rotationDeg": [
+          0,
+          -30,
+          0
+        ],
+        "scale": 0.32
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "stage-key",
+      "name": "stage-key",
+      "transform": {
+        "position": [
+          0,
+          8,
+          -4
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.86,
+            0.76,
+            1
+          ],
+          "intensity": 80,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "stage-magenta",
+      "name": "stage-magenta",
+      "transform": {
+        "position": [
+          -6,
+          10,
+          2
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.3,
+            0.7,
+            1
+          ],
+          "intensity": 50,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "stage-blue",
+      "name": "stage-blue",
+      "transform": {
+        "position": [
+          6,
+          10,
+          2
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            0.3,
+            0.4,
+            1,
+            1
+          ],
+          "intensity": 50,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    },
+    {
+      "id": "fill",
+      "name": "Fill",
+      "components": {
+        "com.iwsdk.components.HemisphereLight": {
+          "skyColor": [
+            0.3,
+            0.25,
+            0.45,
+            1
+          ],
+          "groundColor": [
+            0.05,
+            0.03,
+            0.06,
+            1
+          ],
+          "intensity": 1.2
+        }
+      }
+    },
+    {
+      "id": "performer-key",
+      "name": "Performer Key",
+      "transform": {
+        "position": [
+          0,
+          2.8,
+          -1.2
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.PointLight": {
+          "color": [
+            1,
+            0.92,
+            0.85,
+            1
+          ],
+          "intensity": 18,
+          "distance": 0,
+          "decay": 2
+        }
+      }
+    }
+  ]
+}

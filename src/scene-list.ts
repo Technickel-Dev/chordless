@@ -26,6 +26,21 @@ export const SCENES: readonly SceneEntry[] = [
   { file: 'underwater', name: 'Underwater' },
   { file: 'lantern-lake', name: 'Lantern Lake' },
   { file: 'blossom-garden', name: 'Cherry Blossom Garden' },
+  { file: 'desert-canyon', name: 'Desert Canyon' },
+  { file: 'rainy-rooftop', name: 'Rainy Rooftop' },
+  { file: 'stadium', name: 'Stadium Headliner' },
+  { file: 'space-station', name: 'Space Station' },
+  { file: 'volcano-rim', name: 'Volcano Rim' },
+  { file: 'train-roof', name: 'Train Roof' },
+  { file: 'jazz-club', name: '1950s Jazz Club' },
+  { file: 'mountaintop', name: 'Mountaintop' },
+  { file: 'pirate-ship', name: 'Pirate Ship' },
+  { file: 'snow-globe', name: 'Snow Globe' },
+  { file: 'library', name: 'Endless Library' },
+  { file: 'clock-tower', name: 'Clock Tower' },
+  { file: 'giant-turtle', name: 'Giant Turtle' },
+  { file: 'museum', name: 'Museum at Night' },
+  { file: 'surreal-desert', name: 'Surreal Desert' },
 ];
 
 export function sceneUrl(entry: SceneEntry): string {

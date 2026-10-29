@@ -1,0 +1,174 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.DomeGradient": {
+      "sky": [
+        0.3,
+        0.25,
+        0.5,
+        1
+      ],
+      "equator": [
+        1,
+        0.55,
+        0.35,
+        1
+      ],
+      "ground": [
+        0.2,
+        0.1,
+        0.08,
+        1
+      ],
+      "intensity": 1
+    },
+    "com.iwsdk.components.IBLGradient": {
+      "sky": [
+        0.33,
+        0.275,
+        0.55,
+        1
+      ],
+      "equator": [
+        1,
+        0.55,
+        0.35,
+        1
+      ],
+      "ground": [
+        0.2,
+        0.1,
+        0.08,
+        1
+      ],
+      "intensity": 0.7
+    }
+  },
+  "environment": {
+    "toneMapping": "aces",
+    "exposure": 1,
+    "shadows": false
+  },
+  "resources": {},
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [
+          0,
+          1.6,
+          1
+        ],
+        "target": [
+          0,
+          1.3,
+          -6
+        ],
+        "fov": 70
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "desert-canyon-set",
+      "name": "Desert Canyon Set",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "desert-canyon-set"
+      }
+    },
+    {
+      "id": "welcome-panel",
+      "name": "Welcome Panel",
+      "content": {
+        "type": "asset",
+        "asset": "welcome-panel"
+      },
+      "transform": {
+        "position": [
+          0.95,
+          1.5,
+          -1.6
+        ],
+        "rotationDeg": [
+          0,
+          -30,
+          0
+        ],
+        "scale": 0.32
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "sun",
+      "name": "sun",
+      "transform": {
+        "rotationDeg": [
+          -15,
+          160,
+          0
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.DirectionalLight": {
+          "color": [
+            1,
+            0.62,
+            0.4,
+            1
+          ],
+          "intensity": 2.2
+        }
+      }
+    },
+    {
+      "id": "sky-key",
+      "name": "sky-key",
+      "transform": {
+        "rotationDeg": [
+          -50,
+          20,
+          0
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.DirectionalLight": {
+          "color": [
+            0.65,
+            0.62,
+            0.9,
+            1
+          ],
+          "intensity": 0.7
+        }
+      }
+    },
+    {
+      "id": "fill",
+      "name": "Fill",
+      "components": {
+        "com.iwsdk.components.HemisphereLight": {
+          "skyColor": [
+            0.6,
+            0.5,
+            0.7,
+            1
+          ],
+          "groundColor": [
+            0.4,
+            0.2,
+            0.12,
+            1
+          ],
+          "intensity": 0.8
+        }
+      }
+    }
+  ]
+}

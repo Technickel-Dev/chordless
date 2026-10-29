@@ -206,10 +206,13 @@ function planRightHand(notes) {
 function leftTip(finger, t, intervals, positionAt) {
   const mine = intervals.filter((i) => i.finger === finger);
   const k = FINGERS.indexOf(finger);
-  /** The finger's resting place by the hand when the hand is at time `at`. */
+  /**
+   * The finger's resting place by the hand when the hand is at time `at`:
+   * curled over the treble strings, just clear of them.
+   */
   const restAt = (at) => {
     const p = positionAt(at);
-    return v(slotX(p + k), pressPoint(Math.min(5, 2 + k), p + k)[1], GUITAR.stringZ + HOVER + 0.006);
+    return v(slotX(p + k), pressPoint(3.5 + k * 0.5, p + k)[1], GUITAR.stringZ + HOVER);
   };
   const rest = restAt(t);
   const hover = (p) => [p[0], p[1], GUITAR.stringZ + HOVER];
@@ -324,7 +327,7 @@ export function planPerformance(song, tempo = song.tempo) {
     for (const b of intervals) {
       if (a === b || a.fret !== b.fret || a.finger === b.finger) continue;
       if (a.on >= b.off || b.on >= a.off) continue;
-      a.fraction = FINGERS.indexOf(a.finger) < FINGERS.indexOf(b.finger) ? 0.72 : 0.36;
+      a.fraction = FINGERS.indexOf(a.finger) < FINGERS.indexOf(b.finger) ? 0.88 : 0.36;
     }
   }
   const strokes = planRightHand(notes);
@@ -417,19 +420,29 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
     await new Promise((r) => requestAnimationFrame(r));
   }
 
-  // Watch the app: every pluck it registers, with the note and when.
-  // Times are on the performance clock, which never jumps: if the browser
-  // stalls, the performance slows for a moment instead of skipping notes.
+  // Listen to the app: every note it plucks, caught at the synth the moment
+  // it sounds (polling the component every few frames could read the next
+  // note's name), and the chord it names. Times are on the performance
+  // clock, which never jumps: if the browser stalls, the performance slows
+  // for a moment instead of skipping notes.
   const heard = [];
+  const chords = [];
   let watching = true;
   let clock = 0;
   const before = await guitarState();
+  const synth = guitarSystem.synth;
+  const pluck = synth.pluck;
+  synth.pluck = function (string, midi, velocity, when, muted, legato) {
+    // A hammer-on re-pitches a ringing string; it is not a new pluck.
+    if (!legato) heard.push({ at: clock, count: 1, note: midiName(midi) });
+    return pluck.apply(this, arguments);
+  };
   let plucks = before.plucks;
   const watch = (async () => {
     while (watching) {
       const g = await guitarState();
       if (g.plucks > plucks) {
-        heard.push({ at: clock, count: g.plucks - plucks, note: g.lastNote, chord: g.chord });
+        chords.push({ at: clock, chord: g.chord });
         plucks = g.plucks;
       }
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -475,6 +488,7 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
     });
   } finally {
     watching = false;
+    synth.pluck = pluck;
     await watch;
   }
 
@@ -492,7 +506,7 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
   for (const n of notes) {
     if (n.chord) {
       // Name the chord once the whole strum is ringing: the last pluck of it.
-      const strum = heard.filter((h) => h.at > n.time - 0.1 && h.at < n.time + 0.3).at(-1);
+      const strum = chords.filter((h) => h.at > n.time - 0.1 && h.at < n.time + 0.3).at(-1);
       report.push({
         beat: n.beat,
         want: `${n.chord} chord`,

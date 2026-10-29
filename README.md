@@ -142,10 +142,20 @@ npm run play:william-tell
   note asked for, the finger and hand position used, the note the app played
   and when it registered. `tests/performer.js` plans the fingering (hand
   positions with lookahead, one finger per fret, fingers kept down until they
-  are in the way, shifts with fingers lifted) and the picking (economy strokes
-  across each string), then drives both emulated hands every frame through
+  are in the way, shifts with fingers lifted) and the picking (stroke
+  directions chosen for the whole song so the finger rarely lifts over a
+  string, played just ahead of the beat to allow for the app's delay in
+  hearing a pluck), then drives both emulated hands every frame through
   `tests/hand-rig.js`, which solves each finger's joints to reach its
-  fingertip target. Set `WT_TEMPO=110` for a slower take.
+  fingertip target without passing through the others. Set `WT_TEMPO=110`
+  for a slower take.
+- `npm run check:hands` poses the whole song and checks the hands stay
+  plausible: bone lengths, joint limits, no kinked or twisted fingers, no
+  finger through another, and no fingertip pad pressing a string or fret it
+  should not.
+- `npm run check:timing` feeds the posed song through the app's own fret
+  reader and pluck detector at steady (90, 72, 60 Hz) and uneven frame
+  rates, and scores every note and how far off the beat it lands.
 - `tests/render-audio.mjs` (`npm run render:audio`) renders strummed chords,
   a melody and single notes straight from the synth into
   `test-results/audio/<label>-*.wav`, with spectrum statistics, for comparing
@@ -168,6 +178,7 @@ public/ui/             the panel layout (UIKitML)
 tests/unit/            unit tests
 tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand poses
 tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
+tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
 ```
 
 ## Credits

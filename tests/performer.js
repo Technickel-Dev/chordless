@@ -19,6 +19,7 @@
 
 import { GUITAR, OPEN_MIDI } from '/src/guitar/geometry.ts';
 import { midiName } from '/src/guitar/chords.ts';
+import { AirGuitar } from '/src/guitar/air-guitar-component.ts';
 import { CHORDS } from '/tests/chord-hand.js';
 import { applyPose, FINGERS, gapY, leftHand, lerp, pressPoint, quatFromAxes, rightHand, slotX, v } from '/tests/hand-rig.js';
 
@@ -34,6 +35,12 @@ const LAND_TIME = 0.045;
 const PICK_X = -0.012;
 const PICK_DEPTH = 0.002;
 const PICK_LIFT = 0.045;
+/**
+ * The app hears a pluck about this long after the fingertip crosses the
+ * string (it smooths the fingertip's track and sees each crossing at the
+ * next frame), so the picking hand plays this far ahead of the beat.
+ */
+const PICK_LEAD = 0.025;
 /** Stroke time by dynamic; the app sets loudness from fingertip speed. */
 const STROKE_SECONDS = { pp: 0.03, p: 0.026, mf: 0.022, f: 0.017, ff: 0.013 };
 
@@ -56,8 +63,11 @@ async function guitarState() {
   return q.components.find((c) => c.componentId === 'AirGuitar').values;
 }
 
-/** Longest step the performance clock takes in one frame. */
-const MAX_STEP = 0.02;
+/**
+ * Longest step the performance clock takes in one frame: two frames at
+ * 60 Hz, since the browser's frames vary between about 16 and 21 ms.
+ */
+const MAX_STEP = 0.034;
 
 // ---------------------------------------------------------------- planning
 
@@ -173,31 +183,44 @@ function planLeftHand(notes) {
 
 /** Right-hand strokes: { time, start, end, fromGap, toGap, transit, strum }. */
 function planRightHand(notes) {
-  const strokes = [];
-  let gap = 3;
-  for (const n of notes) {
-    if (n.chord) {
-      const half = (STROKE_SECONDS[n.dynamic] ?? STROKE_SECONDS.f) * 1.6;
-      strokes.push({ time: n.time, start: n.time - half, end: n.time + half, fromGap: 0, toGap: 6, transit: gap !== 0, strum: true });
-      gap = 6;
-      continue;
-    }
-    const s = n.string;
-    const half = (STROKE_SECONDS[n.dynamic] ?? STROKE_SECONDS.mf) / 2;
-    // Pick away from the side the finger is already on; only a string it
-    // is not next to needs a lift over the strings.
-    let fromGap = s;
-    let transit = false;
-    if (gap === s + 1) fromGap = s + 1;
-    else if (gap !== s) {
-      fromGap = Math.abs(gap - s) < Math.abs(gap - (s + 1)) ? s : s + 1;
-      transit = true;
-    }
-    const toGap = fromGap === s ? s + 1 : s;
-    strokes.push({ time: n.time, start: n.time - half, end: n.time + half, fromGap, toGap, transit });
-    gap = toGap;
+  // Each note can be picked toward the bass or the treble: from one side of
+  // its string to the other. Choose directions for the whole song at once,
+  // as a player does, so each stroke ends on the side the next note needs
+  // and the finger rarely has to lift over a string to get there (a lift
+  // over a string it just played is the likeliest to catch it). A lift
+  // that cannot be avoided goes where there is most time for it.
+  const options = notes.map((n) =>
+    n.chord ? [[0, 6]] : [[n.string, n.string + 1], [n.string + 1, n.string]],
+  );
+  const hop = (from, to, time) => (from === to ? 0 : (1 + 0.2 * Math.abs(from - to)) * Math.max(1, 0.25 / time));
+  // cost[i][k]: fewest lifts to play notes 0..i with note i picked option k.
+  const cost = options.map((o) => o.map(() => Infinity));
+  const back = options.map((o) => o.map(() => 0));
+  cost[0] = options[0].map(() => 0);
+  for (let i = 1; i < notes.length; i++) {
+    options[i].forEach(([from], k) => {
+      options[i - 1].forEach(([, to], j) => {
+        const c = cost[i - 1][j] + hop(to, from, notes[i].time - notes[i - 1].time);
+        if (c < cost[i][k]) {
+          cost[i][k] = c;
+          back[i][k] = j;
+        }
+      });
+    });
   }
-  return strokes;
+  const chosen = [];
+  let k = cost.at(-1).indexOf(Math.min(...cost.at(-1)));
+  for (let i = notes.length - 1; i >= 0; i--) {
+    chosen[i] = options[i][k];
+    k = back[i][k];
+  }
+
+  return notes.map((n, i) => {
+    const [fromGap, toGap] = chosen[i];
+    const half = n.chord ? (STROKE_SECONDS[n.dynamic] ?? STROKE_SECONDS.f) * 1.6 : (STROKE_SECONDS[n.dynamic] ?? STROKE_SECONDS.mf) / 2;
+    const transit = i > 0 && chosen[i - 1][1] !== fromGap;
+    return { time: n.time, start: n.time - half, end: n.time + half, fromGap, toGap, transit, strum: !!n.chord };
+  });
 }
 
 // ----------------------------------------------------------------- motion
@@ -265,13 +288,20 @@ function rightTip(t, strokes) {
   const prevGap = strokes[i - 1].toGap;
   const prevEnd = strokes[i - 1].end;
   if (!s.transit) return at(prevGap);
-  // Lift straight off, cross above the strings, come down beside the string.
+  // Follow through at the strings for a moment (the app judges a stroke
+  // from where the fingertip is a frame later), lift straight off, cross
+  // above the strings, come down beside the string and settle before
+  // picking it.
   const window = s.start - prevEnd;
-  const lift = Math.min(0.035, window * 0.25);
-  const land = Math.min(0.035, window * 0.25);
-  if (t < prevEnd + lift) return lerp(at(prevGap), at(prevGap, PICK_LIFT), smooth((t - prevEnd) / lift));
-  if (t > s.start - land) return lerp(at(s.fromGap, PICK_LIFT), at(s.fromGap), smooth(1 - (s.start - t) / land));
-  return lerp(at(prevGap, PICK_LIFT), at(s.fromGap, PICK_LIFT), smooth((t - prevEnd - lift) / Math.max(0.005, window - lift - land)));
+  const settle = Math.min(0.02, window * 0.15);
+  const lift = Math.min(0.035, window * 0.2);
+  const up = prevEnd + settle;
+  const down = s.start - settle;
+  if (t < up) return at(prevGap);
+  if (t > down) return at(s.fromGap);
+  if (t < up + lift) return lerp(at(prevGap), at(prevGap, PICK_LIFT), smooth((t - up) / lift));
+  if (t > down - lift) return lerp(at(s.fromGap, PICK_LIFT), at(s.fromGap), smooth(1 - (down - t) / lift));
+  return lerp(at(prevGap, PICK_LIFT), at(s.fromGap, PICK_LIFT), smooth((t - up - lift) / Math.max(0.005, down - up - 2 * lift)));
 }
 
 // -------------------------------------------------------------- performing
@@ -364,10 +394,12 @@ export function handsFor(plan) {
     for (const f of FINGERS) tips[f] = leftTip(f, t, intervals, positionAt).tip;
     const left = leftHand({ position, tips });
 
-    const indexTip = rightTip(t, strokes);
+    // The picking hand plays ahead by the app's delay in hearing a pluck.
+    const pickT = t + PICK_LEAD;
+    const indexTip = rightTip(pickT, strokes);
     // The wrist follows the fingertip across the strings on a spring; a
     // strum moves the whole hand.
-    const strumming = strokes.some((s) => s.strum && t >= s.start - 0.06 && t <= s.end + 0.06);
+    const strumming = strokes.some((s) => s.strum && pickT >= s.start - 0.06 && pickT <= s.end + 0.06);
     const wanted = indexTip[1] + WRIST_BEHIND;
     wristY = strumming ? wanted : wristY + (wanted - wristY) * (1 - Math.exp(-dt / 0.12));
     // Lifting over the strings lifts the whole hand, not just the fingertip.
@@ -422,12 +454,12 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
 
   // Listen to the app: every note it plucks, caught at the synth the moment
   // it sounds (polling the component every few frames could read the next
-  // note's name), and the chord it names. Times are on the performance
-  // clock, which never jumps: if the browser stalls, the performance slows
-  // for a moment instead of skipping notes.
+  // note's name), and the chord it names, read in the page each frame.
+  // Times are on the performance clock, which never jumps far: if the
+  // browser stalls, the performance slows for a moment instead of skipping
+  // notes.
   const heard = [];
   const chords = [];
-  let watching = true;
   let clock = 0;
   const before = await guitarState();
   const synth = guitarSystem.synth;
@@ -437,17 +469,15 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
     if (!legato) heard.push({ at: clock, count: 1, note: midiName(midi) });
     return pluck.apply(this, arguments);
   };
+  const guitar = guitarSystem.entity;
   let plucks = before.plucks;
-  const watch = (async () => {
-    while (watching) {
-      const g = await guitarState();
-      if (g.plucks > plucks) {
-        chords.push({ at: clock, chord: g.chord });
-        plucks = g.plucks;
-      }
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const watch = () => {
+    const count = guitar.getValue(AirGuitar, 'plucks');
+    if (count > plucks) {
+      chords.push({ at: clock, chord: guitar.getValue(AirGuitar, 'chord') });
+      plucks = count;
     }
-  })();
+  };
 
   // Drive the hands every frame until the song, and its last chord, end.
   let shown = -1;
@@ -472,6 +502,7 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
           clock += advance;
           const t = clock;
           pose(t, Math.max(0.001, advance));
+          watch();
           frames++;
           const current = notes.findIndex((n) => n.time > t) - 1;
           if (current !== shown && current >= 0) {
@@ -487,9 +518,7 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
       requestAnimationFrame(tick);
     });
   } finally {
-    watching = false;
     synth.pluck = pluck;
-    await watch;
   }
 
   // Match what the app played to the score by time: each note takes the

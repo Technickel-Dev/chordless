@@ -259,8 +259,12 @@ function solveFinger(name, metacarpal, knuckle, target, hand, pressing, others =
         // arches the finger to keep it off the next string. Fingers make
         // room for each other rather than pass through. Swinging the finger
         // sideways is the last resort.
-        const crowding = others.length ? intrusion([[knuckle, pip], [pip, dip], [dip, tip]], others) : 0;
-        const cost = bad * 10 + padStrays(tip, dip, pip) * 10 + crowding * 150 + style + Math.abs(roll) / 200 + len(shift) * 20;
+        // (The costlier terms are skipped once a posture cannot win.)
+        let cost = bad * 10 + style + Math.abs(roll) / 200 + len(shift) * 20;
+        if (best && cost >= best.cost) continue;
+        cost += padStrays(tip, dip, pip) * 10;
+        if (best && cost >= best.cost) continue;
+        if (others.length) cost += intrusion([[knuckle, pip], [pip, dip], [dip, tip]], others) * 150;
         if (!best || cost < best.cost) best = { cost, pip, dip, tip, axis };
       }
     }
@@ -411,19 +415,21 @@ export function leftHand({ position, tips }) {
       solveFinger(f, hand.metacarpals[f], hand.knuckles[f], targets[f], { ...hand, upright }, pressingOf(f)),
     );
   }
-  // Then each finger again, making room for where the others ended up
-  // (twice, so they settle on postures that suit each other). Fingers on
-  // the strings come first: they only avoid each other, and resting
-  // fingers get out of their way.
+  // Then any finger that runs into another again, making room for where
+  // the others ended up (up to twice, so they settle on postures that suit
+  // each other). Fingers on the strings come first: they only avoid each
+  // other, and resting fingers get out of their way.
   const pressed = (f) => pressingOf(f) >= 0.5;
+  const othersOf = (f) => FINGERS.filter((n) => n !== f && (pressed(n) || !pressed(f))).flatMap((n) => bonesOf(joints, n));
   for (let pass = 0; pass < 2; pass++) {
-    FINGERS.forEach((f) => {
-      const others = FINGERS.filter((n) => n !== f && (pressed(n) || !pressed(f))).flatMap((n) => bonesOf(joints, n));
+    const crowded = FINGERS.filter((f) => intrusion(bonesOf(joints, f), othersOf(f)) > 0);
+    if (crowded.length === 0) break;
+    for (const f of crowded) {
       Object.assign(
         joints,
-        solveFinger(f, hand.metacarpals[f], hand.knuckles[f], targets[f], { ...hand, upright: v(0, 0, 1) }, pressingOf(f), others),
+        solveFinger(f, hand.metacarpals[f], hand.knuckles[f], targets[f], { ...hand, upright: v(0, 0, 1) }, pressingOf(f), othersOf(f)),
       );
-    });
+    }
   }
   // Thumb along the back of the neck, its pad behind the index and middle
   // fingers and pointing toward the headstock.

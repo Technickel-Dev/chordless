@@ -274,6 +274,18 @@ export function stripeTexture(a: RGB, b: RGB, stripes: number, size = 128): Text
   });
 }
 
+/** Concentric rings around the UV center, for record grooves and targets. */
+export function ringTexture(colors: readonly RGB[], rings: number, size = 256): Texture {
+  const c = size / 2;
+  return fill(size, (x, y, o) => {
+    const r = Math.hypot(x - c, y - c) / c;
+    const col = colors[Math.floor(r * rings) % colors.length];
+    o[0] = col[0];
+    o[1] = col[1];
+    o[2] = col[2];
+  });
+}
+
 /** Scattered soft blobs on a background: florals, polka dots, sprinkles. */
 export function blobTexture(bg: RGB, colors: readonly RGB[], count: number, radius: number, seed: number, size = 256): Texture {
   const rand = seededRandom(seed);
@@ -421,6 +433,10 @@ const FONT: Record<string, string> = {
   U: '1111111111110E', V: '11111111110A04', W: '1111111515150A',
   X: '11110A040A1111', Y: '11110A04040404', Z: '1F01020408101F', ' ': '00000000000000',
   '!': '04040404040004', '-': '0000001F000000', '.': '00000000000004', "'": '04040800000000',
+  '0': '0E11131519110E', '1': '040C040404040E', '2': '0E11010204081F',
+  '3': '1F02040201110E', '4': '02060A121F0202', '5': '1F101E0101110E', '6': '0608101E11110E',
+  '7': '1F010204080808', '8': '0E11110E11110E', '9': '0E11110F01020C', $: '040F140E051E04',
+  ':': '000C0C000C0C00', '?': '0E110102040004', ',': '000000000C0408',
 };
 
 /**

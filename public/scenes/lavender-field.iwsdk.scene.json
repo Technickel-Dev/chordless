@@ -1,0 +1,174 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.DomeGradient": {
+      "sky": [
+        0.42,
+        0.45,
+        0.75,
+        1
+      ],
+      "equator": [
+        1,
+        0.78,
+        0.55,
+        1
+      ],
+      "ground": [
+        0.4,
+        0.3,
+        0.25,
+        1
+      ],
+      "intensity": 1
+    },
+    "com.iwsdk.components.IBLGradient": {
+      "sky": [
+        0.462,
+        0.49500000000000005,
+        0.8250000000000001,
+        1
+      ],
+      "equator": [
+        1,
+        0.78,
+        0.55,
+        1
+      ],
+      "ground": [
+        0.4,
+        0.3,
+        0.25,
+        1
+      ],
+      "intensity": 0.8
+    }
+  },
+  "environment": {
+    "toneMapping": "aces",
+    "exposure": 1,
+    "shadows": false
+  },
+  "resources": {},
+  "authoring": {
+    "views": [
+      {
+        "id": "hero",
+        "role": "hero",
+        "projection": "perspective",
+        "position": [
+          0,
+          1.6,
+          1
+        ],
+        "target": [
+          0,
+          1.3,
+          -6
+        ],
+        "fov": 70
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "id": "lavender-field-set",
+      "name": "lavender-field-set",
+      "framingRole": "support",
+      "content": {
+        "type": "asset",
+        "asset": "lavender-field-set"
+      }
+    },
+    {
+      "id": "welcome-panel",
+      "name": "Welcome Panel",
+      "content": {
+        "type": "asset",
+        "asset": "welcome-panel"
+      },
+      "transform": {
+        "position": [
+          0.95,
+          1.5,
+          -1.6
+        ],
+        "rotationDeg": [
+          0,
+          -30,
+          0
+        ],
+        "scale": 0.32
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "golden-sun",
+      "name": "golden-sun",
+      "transform": {
+        "rotationDeg": [
+          -12,
+          165,
+          0
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.DirectionalLight": {
+          "color": [
+            1,
+            0.78,
+            0.5,
+            1
+          ],
+          "intensity": 2.4
+        }
+      }
+    },
+    {
+      "id": "sky-key",
+      "name": "sky-key",
+      "transform": {
+        "rotationDeg": [
+          -40,
+          20,
+          0
+        ]
+      },
+      "components": {
+        "com.iwsdk.components.DirectionalLight": {
+          "color": [
+            0.85,
+            0.8,
+            0.95,
+            1
+          ],
+          "intensity": 1
+        }
+      }
+    },
+    {
+      "id": "fill",
+      "name": "Fill",
+      "components": {
+        "com.iwsdk.components.HemisphereLight": {
+          "skyColor": [
+            0.75,
+            0.7,
+            0.85,
+            1
+          ],
+          "groundColor": [
+            0.45,
+            0.35,
+            0.3,
+            1
+          ],
+          "intensity": 1
+        }
+      }
+    }
+  ]
+}

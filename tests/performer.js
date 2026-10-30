@@ -314,7 +314,9 @@ function rightTip(t, strokes) {
 export function planPerformance(song, tempo = song.tempo) {
   const beat = 60 / tempo;
   const first = Math.min(...song.events.map((e) => e.beat));
-  const LEAD_IN = 1.0;
+  // The hands settle in place before the clock starts, so the first note
+  // needs only a short lead-in.
+  const LEAD_IN = 0.4;
 
   // One planning record per musical event.
   const notes = song.events.map((e) => {

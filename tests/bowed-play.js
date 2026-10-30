@@ -10,24 +10,16 @@
 
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { startApp } from './app-start.js';
 
-/** Plays one instrument's version: { instrument, song ([module, export]), performer (module), view (headset orientation) }. */
+/** Plays one instrument's version: { instrument, root (model name), song ([module, export]), performer (module), view (headset orientation) }. */
 export async function runBowedPlay({ page, frame, workspaceRoot }, I) {
   const tempo = Number(process.env.WT_TEMPO) || undefined;
   const dispatch = (method, params = {}) =>
     frame.evaluate(([m, p]) => window.IWER_MCP.dispatch(m, p), [method, params]);
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // A window behind others renders at about 1 fps.
-  await page.bringToFront();
-  await frame.evaluate(() => window.IWER_MCP.dispatch('reload_page', {}));
-  await wait(1500);
-  await frame.waitForFunction(() => window.FRAMEWORK_MCP_RUNTIME?.world?.scene != null, null, { timeout: 60000 });
-  await wait(1000);
-
-  // A real click lets the browser start audio if it is still suspended.
-  const box = await (await frame.frameElement()).boundingBox();
-  await page.mouse.click(box.x + 12, box.y + box.height / 2);
+  await startApp({ page, frame }, { root: I.root, view: I.view, modules: [I.song[0], I.performer] });
 
   const banner = (text) =>
     frame
@@ -45,12 +37,6 @@ export async function runBowedPlay({ page, frame, workspaceRoot }, I) {
         el.textContent = t;
       }, text)
       .catch(() => {});
-
-  await dispatch('accept_session');
-  await wait(600);
-  await dispatch('set_input_mode', { mode: 'hand' });
-  await dispatch('set_transform', { device: 'headset', position: { x: 0, y: 1.6, z: 0 }, orientation: I.view });
-  await wait(800);
 
   const playing = frame.evaluate(async ([t, I]) => {
     const WILLIAM_TELL_VIOLIN = (await import(I.song[0]))[I.song[1]];

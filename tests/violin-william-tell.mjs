@@ -11,6 +11,7 @@ import { runBowedPlay } from './bowed-play.js';
 export default (ctx) =>
   runBowedPlay(ctx, {
     instrument: 'violin',
+    root: 'AirViolin',
     song: ['/tests/songs/william-tell.js', 'WILLIAM_TELL_VIOLIN'],
     performer: '/tests/violin-performer.js',
     // Looking down along the violin's neck, as a violinist does.

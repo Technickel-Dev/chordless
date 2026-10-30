@@ -11,6 +11,7 @@ import { runBowedPlay } from './bowed-play.js';
 export default (ctx) =>
   runBowedPlay(ctx, {
     instrument: 'cello',
+    root: 'AirCello',
     song: ['/tests/songs/william-tell.js', 'WILLIAM_TELL_CELLO'],
     performer: '/tests/cello-performer.js',
     // Looking down at the cello in front, a little to the left.

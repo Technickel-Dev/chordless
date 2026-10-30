@@ -13,6 +13,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { reloadApp } from './app-start.js';
 
 /**
  * Runs the test for one instrument, `I`: { instrument, title, component,
@@ -256,13 +257,7 @@ export async function runBowedE2E({ page, frame, workspaceRoot }, I) {
     });
   };
 
-  await page.bringToFront();
-  await frame.evaluate(() => window.IWER_MCP.dispatch('reload_page', {}));
-  await wait(1500);
-  await frame.waitForFunction(() => window.FRAMEWORK_MCP_RUNTIME?.world?.scene != null, null, { timeout: 60000 });
-  await wait(1200);
-  const box = await (await frame.frameElement()).boundingBox();
-  await page.mouse.click(box.x + 12, box.y + box.height / 2); // lets audio start
+  await reloadApp({ page, frame }, I.root);
   page.on('console', onConsole);
   page.on('pageerror', onPageError);
 

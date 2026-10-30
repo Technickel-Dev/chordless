@@ -7,15 +7,20 @@
 
 import { createSystem, Entity, UIKitMLAsset, VisibilityState } from '@iwsdk/core';
 import { AirGuitar, GuitarToneMode } from './guitar/air-guitar-component.js';
+import { AirCello } from './cello/air-cello-component.js';
 import { AirViolin } from './violin/air-violin-component.js';
+
+/** The instruments, by the panel button that takes each one out. */
+type Instrument = 'guitar' | 'violin' | 'cello';
+const INSTRUMENTS: Instrument[] = ['guitar', 'violin', 'cello'];
 
 export class PanelSystem extends createSystem({
   guitars: { required: [AirGuitar] },
   violins: { required: [AirViolin] },
+  cellos: { required: [AirCello] },
 }) {
-  private guitarButton: ReturnType<UIKitMLAsset['getElementById']> = null;
-  private violinButton: ReturnType<UIKitMLAsset['getElementById']> = null;
-  private showingViolin: boolean | null = null;
+  private readonly buttons = new Map<Instrument, ReturnType<UIKitMLAsset['getElementById']>>();
+  private showing: Instrument | null = null;
 
   init(): void {
     const panel = this.world.getSceneObject<UIKitMLAsset>('welcome-panel');
@@ -50,8 +55,8 @@ export class PanelSystem extends createSystem({
   }
 
   /**
-   * Instrument, tone, volume and reset buttons write to the AirGuitar and
-   * AirViolin components.
+   * Instrument, tone, volume and reset buttons write to the AirGuitar,
+   * AirViolin and AirCello components.
    */
   private wireGuitarControls(panel: UIKitMLAsset): void {
     const clean = panel.getElementById('tone-clean');
@@ -63,22 +68,25 @@ export class PanelSystem extends createSystem({
     const forEachGuitar = (fn: (e: Entity) => void) => {
       for (const entity of this.queries.guitars.entities) fn(entity);
     };
-    const forEachViolin = (fn: (e: Entity) => void) => {
-      for (const entity of this.queries.violins.entities) fn(entity);
+    // The bowed instruments share their fields.
+    const forEachBowed = (fn: (e: Entity, c: typeof AirViolin) => void) => {
+      for (const entity of this.queries.violins.entities) fn(entity, AirViolin);
+      for (const entity of this.queries.cellos.entities) fn(entity, AirCello);
     };
-    this.guitarButton = panel.getElementById('instrument-guitar');
-    this.violinButton = panel.getElementById('instrument-violin');
-    const choose = (violin: boolean) => {
-      forEachGuitar((e) => e.setValue(AirGuitar, 'active', !violin));
-      forEachViolin((e) => e.setValue(AirViolin, 'active', violin));
+    for (const name of INSTRUMENTS) this.buttons.set(name, panel.getElementById(`instrument-${name}`));
+    const choose = (name: Instrument) => {
+      forEachGuitar((e) => e.setValue(AirGuitar, 'active', name === 'guitar'));
+      for (const entity of this.queries.violins.entities) entity.setValue(AirViolin, 'active', name === 'violin');
+      for (const entity of this.queries.cellos.entities) entity.setValue(AirCello, 'active', name === 'cello');
     };
     const nudgeVolume = (step: number) => {
       forEachGuitar((e) => e.setValue(AirGuitar, 'volume', clamp01((e.getValue(AirGuitar, 'volume') ?? 0.8) + step)));
-      forEachViolin((e) => e.setValue(AirViolin, 'volume', clamp01((e.getValue(AirViolin, 'volume') ?? 0.8) + step)));
+      forEachBowed((e, c) => e.setValue(c, 'volume', clamp01((e.getValue(c, 'volume') ?? 0.8) + step)));
     };
     const handlers: [string, () => void][] = [
-      ['instrument-guitar', () => choose(false)],
-      ['instrument-violin', () => choose(true)],
+      ['instrument-guitar', () => choose('guitar')],
+      ['instrument-violin', () => choose('violin')],
+      ['instrument-cello', () => choose('cello')],
       [
         'tone-clean',
         () => {
@@ -99,7 +107,7 @@ export class PanelSystem extends createSystem({
         'reset-guitar',
         () => {
           forEachGuitar((e) => e.setValue(AirGuitar, 'resetPlacement', true));
-          forEachViolin((e) => e.setValue(AirViolin, 'resetPlacement', true));
+          forEachBowed((e, c) => e.setValue(c, 'resetPlacement', true));
         },
       ],
     ];
@@ -114,12 +122,12 @@ export class PanelSystem extends createSystem({
 
   /** The instrument buttons show which instrument is out, however it was chosen. */
   update(): void {
-    let violin = false;
-    for (const e of this.queries.violins.entities) violin = e.getValue(AirViolin, 'active') ?? false;
-    if (violin === this.showingViolin) return;
-    this.showingViolin = violin;
-    this.guitarButton?.setProperties({ variant: violin ? 'secondary' : 'primary' });
-    this.violinButton?.setProperties({ variant: violin ? 'primary' : 'secondary' });
+    let out: Instrument = 'guitar';
+    for (const e of this.queries.violins.entities) if (e.getValue(AirViolin, 'active')) out = 'violin';
+    for (const e of this.queries.cellos.entities) if (e.getValue(AirCello, 'active')) out = 'cello';
+    if (out === this.showing) return;
+    this.showing = out;
+    for (const [name, button] of this.buttons) button?.setProperties({ variant: name === out ? 'primary' : 'secondary' });
   }
 }
 

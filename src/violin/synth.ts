@@ -38,7 +38,72 @@ interface Voice {
 }
 
 /**
- * Bowed violin strings. Each string is a voice that runs all the time; the
+ * What makes one bowed instrument sound like itself: how its body radiates
+ * (a smoothed curve in dB and its strong low resonances), where its crowd of
+ * narrower resonances lies, how little it radiates below its air
+ * resonance, and how bright its strings can get.
+ */
+export interface BowedVoice {
+  /** [frequency, dB] points, interpolated on a log scale. */
+  bodyCurve: [number, number][];
+  /** [frequency, dB above the curve, Q] */
+  lowModes: [number, number, number][];
+  /** The dense resonances span this range (Hz). */
+  denseFrom: number;
+  denseTo: number;
+  /** The body has unity gain on average over this range (Hz). */
+  levelBand: [number, number];
+  /** Below this the body barely radiates. */
+  radiationHz: number;
+  /** A string's own harmonics fade above about cutoffBase + cutoffBright x brightness (Hz). */
+  cutoffBase: number;
+  cutoffBright: number;
+  /** Room reverb length (s). */
+  room: number;
+}
+
+/**
+ * A violin body: little below the air resonance, the air and main wood
+ * resonances (A0 near 280 Hz, B1- and B1+ near 460 and 550 Hz), a dip around
+ * 1.5 kHz, the broad "bridge hill" around 2.5 kHz that gives a violin its
+ * ring, and a fall above 4 kHz.
+ */
+export const VIOLIN_VOICE: BowedVoice = {
+  bodyCurve: [
+    [150, -22],
+    [230, -6],
+    [280, 2],
+    [350, -1],
+    [460, 4],
+    [550, 4],
+    [700, 1],
+    [1000, -1],
+    [1500, -4],
+    [2000, -1],
+    [2600, 2],
+    [3200, 1],
+    [4000, -4],
+    [5500, -13],
+    [8000, -26],
+  ],
+  lowModes: [
+    [275, 6, 16], // A0, the air in the box
+    [405, 2, 20], // CBR
+    [465, 5, 24], // B1-
+    [545, 5, 24], // B1+
+    [650, 1, 26],
+  ],
+  denseFrom: 560,
+  denseTo: 7500,
+  levelBand: [600, 2400],
+  radiationHz: 180,
+  cutoffBase: 2600,
+  cutoffBright: 5000,
+  room: 2.2,
+};
+
+/**
+ * Bowed strings. Each string is a voice that runs all the time; the
  * system sets its pitch, loudness, brightness and vibrato every frame as
  * the bow and fingers move. The tone is the bowed string's Helmholtz motion
  * (a sawtooth-like wave, every harmonic falling as 1/n, with notches where
@@ -46,7 +111,7 @@ interface Voice {
  * rosin noise from the hair. It sounds through a violin body, modelled as
  * its many resonances, and a room.
  */
-export class ViolinSynth {
+export class BowedSynth {
   readonly ctx: BaseAudioContext;
   private readonly master: GainNode;
   private readonly voices: Voice[] = [];
@@ -55,7 +120,11 @@ export class ViolinSynth {
    * Plays through a live AudioContext by default; pass an
    * OfflineAudioContext to render to a buffer instead (for listening tests).
    */
-  constructor(stringCount: number, context?: BaseAudioContext) {
+  constructor(
+    stringCount: number,
+    context?: BaseAudioContext,
+    private readonly voice: BowedVoice = VIOLIN_VOICE,
+  ) {
     this.ctx = context ?? new AudioContext({ latencyHint: 'interactive' });
     const ctx = this.ctx;
     this.master = ctx.createGain();
@@ -158,7 +227,7 @@ export class ViolinSynth {
     v.noise.gain.setTargetAtTime(sound.amplitude * 0.009, t, rising ? 0.02 : 0.03);
     // Brighter with the bow near the bridge, but a string's own harmonics
     // fade above a few kHz however it is bowed: high notes stay sweet.
-    const cutoff = Math.min(hz * (5 + 20 * sound.brightness), 2600 + 5000 * sound.brightness);
+    const cutoff = Math.min(hz * (5 + 20 * sound.brightness), this.voice.cutoffBase + this.voice.cutoffBright * sound.brightness);
     v.tone.frequency.setTargetAtTime(Math.min(16000, cutoff), t, 0.03);
     v.amplitude = sound.amplitude;
   }
@@ -174,23 +243,23 @@ export class ViolinSynth {
     }
   }
 
-  /** The violin's body (its resonances, see violinBodyImpulse) and a room. Returns the body's input. */
+  /** The instrument's body (its resonances, see bodyImpulse) and a room. Returns the body's input. */
   private createBody(): AudioNode {
     const ctx = this.ctx;
     const input = ctx.createGain();
     const body = ctx.createConvolver();
     body.normalize = false;
-    body.buffer = violinBodyImpulse(ctx);
+    body.buffer = bodyImpulse(ctx, this.voice);
     // The top and back barely radiate below the air resonance.
     const radiation = ctx.createBiquadFilter();
     radiation.type = 'highpass';
-    radiation.frequency.value = 180;
+    radiation.frequency.value = this.voice.radiationHz;
     radiation.Q.value = 0.7;
     input.connect(body).connect(radiation).connect(this.master);
     this.master.gain.value = 0.8;
 
     const reverb = ctx.createConvolver();
-    reverb.buffer = makeRoomImpulse(ctx, 2.2);
+    reverb.buffer = makeRoomImpulse(ctx, this.voice.room);
     const wet = ctx.createGain();
     wet.gain.value = 0.32;
     this.master.connect(reverb).connect(wet);
@@ -220,76 +289,46 @@ export function bowedHarmonics(count = HARMONICS, bowPosition = BOW_POSITION): F
   return amps;
 }
 
-/**
- * How strongly a violin body radiates each frequency, in dB, smoothed: little
- * below the air resonance, the air and main wood resonances (A0 near 280 Hz,
- * B1- and B1+ near 460 and 550 Hz), a dip around 1.5 kHz, the broad "bridge
- * hill" around 2.5 kHz that gives a violin its ring, and a fall above 4 kHz.
- */
-const BODY_CURVE: [number, number][] = [
-  [150, -22],
-  [230, -6],
-  [280, 2],
-  [350, -1],
-  [460, 4],
-  [550, 4],
-  [700, 1],
-  [1000, -1],
-  [1500, -4],
-  [2000, -1],
-  [2600, 2],
-  [3200, 1],
-  [4000, -4],
-  [5500, -13],
-  [8000, -26],
-];
-
-export function bodyCurveDb(hz: number): number {
+/** How strongly a body radiates `hz`, in dB, smoothed: its curve, read on a log scale. */
+export function bodyCurveDb(curve: [number, number][], hz: number): number {
   const l = Math.log(hz);
-  if (hz <= BODY_CURVE[0][0]) return BODY_CURVE[0][1];
-  for (let i = 1; i < BODY_CURVE.length; i++) {
-    const [f1, d1] = BODY_CURVE[i];
+  if (hz <= curve[0][0]) return curve[0][1];
+  for (let i = 1; i < curve.length; i++) {
+    const [f1, d1] = curve[i];
     if (hz <= f1) {
-      const [f0, d0] = BODY_CURVE[i - 1];
+      const [f0, d0] = curve[i - 1];
       return d0 + ((d1 - d0) * (l - Math.log(f0))) / (Math.log(f1) - Math.log(f0));
     }
   }
-  return BODY_CURVE[BODY_CURVE.length - 1][1];
+  return curve[curve.length - 1][1];
 }
 
 /**
- * A violin body as its resonances: the few strong low modes, then a dense
+ * A body as its resonances: the few strong low modes, then a dense
  * crowd of narrower ones whose levels scatter a few dB either side of the
  * body curve, as a real instrument's do. A note's harmonics land on some
  * and between others, and vibrato sweeps them across the peaks: that is
  * much of what makes a violin sound rich rather than synthetic.
  * Deterministic: the same instrument every time.
  */
-export function violinBodyImpulse(ctx: BaseAudioContext): AudioBuffer {
+export function bodyImpulse(ctx: BaseAudioContext, voice: BowedVoice): AudioBuffer {
   const sr = ctx.sampleRate;
   const length = Math.floor(sr * 0.25);
   const out = new Float32Array(length);
   let seed = 4021;
   const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
-  // [frequency, extra dB above the curve, Q]
-  const modes: [number, number, number][] = [
-    [275, 6, 16], // A0, the air in the box
-    [405, 2, 20], // CBR
-    [465, 5, 24], // B1-
-    [545, 5, 24], // B1+
-    [650, 1, 26],
-  ];
+  const modes = [...voice.lowModes];
   const DENSE = 125;
   for (let i = 0; i < DENSE; i++) {
-    const f = 560 * (7500 / 560) ** ((i + random()) / DENSE);
+    const f = voice.denseFrom * (voice.denseTo / voice.denseFrom) ** ((i + random()) / DENSE);
     modes.push([f, (random() - 0.5) * 8, 22 + random() * 26]);
   }
   for (const [f, extra, q] of modes) {
     if (f >= sr / 2.2) continue;
     // A damped sinusoid's peak is about a * Q / (2 pi f): give each mode its
     // place on the curve.
-    const gain = 10 ** ((bodyCurveDb(f) + extra) / 20);
+    const gain = 10 ** ((bodyCurveDb(voice.bodyCurve, f) + extra) / 20);
     const a = (gain * 2 * Math.PI * f) / q / sr;
     const w = (2 * Math.PI * f) / sr;
     const r = Math.exp(-w / (2 * q));
@@ -310,7 +349,7 @@ export function violinBodyImpulse(ctx: BaseAudioContext): AudioBuffer {
   // Level: unity gain on average across the middle of the range.
   let sum = 0;
   let count = 0;
-  for (let f = 600; f <= 2400; f *= 1.06) {
+  for (let f = voice.levelBand[0]; f <= voice.levelBand[1]; f *= 1.06) {
     let re = 0;
     let im = 0;
     const w = (2 * Math.PI * f) / sr;
@@ -318,7 +357,7 @@ export function violinBodyImpulse(ctx: BaseAudioContext): AudioBuffer {
       re += out[n] * Math.cos(w * n);
       im -= out[n] * Math.sin(w * n);
     }
-    sum += Math.hypot(re, im) / 10 ** (bodyCurveDb(f) / 20);
+    sum += Math.hypot(re, im) / 10 ** (bodyCurveDb(voice.bodyCurve, f) / 20);
     count++;
   }
   const norm = count / sum;
@@ -339,4 +378,11 @@ function noiseBuffer(ctx: BaseAudioContext, seconds: number): AudioBuffer {
   const data = buffer.getChannelData(0);
   for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
   return buffer;
+}
+
+/** Bowed violin strings. */
+export class ViolinSynth extends BowedSynth {
+  constructor(stringCount: number, context?: BaseAudioContext) {
+    super(stringCount, context, VIOLIN_VOICE);
+  }
 }

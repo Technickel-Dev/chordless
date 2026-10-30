@@ -14,7 +14,9 @@
  * octave lower (the violins reach C#6, above the guitar's top fret, B5),
  * and added a closing E major chord that is not in the score. The violin
  * version (WILLIAM_TELL_VIOLIN) plays the melody at the written pitch and
- * closes with an E major double stop, also not in the score.
+ * closes with an E major double stop, also not in the score. The cello
+ * version (WILLIAM_TELL_CELLO) plays the guitar arrangement an octave lower
+ * and closes with the same double stop two octaves below the violin's.
  *
  * Gioachino Rossini (1792-1868) composed the overture in 1829; the music
  * itself is in the public domain.
@@ -132,5 +134,23 @@ export const WILLIAM_TELL_VIOLIN = {
     ...toEvents(QUIET_BARS, QUIET, 'pp').map(({ beat, note, dynamic }) => ({ beat, note, dynamic })),
     ...toEvents(LOUD_BARS, LOUD, 'ff').map(({ beat, note, dynamic }) => ({ beat, note: octaveUp(note), dynamic })),
     { beat: (276 - 244) * 2, notes: ['G#4', 'E5'], dynamic: 'ff' },
+  ].sort((a, b) => a.beat - b.beat),
+};
+
+/** A note name such as 'C#4' an octave lower. */
+const octaveDown = (note) => note.replace(/\d$/, (d) => String(Number(d) - 1));
+
+/**
+ * The melody for the cello: the guitar's arrangement an octave lower (the
+ * quiet theme B2-B3, the tutti C#3-C#4), in a cello's lower positions. It
+ * closes on G#3 and E4 together (a double stop on the D and A strings).
+ */
+export const WILLIAM_TELL_CELLO = {
+  title: 'William Tell Overture: finale, bars 243-275 (cello)',
+  tempo: 152,
+  events: [
+    ...toEvents(QUIET_BARS, QUIET, 'pp').map(({ beat, note, dynamic }) => ({ beat, note: octaveDown(note), dynamic })),
+    ...toEvents(LOUD_BARS, LOUD, 'ff').map(({ beat, note, dynamic }) => ({ beat, note: octaveDown(note), dynamic })),
+    { beat: (276 - 244) * 2, notes: ['G#3', 'E4'], dynamic: 'ff' },
   ].sort((a, b) => a.beat - b.beat),
 };

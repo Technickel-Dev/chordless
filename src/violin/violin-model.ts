@@ -1,7 +1,7 @@
 /**
- * The playable violin and bow: the models from the asset module, plus the
- * overlays the system animates (glowing strings, stop markers, fingertip
- * shadows, the bow's contact point and the HUD).
+ * A playable bowed instrument and its bow: the models from the asset
+ * module, plus the overlays the system animates (glowing strings, stop
+ * markers, fingertip shadows, the bow's contact point and the HUD).
  */
 
 import {
@@ -16,7 +16,7 @@ import {
 } from '@iwsdk/core';
 import { LabelSprite } from '../guitar/guitar-model.js';
 import { createBow, createViolin } from '../scene-assets/violin.scene-asset.js';
-import { STRING_COUNT, stringY, stringZ, VIOLIN } from './geometry.js';
+import { type BowedGeometry, VIOLIN_GEOMETRY } from './geometry.js';
 
 export interface ViolinModel {
   root: Group;
@@ -34,10 +34,36 @@ export interface ViolinModel {
   hud: LabelSprite;
 }
 
+/** How to build one instrument's playable model. */
+export interface BowedModelSpec {
+  geo: BowedGeometry;
+  /** Names of the instrument's and bow's roots in the scene. */
+  name: string;
+  bowName: string;
+  instrument: () => Group;
+  bow: () => Group;
+  /** Where the HUD floats (instrument space) and how big it is (m wide). */
+  hud: [number, number, number];
+  hudWidth: number;
+}
+
 export function createViolinModel(): ViolinModel {
+  return createBowedModel({
+    geo: VIOLIN_GEOMETRY,
+    name: 'AirViolin',
+    bowName: 'AirBow',
+    instrument: createViolin,
+    bow: () => createBow(),
+    hud: [VIOLIN_GEOMETRY.dims.nutX + 0.12, -0.06, 0.12],
+    hudWidth: 0.16,
+  });
+}
+
+export function createBowedModel(spec: BowedModelSpec): ViolinModel {
+  const { STRING_COUNT } = spec.geo;
   const root = new Group();
-  root.name = 'AirViolin';
-  root.add(createViolin());
+  root.name = spec.name;
+  root.add(spec.instrument());
 
   const unit = new CylinderGeometry(1, 1, 1, 6);
   const vibrations: Mesh[] = [];
@@ -78,14 +104,14 @@ export function createViolinModel(): ViolinModel {
   root.add(bowMark);
 
   const hud = new LabelSprite(512, 256);
-  hud.sprite.name = 'ViolinDisplay';
-  hud.sprite.scale.set(0.16, 0.08, 1);
-  hud.sprite.position.set(VIOLIN.nutX + 0.12, -0.06, 0.12);
+  hud.sprite.name = `${spec.name}Display`;
+  hud.sprite.scale.set(spec.hudWidth, spec.hudWidth / 2, 1);
+  hud.sprite.position.set(...spec.hud);
   root.add(hud.sprite);
 
   const bow = new Group();
-  bow.name = 'AirBow';
-  bow.add(createBow());
+  bow.name = spec.bowName;
+  bow.add(spec.bow());
 
   return { root, bow, vibrations, vibrationMaterials, stopDots, fingerShadows, fingerShadowMaterials, bowMark, hud };
 }
@@ -97,8 +123,9 @@ const yAxis = new Vector3(0, 1, 0);
 const rotation = new Quaternion();
 
 /** Stretches a unit cylinder along string `s` from the bridge to `stopX` (the nut, or where it is stopped). */
-export function placeString(mesh: Mesh, s: number, stopX: number, radius: number): void {
-  start.set(VIOLIN.bridgeX, stringY(s, VIOLIN.bridgeX), stringZ(s, VIOLIN.bridgeX));
+export function placeString(mesh: Mesh, s: number, stopX: number, radius: number, geo: BowedGeometry = VIOLIN_GEOMETRY): void {
+  const { stringY, stringZ, dims } = geo;
+  start.set(dims.bridgeX, stringY(s, dims.bridgeX), stringZ(s, dims.bridgeX));
   end.set(stopX, stringY(s, stopX), stringZ(s, stopX));
   dir.subVectors(end, start);
   mesh.scale.set(radius, dir.length(), radius);

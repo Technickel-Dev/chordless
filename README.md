@@ -1,11 +1,11 @@
 # Chordless
 
-Air instruments for Meta Quest, played with your bare hands: a guitar and a
-violin. On the guitar your left fingers fret real strings at real fret
+Air instruments for Meta Quest, played with your bare hands: a guitar, a
+violin and a cello. On the guitar your left fingers fret real strings at real fret
 positions on a full-size steel-string guitar, and your right index fingertip
 plucks: sweep across the strings to strum, flick one string to pick a single
-note. On the violin your left fingers stop the strings anywhere on a fretless
-fingerboard and your right hand draws a bow. The sound is synthesized in the
+note. On the violin and cello your left fingers stop the strings anywhere on
+a fretless fingerboard and your right hand draws a bow. The sound is synthesized in the
 browser, so there are no audio files.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
@@ -69,8 +69,8 @@ are:
 a second: the sound hole moves to your right pinch and the neck points toward
 your left. The placement is remembered.
 
-**Panel.** Point a hand at the panel and pinch to press **Guitar** or
-**Violin** (which instrument to play), **Clean** or **Overdrive**, **Vol −** /
+**Panel.** Point a hand at the panel and pinch to press **Guitar**,
+**Violin** or **Cello** (which instrument to play), **Clean** or **Overdrive**, **Vol −** /
 **Vol +**, or **Reset position** (back to the default position).
 
 ### The violin
@@ -101,6 +101,19 @@ tilt between two strings to play both. Lift it off to stop. Each change of bow d
 string), a green dot where each string is stopped, an amber ring where the bow
 meets the strings, a glow along each string as it sounds, and a display past
 the scroll naming the note bowed and the note each string would play.
+
+### The cello
+
+The cello stands in front of you, a little to the left, as a seated cellist
+holds it: the endpin toward the floor, the body at about hip height, the neck
+leaning back past the left of your chin, and the strings facing away from
+you, the C string on your left and the A on your right. Your left hand
+reaches round the neck from the C-string side to stop the strings, a
+semitone per finger in the lower positions; your right hand holds a cello
+bow and draws it across the strings below the fingerboard. As on the
+violin, the bow's tilt chooses the string (raise your bow hand for the C,
+lower it for the A), its speed sets the loudness, and the stop nearest the
+bridge sets the pitch.
 
 ## How it works
 
@@ -150,8 +163,17 @@ The violin lives in `src/violin/`, built the same way:
 - `synth.ts` is a bowed string per voice: the bowed string's sawtooth-like
   Helmholtz motion with the bow's notches, rosin noise, vibrato, and the
   resonances of a violin body.
-- `src/scene-assets/violin.scene-asset.ts` builds the violin and bow
-  models; they are also in the asset manifest (`violin`, `violin-bow`).
+- `bowed-system.ts` is the system itself, made for each instrument from its
+  geometry, bow, voice, model and where it is held (`air-violin-system.ts`
+  makes the violin's).
+- `src/scene-assets/violin.scene-asset.ts` builds the violin, the cello and
+  their bows; they are also in the asset manifest (`violin`, `violin-bow`,
+  `cello`, `cello-bow`).
+
+The cello (`src/cello/`) is the same family with its own numbers: a 690 mm
+string length and wider arch (`geometry.ts`, which also holds its bow and
+its voice, a body about an octave below the violin's with a formant around
+1.5-2.5 kHz), its state component and its system's placement.
 
 Feel can be tuned in a few constants: how close a finger must be to press
 (`PRESS` in `fretting.ts`), the picking zone, re-pluck lockout and mute timing
@@ -179,8 +201,10 @@ allowed first:
 npx iwsdk dev up --headed --allow-browser-automation
 npm run test:e2e
 npm run test:violin
+npm run test:cello
 npm run play:william-tell
 npm run play:violin
+npm run play:cello
 ```
 
 - `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
@@ -188,9 +212,10 @@ npm run play:violin
   deep and slow strums, hammer-ons, re-placing the guitar, the panel buttons
   and hand-tracking loss. Results and screenshots go to `test-results/`.
   Set `E2E_PACE=2` to slow it down to watch.
-- `tests/violin.e2e.mjs` chooses the violin on the panel, bows each open
-  string and a double stop by tilting the bow, stops the A string at B and E,
-  and checks that a lifted bow is silent and that each change of bow
+- `tests/violin.e2e.mjs` and `tests/cello.e2e.mjs` (both through
+  `tests/bowed-e2e.js`) choose the instrument on the panel, bows each open
+  string and a double stop by tilting the bow, stops a string twice (B4 and
+  E5 on the violin's A string, E3 and A3 on the cello's D), and checks that a lifted bow is silent and that each change of bow
   direction is one stroke.
 - `tests/william-tell.mjs` performs the galop theme of the *William Tell*
   Overture finale (bars 243–275) the way a guitarist would, and reports each
@@ -229,9 +254,18 @@ npm run play:violin
   a melody and single notes straight from the synth into
   `test-results/audio/<label>-*.wav`, with spectrum statistics, for comparing
   sound changes by ear. Set `AUDIO_LABEL` to name the run.
-- `tests/render-violin.mjs` (`npm run render:violin`) does the same for the
-  violin: long bowed notes up the E string, the loud William Tell passage and
-  the open G and D strings, into `test-results/audio/<label>-violin-*.wav`.
+- `tests/render-violin.mjs` and `tests/render-cello.mjs` (`npm run
+  render:violin`, `render:cello`, through `tests/bowed-render.js`) do the
+  same for the bowed instruments: long bowed notes up the top string, the
+  loud William Tell passage and the two lowest open strings, into
+  `test-results/audio/<label>-<instrument>-*.wav`.
+- `tests/cello-william-tell.mjs` (`npm run play:cello`) plays the theme on the
+  cello, an octave below the guitar's arrangement, with the cello's
+  fingering (a semitone per finger, extensions for a whole tone) from
+  `tests/cello-performer.js`; `npm run check:cello` checks it offline. The
+  violin and cello performers, checks and play scripts share
+  `tests/bowed-performer.js`, `tests/bowed-check.js` and
+  `tests/bowed-play.js`.
 
 Both bring the browser window to the front; a window behind others renders at
 about 1 fps. Each script must finish within IWSDK's 110-second limit.
@@ -242,7 +276,8 @@ about 1 fps. Each script must finish within IWSDK's 110-second limit.
 iwsdk.config.json      IWSDK project settings: scene, assets, components, XR
 src/index.ts           creates the world and registers the systems
 src/guitar/            the air guitar (see How it works)
-src/violin/            the air violin and bow
+src/violin/            the air violin and bow, and what the bowed instruments share
+src/cello/             the air cello
 src/scene-assets/      the room's models, and the violin and bow
 src/panel.ts           the panel's buttons
 src/assets.ts          asset catalog for the scene
@@ -251,8 +286,8 @@ public/scenes/         the room the guitar is played in
 public/ui/             the panel layout (UIKitML)
 tests/unit/            unit tests
 tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand poses
-tests/violin.e2e.mjs   end-to-end test for the violin
-tests/violin-william-tell.mjs, tests/violin-performer.js, tests/violin-check.mjs   violin song playback and its check
+tests/violin.e2e.mjs, tests/cello.e2e.mjs, tests/bowed-e2e.js   end-to-end tests for the bowed instruments
+tests/{violin,cello}-william-tell.mjs, -performer.js, -check.mjs, tests/bowed-*.js   bowed song playback and its checks
 tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
 tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
 ```
@@ -265,7 +300,9 @@ domain) from "William Tell: Overture to the Opera", full score typeset by
 Max Wilkinson (2008), [IMSLP #22579](https://imslp.org/wiki/Guillaume_Tell_(Rossini,_Gioacchino)),
 licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/).
 Changes: melody only, without articulation; arranged for guitar with the loud
-section an octave lower and an added closing E major chord; and for violin at
-the written pitch with an added closing E major double stop.
+section an octave lower and an added closing E major chord; for violin at
+the written pitch with an added closing E major double stop; and for cello an
+octave below the guitar arrangement with the same double stop two octaves
+below the violin's.
 
 Built with [IWSDK](https://iwsdk.dev/).

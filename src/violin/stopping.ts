@@ -1,5 +1,5 @@
 import { PRESS } from '../guitar/fretting.js';
-import { boardZ, MAX_STOP, nearestString, STRING_COUNT, stopSemitones, stringZ, VIOLIN } from './geometry.js';
+import { type BowedGeometry, VIOLIN_GEOMETRY } from './geometry.js';
 
 /**
  * In snap mode, a pitch moves to a new semitone only once the fingertip is
@@ -10,18 +10,27 @@ const SNAP_HOLD = 0.2;
 /**
  * Turns sampled finger points (in violin space) into where each string is
  * stopped. Call `begin()`, `addPoint()` for every sample, then `commit()`
- * once per frame. As on a real violin there are no frets: the stop nearest
- * the bridge sets the pitch, anywhere along the fingerboard.
+ * once per frame. As on a real violin or cello there are no frets: the stop
+ * nearest the bridge sets the pitch, anywhere along the fingerboard.
  */
 export class StopReader {
   /** Semitones above the open string each string plays (0 when open); fractional in free intonation. */
-  readonly semitones = new Float32Array(STRING_COUNT);
+  readonly semitones: Float32Array;
   /** Unrounded stop of each string, in semitones (0 when open). */
-  readonly raw = new Float32Array(STRING_COUNT);
-  private readonly strict = new Float32Array(STRING_COUNT);
-  private readonly held = new Float32Array(STRING_COUNT);
-  private readonly releaseTime = new Float32Array(STRING_COUNT);
+  readonly raw: Float32Array;
+  private readonly strict: Float32Array;
+  private readonly held: Float32Array;
+  private readonly releaseTime: Float32Array;
   private untracked = 0;
+
+  constructor(private readonly geo: BowedGeometry = VIOLIN_GEOMETRY) {
+    const n = geo.STRING_COUNT;
+    this.semitones = new Float32Array(n);
+    this.raw = new Float32Array(n);
+    this.strict = new Float32Array(n);
+    this.held = new Float32Array(n);
+    this.releaseTime = new Float32Array(n);
+  }
 
   begin(): void {
     this.strict.fill(0);
@@ -30,7 +39,8 @@ export class StopReader {
 
   /** Adds one finger point; returns the string it stops, or -1. */
   addPoint(x: number, y: number, z: number): number {
-    if (x <= VIOLIN.boardEndX || x >= VIOLIN.nutX) return -1;
+    const { boardZ, nearestString, stringZ, stopSemitones, MAX_STOP, dims } = this.geo;
+    if (x <= dims.boardEndX || x >= dims.nutX) return -1;
     // Behind the neck, or beside the fingerboard below its surface.
     if (z < boardZ(x) - PRESS.below) return -1;
     const s = nearestString(x, y);
@@ -61,7 +71,7 @@ export class StopReader {
       this.untracked = 0;
     }
     let changed = false;
-    for (let s = 0; s < STRING_COUNT; s++) {
+    for (let s = 0; s < this.geo.STRING_COUNT; s++) {
       const current = this.raw[s];
       let next = this.strict[s];
       if (next > current + 1e-6) {

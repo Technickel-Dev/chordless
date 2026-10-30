@@ -1,7 +1,16 @@
-import { STRING_COUNT, stringFacing, stringY, stringZ, VIOLIN } from './geometry.js';
+import { type BowedGeometry, VIOLIN_GEOMETRY } from './geometry.js';
 
-/** A full-size bow. */
-export const BOW = {
+/** How a bow is made and held. */
+export interface BowSpec {
+  hairLength: number;
+  frogToHair: number;
+  buttonLength: number;
+  hairDrop: number;
+  fingerLean: number;
+}
+
+/** A full-size violin bow. */
+export const BOW: BowSpec = {
   /** Playing length of the hair. */
   hairLength: 0.65,
   /** The hair starts this far out from where the hand holds the frog. */
@@ -15,7 +24,7 @@ export const BOW = {
    * fingertips: the stick lies diagonally over the fingers in a bow hold.
    */
   fingerLean: 0.3,
-} as const;
+};
 
 /** The hair counts as touching a string from this far off it (tracked hands are never exact). */
 export const CONTACT_GAP = 0.002;
@@ -96,7 +105,7 @@ const PINKY_KNUCKLE = 21;
  * middle joint; the stick runs out past the index knuckle, across the hand
  * and a little toward the fingertips; the hair hangs on the palm side.
  */
-export function bowPose(joints: ArrayLike<number>, out: BowPose): BowPose {
+export function bowPose(joints: ArrayLike<number>, out: BowPose, bow: BowSpec = BOW): BowPose {
   const p = (j: number, k: number) => joints[j * 3 + k];
   for (let k = 0; k < 3; k++) {
     out.frog[k] = (p(THUMB_TIP, k) + p(MIDDLE_MIDDLE, k)) / 2;
@@ -105,7 +114,7 @@ export function bowPose(joints: ArrayLike<number>, out: BowPose): BowPose {
   }
   normalize(lateral);
   normalize(forward);
-  for (let k = 0; k < 3; k++) out.along[k] = lateral[k] + forward[k] * BOW.fingerLean;
+  for (let k = 0; k < 3; k++) out.along[k] = lateral[k] + forward[k] * bow.fingerLean;
   normalize(out.along);
   // The palm faces this way (for a right hand); the hair hangs on that side.
   cross(lateral, forward, out.hairSide);
@@ -113,8 +122,8 @@ export function bowPose(joints: ArrayLike<number>, out: BowPose): BowPose {
   for (let k = 0; k < 3; k++) out.hairSide[k] -= out.along[k] * d;
   normalize(out.hairSide);
   for (let k = 0; k < 3; k++) {
-    out.hair0[k] = out.frog[k] + out.hairSide[k] * BOW.hairDrop + out.along[k] * BOW.frogToHair;
-    out.hair1[k] = out.hair0[k] + out.along[k] * BOW.hairLength;
+    out.hair0[k] = out.frog[k] + out.hairSide[k] * bow.hairDrop + out.along[k] * bow.frogToHair;
+    out.hair1[k] = out.hair0[k] + out.along[k] * bow.hairLength;
   }
   return out;
 }
@@ -129,11 +138,11 @@ export function bowPose(joints: ArrayLike<number>, out: BowPose): BowPose {
  */
 export class BowContact {
   /** How far the hair presses into each string, in metres (negative: clear of it). */
-  readonly press = new Float32Array(STRING_COUNT);
+  readonly press: Float32Array;
   /** Where along each string the hair crosses it (x), when it does. */
-  readonly contactX = new Float32Array(STRING_COUNT);
+  readonly contactX: Float32Array;
   /** 1 for each string the bow is sounding. */
-  readonly sounding = new Uint8Array(STRING_COUNT);
+  readonly sounding: Uint8Array;
   /** Bow speed along its length, m/s, smoothed; positive toward the tip (an up-bow). */
   velocity = 0;
   /** Strokes drawn so far: each new contact or change of bow direction on a string. */
@@ -142,6 +151,12 @@ export class BowContact {
   touching = false;
 
   private readonly prevFrog: Vec = [0, 0, 0];
+
+  constructor(private readonly geo: BowedGeometry = VIOLIN_GEOMETRY) {
+    this.press = new Float32Array(geo.STRING_COUNT);
+    this.contactX = new Float32Array(geo.STRING_COUNT);
+    this.sounding = new Uint8Array(geo.STRING_COUNT);
+  }
   private started = false;
   private stroking = false;
   private direction = 0;
@@ -166,12 +181,12 @@ export class BowContact {
     this.started = true;
 
     let deepest = -Infinity;
-    for (let s = 0; s < STRING_COUNT; s++) {
+    for (let s = 0; s < this.geo.STRING_COUNT; s++) {
       this.press[s] = this.pressOn(s, pose);
       if (this.press[s] > deepest) deepest = this.press[s];
     }
     this.touching = deepest > -CONTACT_GAP && deepest < MAX_PRESS;
-    for (let s = 0; s < STRING_COUNT; s++) {
+    for (let s = 0; s < this.geo.STRING_COUNT; s++) {
       const p = this.press[s];
       this.sounding[s] = this.touching && p > -CONTACT_GAP && p >= deepest - DOUBLE_STOP ? 1 : 0;
     }
@@ -200,8 +215,9 @@ export class BowContact {
   /** How far the hair presses into string `s` where it crosses it, or -1 when it does not cross it on the bowing stretch. */
   private pressOn(s: number, pose: BowPose): number {
     // The string's bowing stretch is close enough to straight to treat as a line.
-    const x0 = VIOLIN.bowMinX;
-    const x1 = VIOLIN.bowMaxX;
+    const { stringY, stringZ, stringFacing, dims } = this.geo;
+    const x0 = dims.bowMinX;
+    const x1 = dims.bowMaxX;
     set(a, x0, stringY(s, x0), stringZ(s, x0));
     set(u, x1 - x0, stringY(s, x1) - a[1], stringZ(s, x1) - a[2]);
     const b = pose.hair0;

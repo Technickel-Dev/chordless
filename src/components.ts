@@ -7,6 +7,7 @@
 
 import { defineComponents } from '@iwsdk/core';
 import { AirGuitar } from './guitar/air-guitar-component.js';
+import { AirCello } from './cello/air-cello-component.js';
 import { AirViolin } from './violin/air-violin-component.js';
 
-export default defineComponents([AirGuitar, AirViolin]);
+export default defineComponents([AirGuitar, AirViolin, AirCello]);

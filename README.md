@@ -1,11 +1,12 @@
 # Chordless
 
 Air instruments for Meta Quest, played with your bare hands: a guitar, a
-violin and a cello. On the guitar your left fingers fret real strings at real fret
+violin, a cello and a pair of orchestral cymbals. On the guitar your left fingers fret real strings at real fret
 positions on a full-size steel-string guitar, and your right index fingertip
 plucks: sweep across the strings to strum, flick one string to pick a single
 note. On the violin and cello your left fingers stop the strings anywhere on
-a fretless fingerboard and your right hand draws a bow. The sound is synthesized in the
+a fretless fingerboard and your right hand draws a bow. The cymbals are one
+in each hand: clash them together. The sound is synthesized in the
 browser, so there are no audio files.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
@@ -70,7 +71,7 @@ a second: the sound hole moves to your right pinch and the neck points toward
 your left. The placement is remembered.
 
 **Panel.** Point a hand at the panel and pinch to press **Guitar**,
-**Violin** or **Cello** (which instrument to play), **Clean** or **Overdrive**, **Vol −** /
+**Violin**, **Cello** or **Cymbals** (which instrument to play), **Clean** or **Overdrive**, **Vol −** /
 **Vol +**, or **Reset position** (back to the default position).
 
 ### The violin
@@ -114,6 +115,19 @@ bow and draws it across the strings below the fingerboard. As on the
 violin, the bow's tilt chooses the string (raise your bow hand for the C,
 lower it for the A), its speed sets the loudness, and the stop nearest the
 bridge sets the pitch.
+
+### The cymbals
+
+A pair of 18-inch orchestral clash cymbals, one in each hand, held by the
+strap: make a fist and the cymbal hangs beyond your knuckles, its face
+pointing the way your hand points and the strap across your fingers. Bring
+the plates together to clash them; the faster they meet, the louder (and
+brighter) the crash, from a soft *pp* at walking pace to *ff* at about 2 m/s.
+They must part a couple of centimetres before they can clash again. Meet
+them a little off-centre, as cymbal players do: plates that meet flat and
+centred trap air and sound muffled. To stop the ringing, hold them together
+after the clash (*secco*), lay them together gently, or press either plate
+to your chest. The rims glow while the cymbals ring.
 
 ## How it works
 
@@ -175,6 +189,33 @@ string length and wider arch (`geometry.ts`, which also holds its bow and
 its voice, a body about an octave below the violin's with a formant around
 1.5-2.5 kHz), its state component and its system's placement.
 
+The cymbals (`src/cymbals/`):
+
+- `geometry.ts` is the 18-inch plate's shape (bow, bell, thickness and
+  where the hand grips the strap), shared by the model and the clash
+  detection.
+- `clash.ts` puts a cymbal in a fist (`cymbalPose`) and watches the pair
+  (`ClashDetector`): the rims meet first, since the plates are dished, so
+  the gap is the nearest rim of either plate to the other's rim plane while
+  they face each other. A clash sounds the frame the gap closes, as loud as
+  the plates were closing over the last few frames; a jump in tracking is
+  not a clash, and the plates must part again before the next. Plates held
+  together after a clash, or laid together gently, damp the ringing; so
+  does either plate against the chest (`touchesSphere`).
+- `synth.ts` pre-renders three clashes, soft to loud, off the main thread
+  when the app starts: a noise wash in bands that bloom upward after the
+  impact and lose their highs first, about 150 inharmonic partials for the
+  metal's shimmer, the plate's beating low modes and the impact's crack.
+  Each clash crossfades the two layers either side of its loudness through
+  a lowpass that opens with it, into a hall; a flat clash adds the air
+  pocket's whump. Damping chokes everything ringing in about 0.1 s.
+- `air-cymbals-system.ts` puts the cymbals in the hands, runs the clash
+  detection and the sound, and draws the rims' glow and the HUD.
+- `src/scene-assets/cymbal.scene-asset.ts` builds the cymbal: a lathed
+  bronze plate (its grooves and hammer marks in the surface maps), a leather
+  pad and the strap handle, knotted inside the bell (`cymbal` in the asset
+  manifest).
+
 Feel can be tuned in a few constants: how close a finger must be to press
 (`PRESS` in `fretting.ts`), the picking zone, re-pluck lockout and mute timing
 (`pluck-detector.ts`), and where the guitar hangs and how far it tilts toward
@@ -202,9 +243,11 @@ npx iwsdk dev up --headed --allow-browser-automation
 npm run test:e2e
 npm run test:violin
 npm run test:cello
+npm run test:cymbals
 npm run play:william-tell
 npm run play:violin
 npm run play:cello
+npm run play:cymbals
 ```
 
 - `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
@@ -266,6 +309,18 @@ npm run play:cello
   violin and cello performers, checks and play scripts share
   `tests/bowed-performer.js`, `tests/bowed-check.js` and
   `tests/bowed-play.js`.
+- `tests/cymbals.e2e.mjs` (`npm run test:cymbals`) chooses the cymbals on the
+  panel, closes both hands into fists round the straps and drives the plates
+  along scripted paths: a fast clash rings *ff*, a slow one is soft, a flat
+  one is muffled, plates passing edge-on are silent, and holding them
+  together or pressing one to the chest stops the ringing.
+- `tests/cymbals-william-tell.mjs` (`npm run play:cymbals`) plays a cymbal
+  part for the theme's loud section (see Credits) from
+  `tests/cymbals-performer.js`: a glancing clash on every downbeat at the
+  speed its dynamic needs, one *secco*, and a last crash swung open and then
+  stopped against the chest. `npm run check:cymbals` checks it offline at
+  four frame rates, and `npm run render:cymbals` renders clashes at *pp*,
+  *mf* and *ff*, a flat one and the whole part to WAV.
 
 Both bring the browser window to the front; a window behind others renders at
 about 1 fps. Each script must finish within IWSDK's 110-second limit.
@@ -278,7 +333,8 @@ src/index.ts           creates the world and registers the systems
 src/guitar/            the air guitar (see How it works)
 src/violin/            the air violin and bow, and what the bowed instruments share
 src/cello/             the air cello
-src/scene-assets/      the room's models, and the violin and bow
+src/cymbals/           the air cymbals
+src/scene-assets/      the room's models, the violin, cello and bows, and the cymbal
 src/panel.ts           the panel's buttons
 src/assets.ts          asset catalog for the scene
 src/components.ts      component catalog
@@ -288,6 +344,7 @@ tests/unit/            unit tests
 tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand poses
 tests/violin.e2e.mjs, tests/cello.e2e.mjs, tests/bowed-e2e.js   end-to-end tests for the bowed instruments
 tests/{violin,cello}-william-tell.mjs, -performer.js, -check.mjs, tests/bowed-*.js   bowed song playback and its checks
+tests/cymbals.e2e.mjs, tests/cymbals-william-tell.mjs, -performer.js, -check.mjs   cymbal test, playback and its check
 tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
 tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
 ```
@@ -303,6 +360,7 @@ Changes: melody only, without articulation; arranged for guitar with the loud
 section an octave lower and an added closing E major chord; for violin at
 the written pitch with an added closing E major double stop; and for cello an
 octave below the guitar arrangement with the same double stop two octaves
-below the violin's.
+below the violin's. The cymbal part (bars 260–276) is not from the score:
+it is arranged here, a crash on each downbeat of the loud section.
 
 Built with [IWSDK](https://iwsdk.dev/).

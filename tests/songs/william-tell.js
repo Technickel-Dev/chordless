@@ -16,7 +16,9 @@
  * version (WILLIAM_TELL_VIOLIN) plays the melody at the written pitch and
  * closes with an E major double stop, also not in the score. The cello
  * version (WILLIAM_TELL_CELLO) plays the guitar arrangement an octave lower
- * and closes with the same double stop two octaves below the violin's.
+ * and closes with the same double stop two octaves below the violin's. The
+ * cymbal part (WILLIAM_TELL_CYMBALS) is not transcribed: it is arranged
+ * here, a crash on each downbeat of the loud section.
  *
  * Gioachino Rossini (1792-1868) composed the overture in 1829; the music
  * itself is in the public domain.
@@ -153,4 +155,25 @@ export const WILLIAM_TELL_CELLO = {
     ...toEvents(LOUD_BARS, LOUD, 'ff').map(({ beat, note, dynamic }) => ({ beat, note: octaveDown(note), dynamic })),
     { beat: (276 - 244) * 2, notes: ['G#3', 'E4'], dynamic: 'ff' },
   ].sort((a, b) => a.beat - b.beat),
+};
+
+/**
+ * A cymbal part for the same passage, arranged here (not transcribed from
+ * the score): tacet through the quiet theme, then a crash on every
+ * downbeat of the tutti, fortissimo at each phrase and forte between, one
+ * held together to stop it short (secco) at the end of the third phrase,
+ * and a last fortissimo crash on the closing chord, let ring, swung open,
+ * then stopped against the chest (`choke`, in beats after the crash).
+ */
+const CYMBAL_BARS = [
+  [260, 'ff'], [261, 'f'], [262, 'f'], [263, 'f'],
+  [264, 'ff'], [265, 'f'], [266, 'f'], [267, 'f'],
+  [268, 'ff'], [269, 'f'], [270, 'f'], [271, 'f', { secco: true }],
+  [272, 'ff'], [273, 'f'], [274, 'f'], [275, 'ff'],
+  [276, 'ff', { choke: 3 }],
+];
+export const WILLIAM_TELL_CYMBALS = {
+  title: 'William Tell Overture: finale, bars 260-276 (cymbals)',
+  tempo: 152,
+  events: CYMBAL_BARS.map(([bar, dynamic, extra]) => ({ beat: (bar - 244) * 2, dynamic, ...extra })),
 };

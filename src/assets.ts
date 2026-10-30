@@ -15,6 +15,7 @@ import {
   createStudioFloor,
 } from './scene-assets/studio.scene-asset.js';
 import { CELLO_BOW } from './cello/geometry.js';
+import { createCymbal } from './scene-assets/cymbal.scene-asset.js';
 import { createBow, createCello, createViolin } from './scene-assets/violin.scene-asset.js';
 
 const publicAssetUrl = (filePath: string): string =>
@@ -36,4 +37,5 @@ export default defineAssets({
   'violin-bow': createBow(),
   cello: createCello(),
   'cello-bow': createBow(CELLO_BOW),
+  cymbal: createCymbal(),
 });

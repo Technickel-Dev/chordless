@@ -16,17 +16,21 @@
     "test:e2e": "iwsdk browser run tests/air-guitar.e2e.mjs --timeout 110000",
     "test:violin": "iwsdk browser run tests/violin.e2e.mjs --timeout 110000",
     "test:cello": "iwsdk browser run tests/cello.e2e.mjs --timeout 110000",
+    "test:cymbals": "iwsdk browser run tests/cymbals.e2e.mjs --timeout 110000",
     "test:unit": "vitest run",
     "play:william-tell": "iwsdk browser run tests/william-tell.mjs --timeout 110000",
     "play:violin": "iwsdk browser run tests/violin-william-tell.mjs --timeout 110000",
     "play:cello": "iwsdk browser run tests/cello-william-tell.mjs --timeout 110000",
+    "play:cymbals": "iwsdk browser run tests/cymbals-william-tell.mjs --timeout 110000",
     "render:audio": "iwsdk browser run tests/render-audio.mjs --timeout 110000",
     "render:violin": "iwsdk browser run tests/render-violin.mjs --timeout 110000",
     "render:cello": "iwsdk browser run tests/render-cello.mjs --timeout 110000",
+    "render:cymbals": "iwsdk browser run tests/render-cymbals.mjs --timeout 110000",
     "check:hands": "iwsdk browser run tests/hand-check.mjs --timeout 110000",
     "check:timing": "iwsdk browser run tests/timing-check.mjs --timeout 110000",
     "check:violin": "iwsdk browser run tests/violin-check.mjs --timeout 110000",
-    "check:cello": "iwsdk browser run tests/cello-check.mjs --timeout 110000"
+    "check:cello": "iwsdk browser run tests/cello-check.mjs --timeout 110000",
+    "check:cymbals": "iwsdk browser run tests/cymbals-check.mjs --timeout 110000"
   },
   "dependencies": {
     "@iwsdk/core": "1.1.0-rc.2",

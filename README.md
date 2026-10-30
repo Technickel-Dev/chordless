@@ -229,6 +229,9 @@ npm run play:violin
   a melody and single notes straight from the synth into
   `test-results/audio/<label>-*.wav`, with spectrum statistics, for comparing
   sound changes by ear. Set `AUDIO_LABEL` to name the run.
+- `tests/render-violin.mjs` (`npm run render:violin`) does the same for the
+  violin: long bowed notes up the E string, the loud William Tell passage and
+  the open G and D strings, into `test-results/audio/<label>-violin-*.wav`.
 
 Both bring the browser window to the front; a window behind others renders at
 about 1 fps. Each script must finish within IWSDK's 110-second limit.

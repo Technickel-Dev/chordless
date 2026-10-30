@@ -2,7 +2,8 @@
   Panel, Button and ButtonLabel come from the bundled Horizon kit.
   RectangleGoggles and LogIn are bundled Lucide icon components. The :dark
   styles apply because iwsdk.config.json prefers the dark color scheme.
-  PanelSystem wires every button id below to the AirGuitar component.
+  PanelSystem wires every button id below to the AirGuitar and AirViolin
+  components.
 -->
 <style>
   .panel-root {
@@ -72,13 +73,22 @@
 </style>
 <Panel class="panel-root">
   <div class="panel-content">
-    <div class="eyebrow">CHORDLESS - AIR GUITAR</div>
+    <div class="eyebrow">CHORDLESS - AIR INSTRUMENTS</div>
     <div class="heading">Play with your hands</div>
     <div class="body">Put the controllers down. The guitar hangs in front of you.</div>
     <div class="body">Left fingertips press the strings between the frets.</div>
     <div class="body">Right index fingertip plucks: sweep to strum, flick for one string.</div>
     <div class="body">Lift above the strings to move back silently; rest on one to mute it.</div>
     <div class="body">Pinch both hands for a second to move the guitar to them.</div>
+    <div class="body">Violin: stop the strings anywhere on the fingerboard. The bow is in your right hand: draw it across near the bridge, tilt it to change string.</div>
+  </div>
+  <div class="row">
+    <Button id="instrument-guitar" variant="primary">
+      <ButtonLabel>Guitar</ButtonLabel>
+    </Button>
+    <Button id="instrument-violin" variant="secondary">
+      <ButtonLabel>Violin</ButtonLabel>
+    </Button>
   </div>
   <div class="row">
     <Button id="tone-clean" variant="primary">
@@ -94,7 +104,7 @@
       <ButtonLabel>Vol +</ButtonLabel>
     </Button>
     <Button id="reset-guitar" variant="secondary">
-      <ButtonLabel>Reset guitar</ButtonLabel>
+      <ButtonLabel>Reset position</ButtonLabel>
     </Button>
   </div>
   <Button id="xr-button" class="button">

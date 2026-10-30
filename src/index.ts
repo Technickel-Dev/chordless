@@ -9,11 +9,13 @@ import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { AirGuitarSystem } from './guitar/air-guitar-system.js';
 import { PanelSystem } from './panel.js';
+import { AirViolinSystem } from './violin/air-violin-system.js';
 
 World.create(
   document.getElementById('scene-container') as HTMLDivElement,
   projectOptions,
 ).then((world) => {
   world.registerSystem(AirGuitarSystem);
+  world.registerSystem(AirViolinSystem);
   world.registerSystem(PanelSystem);
 });

@@ -1,9 +1,11 @@
 # Chordless
 
-An air guitar for Meta Quest, played with your bare hands. Your left fingers
-fret real strings at real fret positions on a full-size steel-string guitar,
-and your right index fingertip plucks: sweep across the strings to strum,
-flick one string to pick a single note. The sound is synthesized in the
+Air instruments for Meta Quest, played with your bare hands: a guitar and a
+violin. On the guitar your left fingers fret real strings at real fret
+positions on a full-size steel-string guitar, and your right index fingertip
+plucks: sweep across the strings to strum, flick one string to pick a single
+note. On the violin your left fingers stop the strings anywhere on a fretless
+fingerboard and your right hand draws a bow. The sound is synthesized in the
 browser, so there are no audio files.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
@@ -67,9 +69,38 @@ are:
 a second: the sound hole moves to your right pinch and the neck points toward
 your left. The placement is remembered.
 
-**Panel.** Point a hand at the panel and pinch to press **Clean** or
-**Overdrive**, **Vol −** / **Vol +**, or **Reset guitar** (back to the default
-position).
+**Panel.** Point a hand at the panel and pinch to press **Guitar** or
+**Violin** (which instrument to play), **Clean** or **Overdrive**, **Vol −** /
+**Vol +**, or **Reset position** (back to the default position).
+
+### The violin
+
+The violin rests under your chin on your left shoulder, the neck pointing
+forward and to the left, the top tilted toward your bow arm. Like the guitar,
+it follows you when you turn your body but not when you glance along the neck.
+
+**Left hand (stopping).** Press a fingertip onto a string anywhere on the
+fingerboard: there are no frets, so the pitch comes from exactly where you
+press, and the stop nearest the bridge sounds. Pitches snap to the nearest
+semitone, holding a note until your finger is clearly nearer the next one, so
+tracking jitter cannot wobble it; hold a note and it grows a gentle vibrato.
+Set `intonation` to `free` on the `AirViolin` component for a true
+fretless fingerboard, where your own finger makes the vibrato and slides.
+
+**Right hand (bowing).** The bow is in your right hand, held at the frog the
+way a violinist holds it: palm down, the stick across your fingers, the tip
+pointing to your left. Draw it along itself across the strings between the
+bridge and the end of the fingerboard. Bow speed sets the loudness; pressing
+the hair a little into the string fills out the tone, and bowing near the
+bridge is brighter than over the fingerboard. The bridge is arched, so the
+bow's tilt chooses the string, as a violinist's arm does: raise your bow hand
+for the G string and lower it for the E, about 15 degrees per string, and
+tilt between two strings to play both. Lift it off to stop. Each change of bow direction starts a new stroke.
+
+**Visual cues.** Shadows under your left fingertips (green when stopping a
+string), a green dot where each string is stopped, an amber ring where the bow
+meets the strings, a glow along each string as it sounds, and a display past
+the scroll naming the note bowed and the note each string would play.
 
 ## How it works
 
@@ -104,6 +135,24 @@ components holding data, and systems update them every frame.
 - `src/guitar/chords.ts` names chords from the notes ringing.
 - `src/guitar/guitar-model.ts` builds the guitar model in code.
 
+The violin lives in `src/violin/`, built the same way:
+
+- `air-violin-system.ts` holds the violin under the chin, reads the left
+  hand into stops and puts the bow in the right hand.
+- `geometry.ts` has a full-size violin's dimensions: a 328 mm string
+  length, the arched bridge and fingerboard, and stopping position to pitch.
+- `stopping.ts` turns finger points into where each string is stopped,
+  with semitone snapping.
+- `bow.ts` places the bow from the right hand's joints and finds which
+  strings the hair crosses, how hard it presses and how fast it moves; a
+  hand moving faster than any bow stroke is a tracking jump and plays
+  nothing.
+- `synth.ts` is a bowed string per voice: the bowed string's sawtooth-like
+  Helmholtz motion with the bow's notches, rosin noise, vibrato, and the
+  resonances of a violin body.
+- `src/scene-assets/violin.scene-asset.ts` builds the violin and bow
+  models; they are also in the asset manifest (`violin`, `violin-bow`).
+
 Feel can be tuned in a few constants: how close a finger must be to press
 (`PRESS` in `fretting.ts`), the picking zone, re-pluck lockout and mute timing
 (`pluck-detector.ts`), and where the guitar hangs and how far it tilts toward
@@ -129,6 +178,7 @@ allowed first:
 ```sh
 npx iwsdk dev up --headed --allow-browser-automation
 npm run test:e2e
+npm run test:violin
 npm run play:william-tell
 ```
 
@@ -137,6 +187,10 @@ npm run play:william-tell
   deep and slow strums, hammer-ons, re-placing the guitar, the panel buttons
   and hand-tracking loss. Results and screenshots go to `test-results/`.
   Set `E2E_PACE=2` to slow it down to watch.
+- `tests/violin.e2e.mjs` chooses the violin on the panel, bows each open
+  string and a double stop by tilting the bow, stops the A string at B and E,
+  and checks that a lifted bow is silent and that each change of bow
+  direction is one stroke.
 - `tests/william-tell.mjs` performs the galop theme of the *William Tell*
   Overture finale (bars 243–275) the way a guitarist would, and reports each
   note asked for, the finger and hand position used, the note the app played
@@ -170,6 +224,8 @@ about 1 fps. Each script must finish within IWSDK's 110-second limit.
 iwsdk.config.json      IWSDK project settings: scene, assets, components, XR
 src/index.ts           creates the world and registers the systems
 src/guitar/            the air guitar (see How it works)
+src/violin/            the air violin and bow
+src/scene-assets/      the room's models, and the violin and bow
 src/panel.ts           the panel's buttons
 src/assets.ts          asset catalog for the scene
 src/components.ts      component catalog
@@ -177,6 +233,7 @@ public/scenes/         the room the guitar is played in
 public/ui/             the panel layout (UIKitML)
 tests/unit/            unit tests
 tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand poses
+tests/violin.e2e.mjs   end-to-end test for the violin
 tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
 tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
 ```

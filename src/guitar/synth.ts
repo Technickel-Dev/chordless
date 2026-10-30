@@ -436,7 +436,7 @@ function makeDriveCurve(amount: number): Float32Array<ArrayBuffer> {
  * A small room: a short gap, then a dense tail that loses its highs as it
  * decays, as real rooms do.
  */
-function makeRoomImpulse(ctx: BaseAudioContext, seconds: number): AudioBuffer {
+export function makeRoomImpulse(ctx: BaseAudioContext, seconds: number): AudioBuffer {
   const sr = ctx.sampleRate;
   const length = Math.floor(sr * seconds);
   const preDelay = Math.floor(sr * 0.012);

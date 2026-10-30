@@ -7,9 +7,11 @@
 
 import { createSystem, Entity, UIKitMLAsset, VisibilityState } from '@iwsdk/core';
 import { AirGuitar, GuitarToneMode } from './guitar/air-guitar-component.js';
+import { AirViolin } from './violin/air-violin-component.js';
 
 export class PanelSystem extends createSystem({
   guitars: { required: [AirGuitar] },
+  violins: { required: [AirViolin] },
 }) {
   init(): void {
     const panel = this.world.getSceneObject<UIKitMLAsset>('welcome-panel');
@@ -43,7 +45,10 @@ export class PanelSystem extends createSystem({
     );
   }
 
-  /** Tone, volume and reset buttons write to the AirGuitar component. */
+  /**
+   * Instrument, tone, volume and reset buttons write to the AirGuitar and
+   * AirViolin components.
+   */
   private wireGuitarControls(panel: UIKitMLAsset): void {
     const clean = panel.getElementById('tone-clean');
     const drive = panel.getElementById('tone-drive');
@@ -54,7 +59,24 @@ export class PanelSystem extends createSystem({
     const forEachGuitar = (fn: (e: Entity) => void) => {
       for (const entity of this.queries.guitars.entities) fn(entity);
     };
+    const forEachViolin = (fn: (e: Entity) => void) => {
+      for (const entity of this.queries.violins.entities) fn(entity);
+    };
+    const guitarButton = panel.getElementById('instrument-guitar');
+    const violinButton = panel.getElementById('instrument-violin');
+    const choose = (violin: boolean) => {
+      forEachGuitar((e) => e.setValue(AirGuitar, 'active', !violin));
+      forEachViolin((e) => e.setValue(AirViolin, 'active', violin));
+      guitarButton?.setProperties({ variant: violin ? 'secondary' : 'primary' });
+      violinButton?.setProperties({ variant: violin ? 'primary' : 'secondary' });
+    };
+    const nudgeVolume = (step: number) => {
+      forEachGuitar((e) => e.setValue(AirGuitar, 'volume', clamp01((e.getValue(AirGuitar, 'volume') ?? 0.8) + step)));
+      forEachViolin((e) => e.setValue(AirViolin, 'volume', clamp01((e.getValue(AirViolin, 'volume') ?? 0.8) + step)));
+    };
     const handlers: [string, () => void][] = [
+      ['instrument-guitar', () => choose(false)],
+      ['instrument-violin', () => choose(true)],
       [
         'tone-clean',
         () => {
@@ -69,21 +91,15 @@ export class PanelSystem extends createSystem({
           showTone(GuitarToneMode.Drive);
         },
       ],
+      ['volume-down', () => nudgeVolume(-0.1)],
+      ['volume-up', () => nudgeVolume(0.1)],
       [
-        'volume-down',
-        () =>
-          forEachGuitar((e) =>
-            e.setValue(AirGuitar, 'volume', Math.max(0, (e.getValue(AirGuitar, 'volume') ?? 0.8) - 0.1)),
-          ),
+        'reset-guitar',
+        () => {
+          forEachGuitar((e) => e.setValue(AirGuitar, 'resetPlacement', true));
+          forEachViolin((e) => e.setValue(AirViolin, 'resetPlacement', true));
+        },
       ],
-      [
-        'volume-up',
-        () =>
-          forEachGuitar((e) =>
-            e.setValue(AirGuitar, 'volume', Math.min(1, (e.getValue(AirGuitar, 'volume') ?? 0.8) + 0.1)),
-          ),
-      ],
-      ['reset-guitar', () => forEachGuitar((e) => e.setValue(AirGuitar, 'resetPlacement', true))],
     ];
     for (const [id, handler] of handlers) {
       const element = panel.getElementById(id);
@@ -94,3 +110,5 @@ export class PanelSystem extends createSystem({
     }
   }
 }
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));

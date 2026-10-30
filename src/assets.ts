@@ -14,6 +14,7 @@ import {
   createStage,
   createStudioFloor,
 } from './scene-assets/studio.scene-asset.js';
+import { createBow, createViolin } from './scene-assets/violin.scene-asset.js';
 
 const publicAssetUrl = (filePath: string): string =>
   `${import.meta.env.BASE_URL}${filePath.replace(/^\/+/u, '')}`;
@@ -30,4 +31,6 @@ export default defineAssets({
   'gallery-set': createGallerySet(),
   'sideboard-set': createSideboardSet(),
   'welcome-panel': uikitml('welcome.uikitml', 'Welcome Panel'),
+  violin: createViolin(),
+  'violin-bow': createBow(),
 });

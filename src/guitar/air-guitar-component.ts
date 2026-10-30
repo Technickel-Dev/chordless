@@ -8,6 +8,8 @@ export const GuitarToneMode = { Clean: 'clean', Drive: 'drive' } as const;
  * live; PanelSystem writes `tone`, `volume` and `resetPlacement`.
  */
 export const AirGuitar = createComponent('AirGuitar', {
+  /** The guitar is the instrument in play (false while the violin is). */
+  active: { type: Types.Boolean, default: true },
   tone: { type: Types.Enum, enum: GuitarToneMode, default: GuitarToneMode.Clean },
   volume: { type: Types.Float32, default: 0.8, min: 0, max: 1, step: 0.05 },
   /** Set to move the guitar back to its default spot in front of the player. */

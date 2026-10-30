@@ -4,7 +4,7 @@ import { PRESS } from '../guitar/fretting.js';
 import { ACCENT } from '../guitar/guitar-model.js';
 import { JOINT, JOINT_COUNT, TrackedHand } from '../guitar/hands.js';
 import { AirViolin, Intonation } from './air-violin-component.js';
-import { BowContact, bowPose, CONTACT_GAP, createBowPose, SPEAKING_SPEED } from './bow.js';
+import { BowContact, bowedAmplitude, bowPose, createBowPose } from './bow.js';
 import { boardZ, OPEN_MIDI, STRING_COUNT, STRING_NAMES, stopX, stringY, stringZ, VIOLIN } from './geometry.js';
 import { StopReader } from './stopping.js';
 import { ViolinSynth } from './synth.js';
@@ -32,8 +32,6 @@ const STOP_FINGERS = [
 /** As on the guitar: the fingertip pad stops a string; the rest only where it lies flat. */
 const PAD_FRACTION = 0.5;
 const SAMPLE_SPACING = 0.006;
-/** Bow speed (m/s) for full volume. */
-const FULL_SPEED = 0.5;
 /** A held note grows vibrato after this long (snap intonation only; in free, the finger makes its own). */
 const VIBRATO_DELAY = 0.35;
 
@@ -302,7 +300,6 @@ export class AirViolinSystem extends createSystem({
   private updateSound(dt: number): void {
     const bow = this.bow;
     const speed = Math.abs(bow.velocity);
-    const drive = Math.min(1, Math.max(0, (speed - SPEAKING_SPEED) / (FULL_SPEED - SPEAKING_SPEED))) ** 0.6;
     const autoVibrato = (this.entity.getValue(AirViolin, 'intonation') ?? Intonation.Snap) === Intonation.Snap;
     let deepest = -1;
     let bowing = '';
@@ -312,9 +309,7 @@ export class AirViolinSystem extends createSystem({
       const midi = OPEN_MIDI[s] + semis;
       let amplitude = 0;
       if (bow.sounding[s] && this.right.tracked) {
-        // Barely touching gives a thin, airy tone; pressed in, a full one.
-        const press = Math.min(1, Math.max(0, (bow.press[s] + CONTACT_GAP) / (CONTACT_GAP + 0.003)));
-        amplitude = drive * (0.3 + 0.7 * press);
+        amplitude = bowedAmplitude(speed, bow.press[s]);
         if (deepest < 0 || bow.press[s] > bow.press[deepest]) deepest = s;
         if (amplitude > 0.05) {
           bowing += (bowing ? ' ' : '') + STRING_NAMES[s];

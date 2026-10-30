@@ -12,7 +12,9 @@
  * Changes: transcribed the Violin I melody only, dropped articulation,
  * arranged it for guitar (fingering below), played the loud section an
  * octave lower (the violins reach C#6, above the guitar's top fret, B5),
- * and added a closing E major chord that is not in the score.
+ * and added a closing E major chord that is not in the score. The violin
+ * version (WILLIAM_TELL_VIOLIN) plays the melody at the written pitch and
+ * closes with an E major double stop, also not in the score.
  *
  * Gioachino Rossini (1792-1868) composed the overture in 1829; the music
  * itself is in the public domain.
@@ -111,5 +113,24 @@ export const WILLIAM_TELL = {
     ...toEvents(QUIET_BARS, QUIET, 'pp'),
     ...toEvents(LOUD_BARS, LOUD, 'ff'),
     { beat: (276 - 244) * 2, chord: 'E', dynamic: 'ff' },
+  ].sort((a, b) => a.beat - b.beat),
+};
+
+/** A note name such as 'C#5' an octave higher. */
+const octaveUp = (note) => note.replace(/\d$/, (d) => String(Number(d) + 1));
+
+/**
+ * The same melody for the violin, as the first violins play it: the loud
+ * section at the written pitch, up to C#6. Notes are names only; the
+ * violin performer chooses strings and fingers. It closes on G#4 and E5
+ * together (a double stop on the D and A strings).
+ */
+export const WILLIAM_TELL_VIOLIN = {
+  title: 'William Tell Overture: finale, bars 243-275 (violin)',
+  tempo: 152,
+  events: [
+    ...toEvents(QUIET_BARS, QUIET, 'pp').map(({ beat, note, dynamic }) => ({ beat, note, dynamic })),
+    ...toEvents(LOUD_BARS, LOUD, 'ff').map(({ beat, note, dynamic }) => ({ beat, note: octaveUp(note), dynamic })),
+    { beat: (276 - 244) * 2, notes: ['G#4', 'E5'], dynamic: 'ff' },
   ].sort((a, b) => a.beat - b.beat),
 };

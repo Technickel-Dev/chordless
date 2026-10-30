@@ -13,6 +13,10 @@ export class PanelSystem extends createSystem({
   guitars: { required: [AirGuitar] },
   violins: { required: [AirViolin] },
 }) {
+  private guitarButton: ReturnType<UIKitMLAsset['getElementById']> = null;
+  private violinButton: ReturnType<UIKitMLAsset['getElementById']> = null;
+  private showingViolin: boolean | null = null;
+
   init(): void {
     const panel = this.world.getSceneObject<UIKitMLAsset>('welcome-panel');
     if (panel == null) return;
@@ -62,13 +66,11 @@ export class PanelSystem extends createSystem({
     const forEachViolin = (fn: (e: Entity) => void) => {
       for (const entity of this.queries.violins.entities) fn(entity);
     };
-    const guitarButton = panel.getElementById('instrument-guitar');
-    const violinButton = panel.getElementById('instrument-violin');
+    this.guitarButton = panel.getElementById('instrument-guitar');
+    this.violinButton = panel.getElementById('instrument-violin');
     const choose = (violin: boolean) => {
       forEachGuitar((e) => e.setValue(AirGuitar, 'active', !violin));
       forEachViolin((e) => e.setValue(AirViolin, 'active', violin));
-      guitarButton?.setProperties({ variant: violin ? 'secondary' : 'primary' });
-      violinButton?.setProperties({ variant: violin ? 'primary' : 'secondary' });
     };
     const nudgeVolume = (step: number) => {
       forEachGuitar((e) => e.setValue(AirGuitar, 'volume', clamp01((e.getValue(AirGuitar, 'volume') ?? 0.8) + step)));
@@ -108,6 +110,16 @@ export class PanelSystem extends createSystem({
       element.addEventListener('click', handler);
       this.cleanupFuncs.push(() => element.removeEventListener('click', handler));
     }
+  }
+
+  /** The instrument buttons show which instrument is out, however it was chosen. */
+  update(): void {
+    let violin = false;
+    for (const e of this.queries.violins.entities) violin = e.getValue(AirViolin, 'active') ?? false;
+    if (violin === this.showingViolin) return;
+    this.showingViolin = violin;
+    this.guitarButton?.setProperties({ variant: violin ? 'secondary' : 'primary' });
+    this.violinButton?.setProperties({ variant: violin ? 'primary' : 'secondary' });
   }
 }
 

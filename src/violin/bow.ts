@@ -34,6 +34,19 @@ export const DOUBLE_STOP = 0.0008;
 export const SPEAKING_SPEED = 0.05;
 /** A stroke starts once the bow moves this fast (m/s), and lasts until it nearly stops. */
 export const STROKE_SPEED = 0.1;
+/** Bow speed (m/s) for full volume. */
+export const FULL_SPEED = 0.5;
+
+/**
+ * How loud a string sounds, 0 to 1, under a bow drawn at `speed` m/s and
+ * pressed `press` metres into it: barely touching gives a thin, airy tone,
+ * pressed in a full one.
+ */
+export function bowedAmplitude(speed: number, press: number): number {
+  const drive = Math.min(1, Math.max(0, (speed - SPEAKING_SPEED) / (FULL_SPEED - SPEAKING_SPEED))) ** 0.6;
+  const pressure = Math.min(1, Math.max(0, (press + CONTACT_GAP) / (CONTACT_GAP + 0.003)));
+  return drive * (0.3 + 0.7 * pressure);
+}
 /**
  * Faster than any real bow stroke (m/s). The hand moving faster than this
  * between frames is a jump in tracking, not a stroke: it makes no sound

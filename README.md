@@ -180,6 +180,7 @@ npx iwsdk dev up --headed --allow-browser-automation
 npm run test:e2e
 npm run test:violin
 npm run play:william-tell
+npm run play:violin
 ```
 
 - `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
@@ -203,6 +204,20 @@ npm run play:william-tell
   `tests/hand-rig.js`, which solves each finger's joints to reach its
   fingertip target without passing through the others. Set `WT_TEMPO=110`
   for a slower take.
+- `tests/violin-william-tell.mjs` (`npm run play:violin`) plays the same
+  theme on the violin at the written pitch, as the first violins have it (up
+  to C#6), closing on an E major double stop. `tests/violin-performer.js`
+  marks up the part as a violinist would: every note's string, hand
+  position and finger chosen for the whole piece at once (the quiet theme in
+  first position, the tutti mostly in second), fingers that stay down until
+  they would spoil a note and land on a sounding string just as the bow
+  turns, and shifts late in a note. The bow alternates strokes near its
+  middle, crossing strings at the turn, faster, nearer the bridge and
+  pressed harder when loud. Notes are scored from the app's own synth:
+  in the middle of each note the loudest string must play the right pitch
+  and no other string may sound. `npm run check:violin` runs the same
+  performance through the app's stopping reader and bow contact offline, at
+  steady and uneven frame rates.
 - `npm run check:hands` poses the whole song and checks the hands stay
   plausible: bone lengths, joint limits, no kinked or twisted fingers, no
   finger through another, and no fingertip pad pressing a string or fret it
@@ -234,6 +249,7 @@ public/ui/             the panel layout (UIKitML)
 tests/unit/            unit tests
 tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand poses
 tests/violin.e2e.mjs   end-to-end test for the violin
+tests/violin-william-tell.mjs, tests/violin-performer.js, tests/violin-check.mjs   violin song playback and its check
 tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
 tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
 ```
@@ -245,7 +261,8 @@ tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands a
 domain) from "William Tell: Overture to the Opera", full score typeset by
 Max Wilkinson (2008), [IMSLP #22579](https://imslp.org/wiki/Guillaume_Tell_(Rossini,_Gioacchino)),
 licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/).
-Changes: melody only, without articulation, arranged for guitar with the loud
-section an octave lower, and an added closing E major chord.
+Changes: melody only, without articulation; arranged for guitar with the loud
+section an octave lower and an added closing E major chord; and for violin at
+the written pitch with an added closing E major double stop.
 
 Built with [IWSDK](https://iwsdk.dev/).

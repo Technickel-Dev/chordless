@@ -262,7 +262,7 @@ function solveFinger(name, metacarpal, knuckle, target, hand, pressing, others =
         // (The costlier terms are skipped once a posture cannot win.)
         let cost = bad * 10 + style + Math.abs(roll) / 200 + len(shift) * 20;
         if (best && cost >= best.cost) continue;
-        cost += padStrays(tip, dip, pip) * 10;
+        cost += (hand.strays ?? padStrays)(tip, dip, pip) * 10;
         if (best && cost >= best.cost) continue;
         if (others.length) cost += intrusion([[knuckle, pip], [pip, dip], [dip, tip]], others) * 150;
         if (!best || cost < best.cost) best = { cost, pip, dip, tip, axis };
@@ -340,7 +340,7 @@ function solveThumb(base, metacarpalDir, target, hand) {
  * knuckle) and index side. Left and right hands are mirror images, so the
  * palm is on opposite sides of forward x index for each.
  */
-function handBasis(wrist, forward, indexSide, right) {
+export function handBasis(wrist, forward, indexSide, right) {
   const lateral = norm(sub(indexSide, scale(forward, dot(indexSide, forward))));
   const palm = norm(right ? cross(lateral, forward) : cross(forward, lateral));
   const back = scale(palm, -1);
@@ -360,7 +360,7 @@ function handBasis(wrist, forward, indexSide, right) {
  * A pressing finger takes up the whole stretch from its knuckle to its tip,
  * since it slants across the neck.
  */
-function spaceFreeFingers(tips, knuckles, pressedOf, axis, gap = 0.017) {
+export function spaceFreeFingers(tips, knuckles, pressedOf, axis, gap = 0.017) {
   const along = (p) => dot(p, axis);
   const moveTo = (p, value) => add(p, scale(axis, value - along(p)));
   const low = (f) => (pressedOf(f) ? Math.min(along(tips[f]), along(knuckles[f])) : along(tips[f]));
@@ -405,15 +405,34 @@ export function leftHand({ position, tips }) {
   const hand = handBasis(wrist, forward, v(1, 0, 0), false);
   const targets = { ...tips };
   spaceFreeFingers(targets, hand.knuckles, (f) => pressingOf(f) > 0.5, v(1, 0, 0));
-  const joints = { wrist: frame(wrist, hand.forward, hand.back) };
+  // A pressing fingertip comes straight down on its string, so its pad
+  // stays off the neighbouring ones. The thumb lies along the back of the
+  // neck, its pad behind the index and middle fingers and pointing toward
+  // the headstock.
+  return poseHand(
+    { ...hand, upright: v(0, 0, 1) },
+    {
+      targets,
+      pressingOf,
+      thumbTip: v(hx + 0.035, neckEdge + neckHalfWidth(hx) * 0.9, NECK_BACK_Z - SKIN),
+      thumbWeights: [0.6, 0.55, 0.55],
+    },
+  );
+}
+
+/**
+ * Solves a whole hand from its basis (handBasis, plus `upright`, the way a
+ * pressing fingertip should point, and optionally `strays`, which scores a
+ * pressing pad off its note; the guitar's padStrays by default): each
+ * finger to its target, then again any finger that runs into another, then
+ * the thumb toward `thumbTip`, its metacarpal along `thumbWeights` (of the
+ * hand's lateral, forward and palm directions). `pressingOf(f)` is how much
+ * finger f presses, 0 to 1.
+ */
+export function poseHand(hand, { targets, pressingOf, thumbTip, thumbWeights }) {
+  const joints = { wrist: frame(hand.wrist, hand.forward, hand.back) };
   for (const f of FINGERS) {
-    // A pressing fingertip comes straight down on its string, so its pad
-    // stays off the neighbouring ones.
-    const upright = v(0, 0, 1);
-    Object.assign(
-      joints,
-      solveFinger(f, hand.metacarpals[f], hand.knuckles[f], targets[f], { ...hand, upright }, pressingOf(f)),
-    );
+    Object.assign(joints, solveFinger(f, hand.metacarpals[f], hand.knuckles[f], targets[f], hand, pressingOf(f)));
   }
   // Then any finger that runs into another again, making room for where
   // the others ended up (up to twice, so they settle on postures that suit
@@ -425,17 +444,12 @@ export function leftHand({ position, tips }) {
     const crowded = FINGERS.filter((f) => intrusion(bonesOf(joints, f), othersOf(f)) > 0);
     if (crowded.length === 0) break;
     for (const f of crowded) {
-      Object.assign(
-        joints,
-        solveFinger(f, hand.metacarpals[f], hand.knuckles[f], targets[f], { ...hand, upright: v(0, 0, 1) }, pressingOf(f), othersOf(f)),
-      );
+      Object.assign(joints, solveFinger(f, hand.metacarpals[f], hand.knuckles[f], targets[f], hand, pressingOf(f), othersOf(f)));
     }
   }
-  // Thumb along the back of the neck, its pad behind the index and middle
-  // fingers and pointing toward the headstock.
-  const thumbBase = add(add(wrist, scale(hand.lateral, 0.018)), scale(hand.forward, 0.012));
-  const thumbDir = norm(add(add(scale(hand.lateral, 0.6), scale(hand.forward, 0.55)), scale(hand.palm, 0.55)));
-  const thumbTip = v(hx + 0.035, neckEdge + neckHalfWidth(hx) * 0.9, NECK_BACK_Z - SKIN);
+  const [wl, wf, wp] = thumbWeights;
+  const thumbBase = add(add(hand.wrist, scale(hand.lateral, 0.018)), scale(hand.forward, 0.012));
+  const thumbDir = norm(add(add(scale(hand.lateral, wl), scale(hand.forward, wf)), scale(hand.palm, wp)));
   Object.assign(joints, solveThumb(thumbBase, thumbDir, thumbTip, hand));
   return joints;
 }

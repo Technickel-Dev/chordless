@@ -17,8 +17,8 @@
  * closes with an E major double stop, also not in the score. The cello
  * version (WILLIAM_TELL_CELLO) plays the guitar arrangement an octave lower
  * and closes with the same double stop two octaves below the violin's. The
- * cymbal part (WILLIAM_TELL_CYMBALS) is not transcribed: it is arranged
- * here, a crash on each downbeat of the loud section.
+ * cymbal and triangle parts (WILLIAM_TELL_CYMBALS, WILLIAM_TELL_TRIANGLE)
+ * are not transcribed: they are arranged here.
  *
  * Gioachino Rossini (1792-1868) composed the overture in 1829; the music
  * itself is in the public domain.
@@ -176,4 +176,23 @@ export const WILLIAM_TELL_CYMBALS = {
   title: 'William Tell Overture: finale, bars 260-276 (cymbals)',
   tempo: 152,
   events: CYMBAL_BARS.map(([bar, dynamic, extra]) => ({ beat: (bar - 244) * 2, dynamic, ...extra })),
+};
+
+/**
+ * A triangle part for the same passage, also arranged here (not
+ * transcribed): tacet through the first quiet theme, a light ting on each
+ * downbeat of the second, then in the tutti the gallop rhythm itself in
+ * each phrase's first bar and a strike on the other downbeats, and a roll
+ * on the closing chord, stopped short (`roll`, in beats).
+ */
+const GALLOP = [0, 0.5, 0.75, 1, 1.5, 1.75];
+export const WILLIAM_TELL_TRIANGLE = {
+  title: 'William Tell Overture: finale, bars 252-276 (triangle)',
+  tempo: 152,
+  events: [
+    ...[252, 253, 254, 255, 256, 257, 258, 259].map((bar) => ({ beat: (bar - 244) * 2, dynamic: 'p' })),
+    ...[260, 264, 268, 272].flatMap((bar) => GALLOP.map((b) => ({ beat: (bar - 244) * 2 + b, dynamic: 'f' }))),
+    ...[261, 262, 263, 265, 266, 267, 269, 270, 271, 273, 274, 275].map((bar) => ({ beat: (bar - 244) * 2, dynamic: 'mf' })),
+    { beat: (276 - 244) * 2, dynamic: 'f', roll: 3 },
+  ].sort((a, b) => a.beat - b.beat),
 };

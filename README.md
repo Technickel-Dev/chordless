@@ -1,12 +1,13 @@
 # Chordless
 
 Air instruments for Meta Quest, played with your bare hands: a guitar, a
-violin, a cello and a pair of orchestral cymbals. On the guitar your left fingers fret real strings at real fret
+violin, a cello, a pair of orchestral cymbals and a triangle. On the guitar your left fingers fret real strings at real fret
 positions on a full-size steel-string guitar, and your right index fingertip
 plucks: sweep across the strings to strum, flick one string to pick a single
 note. On the violin and cello your left fingers stop the strings anywhere on
 a fretless fingerboard and your right hand draws a bow. The cymbals are one
-in each hand: clash them together. The sound is synthesized in the
+in each hand: clash them together. The triangle hangs from your left hand
+and the beater is in your right. The sound is synthesized in the
 browser, so there are no audio files.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
@@ -71,7 +72,7 @@ a second: the sound hole moves to your right pinch and the neck points toward
 your left. The placement is remembered.
 
 **Panel.** Point a hand at the panel and pinch to press **Guitar**,
-**Violin**, **Cello** or **Cymbals** (which instrument to play), **Clean** or **Overdrive**, **Vol −** /
+**Violin**, **Cello**, **Cymbals** or **Triangle** (which instrument to play), **Clean** or **Overdrive**, **Vol −** /
 **Vol +**, or **Reset position** (back to the default position).
 
 ### The violin
@@ -128,6 +129,19 @@ them a little off-centre, as cymbal players do: plates that meet flat and
 centred trap air and sound muffled. To stop the ringing, hold them together
 after the clash (*secco*), lay them together gently, or press either plate
 to your chest. The rims glow while the cymbals ring.
+
+### The triangle
+
+A 7-inch orchestral triangle hangs from a clip: pinch the clip between your
+left thumb and index finger and the triangle hangs plumb below, turned to
+face you. Your right fist holds a steel beater like a drumstick. Strike the
+bar with it; the faster the beater, the louder and brighter the note, and
+where you strike it (near a corner, mid-side, into the face or across it)
+colours the sound. Strikes add to what is already ringing, as on a real
+triangle, so a roll (the beater moved quickly side to side inside a
+corner, touching both sides) builds and sustains. To stop it, touch the bar
+with the free fingers of your holding hand, or rest the beater on it. The
+bar glows while it rings.
 
 ## How it works
 
@@ -216,6 +230,34 @@ The cymbals (`src/cymbals/`):
   pad and the strap handle, knotted inside the bell (`cymbal` in the asset
   manifest).
 
+The triangle (`src/triangle/`):
+
+- `geometry.ts` is the triangle's bar as a polyline (each segment tagged with
+  its side), the loop and clip, and the beater.
+- `strike.ts` hangs the triangle from the left hand's pinch and puts the
+  beater in the right fist, then watches the rod against the bar
+  (`StrikeDetector`). Each frame's motion is checked in twelve steps, so a
+  fast beater cannot pass through the 1 cm bar unseen. A strike is as loud as
+  the beater's average speed into the bar over the 20 ms before it touched
+  (tracked positions jitter, and what it does after touching is not the
+  strike). Each side keeps its own contact, so a roll in a corner strikes
+  every time; a side is struck again only once the beater has come back off
+  it the way it came, so following through a bar you cannot feel is one
+  strike. A beater resting on the bar, or the holding hand's free fingers on
+  it (`touchesBar`), damps it.
+- `synth.ts` rings the triangle's modes on the audio thread (an
+  AudioWorklet): about 50 resonators tuned as a 10 mm steel bar bent into a
+  triangle, each bending mode split in and out of the triangle's plane and
+  coupled at the corners. A strike excites them by where it lands along the
+  bar and how square it is to the face, brighter the harder it is, with the
+  beater's tink; strikes add to what is ringing, and damping switches every
+  resonator to a fast decay.
+- `air-triangle-system.ts` puts the triangle and beater in the hands, runs
+  the strike detection and the sound, and draws the bar's glow and the HUD.
+- `src/scene-assets/triangle.scene-asset.ts` builds the triangle (the bent
+  bar, open at one corner, its nylon loop and clip) and the beater
+  (`triangle` and `triangle-beater` in the asset manifest).
+
 Feel can be tuned in a few constants: how close a finger must be to press
 (`PRESS` in `fretting.ts`), the picking zone, re-pluck lockout and mute timing
 (`pluck-detector.ts`), and where the guitar hangs and how far it tilts toward
@@ -244,10 +286,12 @@ npm run test:e2e
 npm run test:violin
 npm run test:cello
 npm run test:cymbals
+npm run test:triangle
 npm run play:william-tell
 npm run play:violin
 npm run play:cello
 npm run play:cymbals
+npm run play:triangle
 ```
 
 - `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
@@ -321,6 +365,19 @@ npm run play:cymbals
   stopped against the chest. `npm run check:cymbals` checks it offline at
   four frame rates, and `npm run render:cymbals` renders clashes at *pp*,
   *mf* and *ff*, a flat one and the whole part to WAV.
+- `tests/triangle.e2e.mjs` (`npm run test:triangle`) chooses the triangle on
+  the panel, pinches the clip and closes the other hand round the beater,
+  and drives the beater along scripted paths: a hard and a soft strike, a
+  roll in the top corner, the beater rested on the bar, and the holding
+  hand's free fingers laid on it.
+- `tests/triangle-william-tell.mjs` (`npm run play:triangle`) plays a
+  triangle part for the theme (see Credits) from
+  `tests/triangle-performer.js`: strikes into the face of the right side at
+  the speed each dynamic needs, the gallop rhythm in sixteenths, and a roll
+  in the top corner stopped by leaving the beater on the bar. `npm run
+  check:triangle` checks it offline at four frame rates, and `npm run
+  render:triangle` renders strikes at *p*, *mf* and *f*, at a corner and
+  mid-side, a roll and the whole part to WAV.
 
 Both bring the browser window to the front; a window behind others renders at
 about 1 fps. Each script must finish within IWSDK's 110-second limit.
@@ -334,7 +391,8 @@ src/guitar/            the air guitar (see How it works)
 src/violin/            the air violin and bow, and what the bowed instruments share
 src/cello/             the air cello
 src/cymbals/           the air cymbals
-src/scene-assets/      the room's models, the violin, cello and bows, and the cymbal
+src/triangle/          the air triangle
+src/scene-assets/      the room's models, the violin, cello and bows, the cymbal, and the triangle and beater
 src/panel.ts           the panel's buttons
 src/assets.ts          asset catalog for the scene
 src/components.ts      component catalog
@@ -345,6 +403,7 @@ tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand p
 tests/violin.e2e.mjs, tests/cello.e2e.mjs, tests/bowed-e2e.js   end-to-end tests for the bowed instruments
 tests/{violin,cello}-william-tell.mjs, -performer.js, -check.mjs, tests/bowed-*.js   bowed song playback and its checks
 tests/cymbals.e2e.mjs, tests/cymbals-william-tell.mjs, -performer.js, -check.mjs   cymbal test, playback and its check
+tests/triangle.e2e.mjs, tests/triangle-william-tell.mjs, -performer.js, -check.mjs   triangle test, playback and its check
 tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
 tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
 ```
@@ -360,7 +419,7 @@ Changes: melody only, without articulation; arranged for guitar with the loud
 section an octave lower and an added closing E major chord; for violin at
 the written pitch with an added closing E major double stop; and for cello an
 octave below the guitar arrangement with the same double stop two octaves
-below the violin's. The cymbal part (bars 260–276) is not from the score:
-it is arranged here, a crash on each downbeat of the loud section.
+below the violin's. The cymbal part (bars 260–276) and the triangle part
+(bars 252–276) are not from the score: they are arranged here.
 
 Built with [IWSDK](https://iwsdk.dev/).

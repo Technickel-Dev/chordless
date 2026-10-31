@@ -18,7 +18,8 @@
  * version (WILLIAM_TELL_CELLO) plays the guitar arrangement an octave lower
  * and closes with the same double stop two octaves below the violin's. The
  * cymbal part (WILLIAM_TELL_CYMBALS) is not transcribed: it is arranged
- * here, a crash on each downbeat of the loud section.
+ * here, a crash on each downbeat of the loud section. Nor is the drum kit
+ * part (WILLIAM_TELL_DRUMS), arranged here on the melody's gallop rhythm.
  *
  * Gioachino Rossini (1792-1868) composed the overture in 1829; the music
  * itself is in the public domain.
@@ -176,4 +177,89 @@ export const WILLIAM_TELL_CYMBALS = {
   title: 'William Tell Overture: finale, bars 260-276 (cymbals)',
   tempo: 152,
   events: CYMBAL_BARS.map(([bar, dynamic, extra]) => ({ beat: (bar - 244) * 2, dynamic, ...extra })),
+};
+
+/**
+ * A drum kit part for the whole passage, arranged here (not transcribed from
+ * the score), played open-handed: the left hand keeps the hi-hat on its side
+ * of the kit and the right hand the ride on its own. Through the quiet theme
+ * the left hand plays the melody's gallop on the closed hi-hat, opening it
+ * at the end of each phrase, while the right plays kick on the first beat
+ * and snare on the second; bar 259 builds into the tutti with a snare fill.
+ * In the tutti the right hand gallops on the ride, a bell on each downbeat,
+ * and the left plays kick and snare, or crash and snare on the downbeat of
+ * each phrase with the right hand on the kick. Bar 274 is a fill round the
+ * toms; the last two downbeats are crash and kick together, left to ring.
+ *
+ * Each event is a stroke: its beat, which hand, what it plays (an
+ * articulation of the air drums, see src/drums/strokes.ts) and how loud.
+ */
+const L = 'left';
+const R = 'right';
+const at = (bar, beat) => (bar - 244) * 2 + beat;
+const GALLOP = [0, 0.5, 0.75, 1, 1.5, 1.75];
+
+const drumBar = (bar) => {
+  // The quiet theme, bars 244-258.
+  if (bar < 259) {
+    const phraseEnd = bar === 251 || bar === 258;
+    return [
+      ...GALLOP.map((b) => [b, L, phraseEnd && b === 1.5 ? 'hihatOpen' : 'hihatClosed', b % 1 === 0 ? 'p' : 'pp']),
+      [0, R, 'kick', 'p'],
+      [1, R, 'snare', 'p'],
+    ];
+  }
+  if (bar === 259) {
+    // The quiet E G# E, then the fortissimo pickup: a fill into the tutti.
+    return [
+      [0, L, 'hihatClosed', 'p'],
+      [0.5, L, 'hihatClosed', 'pp'],
+      [0, R, 'kick', 'p'],
+      [1, R, 'snare', 'mf'],
+      [1.5, L, 'snare', 'ff'],
+    ];
+  }
+  if (bar === 274) {
+    // Round the toms, high to low, into the last downbeats.
+    return [
+      [0, R, 'kick', 'f'],
+      [0, L, 'tom1', 'f'],
+      [0.5, L, 'tom1', 'f'],
+      [0.75, R, 'tom2', 'f'],
+      [1, R, 'tom2', 'f'],
+      [1.5, R, 'floorTom', 'ff'],
+    ];
+  }
+  if (bar >= 275) return [[0, L, 'crash', 'ff'], [0, R, 'kick', 'ff']];
+  // The tutti, bars 260-273: a crash on the downbeat of each four-bar phrase.
+  if ((bar - 260) % 4 === 0) {
+    return [
+      [0, L, 'crash', 'ff'],
+      [0, R, 'kick', 'ff'],
+      [1, L, 'snare', 'f'],
+      ...[1, 1.5, 1.75].map((b) => [b, R, 'ride', 'f']),
+    ];
+  }
+  // Bar 273 leaves the right hand time to reach the kick for the fill.
+  // The right hand leaves the ride a beat early before a phrase's kick, and before the fill.
+  const ride = bar === 273 ? [0.5, 0.75, 1] : bar % 4 === 3 ? [0.5, 0.75, 1, 1.5] : [0.5, 0.75, 1, 1.5, 1.75];
+  return [
+    [0, L, 'kick', 'f'],
+    [1, L, 'snare', 'f'],
+    [0, R, 'rideBell', 'f'],
+    ...ride.map((b) => [b, R, 'ride', 'mf']),
+  ];
+};
+
+export const WILLIAM_TELL_DRUMS = {
+  title: 'William Tell Overture: finale, bars 243-276 (drums)',
+  tempo: 152,
+  events: [
+    // The pickup, on the hi-hat.
+    { beat: at(243, 1.5), hand: L, hit: 'hihatClosed', dynamic: 'p' },
+    { beat: at(243, 1.75), hand: L, hit: 'hihatClosed', dynamic: 'pp' },
+    ...Array.from({ length: 276 - 244 + 1 }, (_, i) => 244 + i).flatMap((bar) =>
+      drumBar(bar).map(([beat, hand, hit, dynamic]) => ({ beat: at(bar, beat), hand, hit, dynamic })),
+    ),
+  ].sort((a, b) => a.beat - b.beat || (a.hand < b.hand ? -1 : 1)),
 };

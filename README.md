@@ -295,6 +295,7 @@ npm run play:william-tell
 npm run play:violin
 npm run play:cello
 npm run play:cymbals
+npm run play:drums
 ```
 
 - `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
@@ -368,6 +369,15 @@ npm run play:cymbals
   stopped against the chest. `npm run check:cymbals` checks it offline at
   four frame rates, and `npm run render:cymbals` renders clashes at *pp*,
   *mf* and *ff*, a flat one and the whole part to WAV.
+- `tests/drums-william-tell.mjs` (`npm run play:drums`) plays a drum part
+  for the whole passage (see Credits) from `tests/drums-performer.js`:
+  hi-hat gallop with kick and snare through the quiet theme, a snare fill, a
+  ride gallop with a crash on each phrase in the tutti, a tom fill and two
+  closing crashes. Each stick tip is planned to meet its surface at the speed
+  its dynamic needs. `npm run check:drums` scores the plan offline through
+  the app's own stroke detector at four frame rates (all strokes right at
+  steady rates). Live, strokes are only as accurate as the browser's frame
+  rate: a slow, stalling headless window skews the measured loudness.
 - `tests/drums.e2e.mjs` (`npm run test:drums`) chooses the drums on the
   panel, closes both hands round the sticks and drives the tips: a fast
   snare stroke is loud, a slow one soft, a tip lowered gently is silent, a
@@ -399,7 +409,7 @@ tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand p
 tests/violin.e2e.mjs, tests/cello.e2e.mjs, tests/bowed-e2e.js   end-to-end tests for the bowed instruments
 tests/{violin,cello}-william-tell.mjs, -performer.js, -check.mjs, tests/bowed-*.js   bowed song playback and its checks
 tests/cymbals.e2e.mjs, tests/cymbals-william-tell.mjs, -performer.js, -check.mjs   cymbal test, playback and its check
-tests/drums.e2e.mjs    drums end-to-end test
+tests/drums.e2e.mjs, tests/drums-william-tell.mjs, -performer.js, -check.mjs   drums test, playback and its check
 tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
 tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
 ```

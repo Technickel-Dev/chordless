@@ -162,6 +162,14 @@ export class AirGuitarSystem extends createSystem({
     if (this.world.visibilityState.peek() === VisibilityState.NonImmersive) return;
     const dt = Math.min(delta, 0.1);
     const e = this.entity;
+    // Put away while the violin is played.
+    const active = e.getValue(AirGuitar, 'active') ?? true;
+    if (active !== this.model.root.visible) {
+      this.model.root.visible = active;
+      if (!active) this.synth.chokeAll();
+      this.placed = false;
+    }
+    if (!active) return;
 
     const hands = this.input.xr.visualAdapters.hand;
     this.left.update(hands.left, this.player.gripSpaces.left);
@@ -363,7 +371,7 @@ export class AirGuitarSystem extends createSystem({
       }
     }
 
-    if (!reader.commit(dt) && this.shownFrets !== '') {
+    if (!reader.commit(dt, this.left.tracked) && this.shownFrets !== '') {
       this.updateFingerShadows();
       return;
     }

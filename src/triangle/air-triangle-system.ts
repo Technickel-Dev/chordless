@@ -1,0 +1,234 @@
+import { createSystem, Entity, Group, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
+import { dynamicMark } from '../cymbals/air-cymbals-system.js';
+import { ACCENT } from '../guitar/guitar-model.js';
+import { TrackedHand } from '../guitar/hands.js';
+import { AirTriangle } from './air-triangle-component.js';
+import { SIDE_NAMES } from './geometry.js';
+import {
+  beaterPose,
+  createBeaterPose,
+  createTrianglePose,
+  DAMPING_JOINTS,
+  StrikeDetector,
+  toTriangle,
+  touchesBar,
+  trianglePose,
+} from './strike.js';
+import { TriangleSynth } from './synth.js';
+import { createTriangleModel, type TriangleModel } from './triangle-model.js';
+
+/** The HUD floats this far in front of, below and left of the head (m), as the cymbals' does. */
+const HUD_FORWARD = 0.6;
+const HUD_BELOW = 0.14;
+const HUD_LEFT = 0.3;
+
+type Vec = [number, number, number];
+
+/**
+ * An orchestral triangle hanging from a clip pinched in the left hand, and
+ * a steel beater in the right fist. Striking the bar sounds it, as loud as
+ * the beater was moving; strikes add to what is ringing, so a roll
+ * sustains. Touching the bar with the holding hand's free fingers, or
+ * resting the beater on it, damps it.
+ */
+export class AirTriangleSystem extends createSystem({
+  items: { required: [AirTriangle] },
+}) {
+  /** Which instrument this is, for tests and tools. */
+  readonly instrument = 'triangle';
+  readonly component = AirTriangle;
+  private model!: TriangleModel;
+  private entity!: Entity;
+  private synth!: TriangleSynth;
+  private readonly left = new TrackedHand();
+  private readonly right = new TrackedHand();
+  private readonly pose = createTrianglePose();
+  private readonly beater = createBeaterPose();
+  private readonly strike = new StrikeDetector();
+  private readonly butt: Vec = [0, 0, 0];
+  private readonly tip: Vec = [0, 0, 0];
+  private readonly fingers = new Float32Array(DAMPING_JOINTS.length * 3);
+  private readonly scratch: Vec = [0, 0, 0];
+  private readonly joint: Vec = [0, 0, 0];
+  private shown = false;
+  private damped = false;
+  private damps = 0;
+  private shownRinging = -1;
+  private readonly basis = new Matrix4();
+  private readonly x = new Vector3();
+  private readonly y = new Vector3();
+  private readonly z = new Vector3();
+  private readonly headPos = new Vector3();
+  private readonly headQuat = new Quaternion();
+  private readonly fwd = new Vector3();
+  private readonly head: Vec = [0, 0, 0];
+
+  init(): void {
+    this.synth = new TriangleSynth();
+    this.model = createTriangleModel();
+    this.entity = this.world.createTransformEntity(this.model.triangle, { persistent: true });
+    this.entity.addComponent(AirTriangle);
+    this.world.createTransformEntity(this.model.beater, { persistent: true });
+    this.world.createTransformEntity(this.model.hud.sprite, { persistent: true });
+    this.setVisible(false);
+
+    const unlock = () => this.synth.resume();
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    this.cleanupFuncs.push(
+      () => window.removeEventListener('pointerdown', unlock),
+      () => window.removeEventListener('keydown', unlock),
+      this.world.visibilityState.subscribe((state) => {
+        // Entering XR is a user gesture, so audio can start here.
+        if (state !== VisibilityState.NonImmersive) this.synth.resume();
+        else this.show(false);
+      }),
+      () => this.synth.dispose(),
+    );
+  }
+
+  update(delta: number): void {
+    const e = this.entity;
+    const active = e.getValue(AirTriangle, 'active') ?? false;
+    if (!active || this.world.visibilityState.peek() === VisibilityState.NonImmersive) {
+      this.show(false);
+      return;
+    }
+    this.show(true);
+    const dt = Math.min(delta, 0.1);
+    if (e.getValue(AirTriangle, 'resetPlacement')) e.setValue(AirTriangle, 'resetPlacement', false);
+    this.synth.setVolume(e.getValue(AirTriangle, 'volume') ?? 0.8);
+
+    const adapters = this.input.xr.visualAdapters.hand;
+    const { left, right } = this;
+    left.update(adapters.left, this.player.gripSpaces.left);
+    right.update(adapters.right, this.player.gripSpaces.right);
+    if (e.getValue(AirTriangle, 'leftHand') !== left.tracked) e.setValue(AirTriangle, 'leftHand', left.tracked);
+    if (e.getValue(AirTriangle, 'rightHand') !== right.tracked) e.setValue(AirTriangle, 'rightHand', right.tracked);
+    this.readHead();
+
+    const { triangle, beater } = this.model;
+    triangle.visible = left.tracked;
+    beater.visible = right.tracked;
+    if (left.tracked) {
+      const p = trianglePose(left.positions, this.head, this.pose);
+      this.place(triangle, p.origin, this.x.fromArray(p.x), this.y.fromArray(p.y), this.z.fromArray(p.z));
+    }
+    if (right.tracked) {
+      const b = beaterPose(right.positions, this.beater);
+      this.x.fromArray(b.along);
+      // Any frame round the rod will do; keep it steady by leaning on world up.
+      this.y.set(0, 1, 0).addScaledVector(this.x, -this.x.y);
+      if (this.y.lengthSq() < 1e-6) this.y.set(1, 0, 0).addScaledVector(this.x, -this.x.x);
+      this.y.normalize();
+      this.z.crossVectors(this.x, this.y);
+      this.place(beater, b.grip, this.x, this.y, this.z);
+    }
+
+    const strike = this.strike;
+    const now = this.synth.ctx.currentTime;
+    if (left.tracked && right.tracked) {
+      toTriangle(this.pose, this.beater.butt, this.butt);
+      toTriangle(this.pose, this.beater.tip, this.tip);
+      strike.update(this.butt, this.tip, dt);
+    } else {
+      strike.reset();
+    }
+    if (strike.struck) {
+      this.synth.strike({ loudness: strike.loudness, position: strike.position, across: strike.across }, now);
+      e.setValue(AirTriangle, 'strikes', strike.strikes);
+      e.setValue(AirTriangle, 'lastStrike', Math.round(strike.loudness * 100) / 100);
+      e.setValue(AirTriangle, 'lastSpeed', Math.round(strike.speed * 100) / 100);
+      e.setValue(AirTriangle, 'lastSide', SIDE_NAMES[strike.side] ?? '');
+    }
+
+    // The holding hand's free fingers on the bar, or the beater resting on it, damp it.
+    let fingers = false;
+    if (left.tracked) {
+      for (let i = 0; i < DAMPING_JOINTS.length; i++) {
+        const j = DAMPING_JOINTS[i] * 3;
+        this.joint[0] = left.positions[j];
+        this.joint[1] = left.positions[j + 1];
+        this.joint[2] = left.positions[j + 2];
+        toTriangle(this.pose, this.joint, this.scratch);
+        this.fingers.set(this.scratch, i * 3);
+      }
+      fingers = touchesBar(this.fingers, DAMPING_JOINTS.length);
+    }
+    const damping = strike.damping || fingers;
+    if (damping && !this.damped) {
+      if (this.synth.ringing(now) > 0.02) e.setValue(AirTriangle, 'damps', ++this.damps);
+      this.synth.damp(now);
+    } else if (!damping && this.damped) {
+      this.synth.release(now);
+    }
+    this.damped = damping;
+
+    const ringing = this.synth.ringing(now);
+    this.model.glow.visible = ringing > 0.01 && triangle.visible;
+    this.model.glowMaterial.opacity = Math.min(0.7, ringing * 0.8);
+    const shown = Math.round(ringing * 100) / 100;
+    if (shown !== this.shownRinging) {
+      this.shownRinging = shown;
+      e.setValue(AirTriangle, 'ringing', shown);
+    }
+    if (e.getValue(AirTriangle, 'touching') !== strike.touching) e.setValue(AirTriangle, 'touching', strike.touching);
+    this.updateHud(ringing);
+  }
+
+  /** Shows or puts away the triangle and beater, silencing them when put away. */
+  private show(visible: boolean): void {
+    if (this.shown === visible) return;
+    this.shown = visible;
+    this.setVisible(visible);
+    if (!visible) {
+      this.synth.stopAll();
+      this.strike.reset();
+    }
+  }
+
+  private setVisible(visible: boolean): void {
+    this.model.triangle.visible = visible;
+    this.model.beater.visible = visible;
+    this.model.hud.sprite.visible = visible;
+  }
+
+  private place(object: Group, at: ArrayLike<number>, x: Vector3, y: Vector3, z: Vector3): void {
+    this.basis.makeBasis(x, y, z);
+    object.quaternion.setFromRotationMatrix(this.basis);
+    object.position.set(at[0], at[1], at[2]);
+    object.updateMatrixWorld(true);
+  }
+
+  /** The head's position, and which way the torso faces (level). */
+  private readHead(): void {
+    const head = this.player.head;
+    head.updateWorldMatrix(true, false);
+    head.getWorldPosition(this.headPos);
+    head.getWorldQuaternion(this.headQuat);
+    this.headPos.toArray(this.head);
+    this.fwd.set(0, 0, -1).applyQuaternion(this.headQuat);
+    this.fwd.y = 0;
+    if (this.fwd.lengthSq() < 1e-6) this.fwd.set(0, 0, -1);
+    this.fwd.normalize();
+  }
+
+  private updateHud(ringing: number): void {
+    const hud = this.model.hud;
+    hud.sprite.position.copy(this.headPos).addScaledVector(this.fwd, HUD_FORWARD);
+    hud.sprite.position.x += this.fwd.z * HUD_LEFT;
+    hud.sprite.position.z -= this.fwd.x * HUD_LEFT;
+    hud.sprite.position.y -= HUD_BELOW;
+    if (!this.left.tracked || !this.right.tracked) {
+      hud.draw(['Show both hands', 'Pinch the clip left, beater right'], ACCENT.idle);
+      return;
+    }
+    const e = this.entity;
+    if (ringing > 0.02 && (e.getValue(AirTriangle, 'strikes') ?? 0) > 0) {
+      const volume = Math.round((e.getValue(AirTriangle, 'volume') ?? 0.8) * 100);
+      hud.draw([`DING ${dynamicMark(e.getValue(AirTriangle, 'lastStrike') ?? 0)}`, `${e.getValue(AirTriangle, 'lastSide')} · ${volume}%`, 'Touch it or rest the beater on it to stop'], ACCENT.playing);
+      return;
+    }
+    hud.draw(['Triangle', 'Strike the bar with the beater', 'Faster is louder'], ACCENT.idle);
+  }
+}

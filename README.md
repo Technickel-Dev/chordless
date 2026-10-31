@@ -1,9 +1,13 @@
 # Chordless
 
-An air guitar for Meta Quest, played with your bare hands. Your left fingers
-fret real strings at real fret positions on a full-size steel-string guitar,
-and your right index fingertip plucks: sweep across the strings to strum,
-flick one string to pick a single note. The sound is synthesized in the
+Air instruments for Meta Quest, played with your bare hands: a guitar, a
+violin, a cello, a pair of orchestral cymbals and a triangle. On the guitar your left fingers fret real strings at real fret
+positions on a full-size steel-string guitar, and your right index fingertip
+plucks: sweep across the strings to strum, flick one string to pick a single
+note. On the violin and cello your left fingers stop the strings anywhere on
+a fretless fingerboard and your right hand draws a bow. The cymbals are one
+in each hand: clash them together. The triangle hangs from your left hand
+and the beater is in your right. The sound is synthesized in the
 browser, so there are no audio files.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
@@ -67,9 +71,77 @@ are:
 a second: the sound hole moves to your right pinch and the neck points toward
 your left. The placement is remembered.
 
-**Panel.** Point a hand at the panel and pinch to press **Clean** or
-**Overdrive**, **Vol −** / **Vol +**, or **Reset guitar** (back to the default
-position).
+**Panel.** Point a hand at the panel and pinch to press **Guitar**,
+**Violin**, **Cello**, **Cymbals** or **Triangle** (which instrument to play), **Clean** or **Overdrive**, **Vol −** /
+**Vol +**, or **Reset position** (back to the default position).
+
+### The violin
+
+The violin rests under your chin on your left shoulder, the neck pointing
+forward and to the left, the top tilted toward your bow arm. Like the guitar,
+it follows you when you turn your body but not when you glance along the neck.
+
+**Left hand (stopping).** Press a fingertip onto a string anywhere on the
+fingerboard: there are no frets, so the pitch comes from exactly where you
+press, and the stop nearest the bridge sounds. Pitches snap to the nearest
+semitone, holding a note until your finger is clearly nearer the next one, so
+tracking jitter cannot wobble it; hold a note and it grows a gentle vibrato.
+Set `intonation` to `free` on the `AirViolin` component for a true
+fretless fingerboard, where your own finger makes the vibrato and slides.
+
+**Right hand (bowing).** The bow is in your right hand, held at the frog the
+way a violinist holds it: palm down, the stick across your fingers, the tip
+pointing to your left. Draw it along itself across the strings between the
+bridge and the end of the fingerboard. Bow speed sets the loudness; pressing
+the hair a little into the string fills out the tone, and bowing near the
+bridge is brighter than over the fingerboard. The bridge is arched, so the
+bow's tilt chooses the string, as a violinist's arm does: raise your bow hand
+for the G string and lower it for the E, about 15 degrees per string, and
+tilt between two strings to play both. Lift it off to stop. Each change of bow direction starts a new stroke.
+
+**Visual cues.** Shadows under your left fingertips (green when stopping a
+string), a green dot where each string is stopped, an amber ring where the bow
+meets the strings, a glow along each string as it sounds, and a display past
+the scroll naming the note bowed and the note each string would play.
+
+### The cello
+
+The cello stands in front of you, a little to the left, as a seated cellist
+holds it: the endpin toward the floor, the body at about hip height, the neck
+leaning back past the left of your chin, and the strings facing away from
+you, the C string on your left and the A on your right. Your left hand
+reaches round the neck from the C-string side to stop the strings, a
+semitone per finger in the lower positions; your right hand holds a cello
+bow and draws it across the strings below the fingerboard. As on the
+violin, the bow's tilt chooses the string (raise your bow hand for the C,
+lower it for the A), its speed sets the loudness, and the stop nearest the
+bridge sets the pitch.
+
+### The cymbals
+
+A pair of 18-inch orchestral clash cymbals, one in each hand, held by the
+strap: make a fist and the cymbal hangs beyond your knuckles, its face
+pointing the way your hand points and the strap across your fingers. Bring
+the plates together to clash them; the faster they meet, the louder (and
+brighter) the crash, from a soft *pp* at walking pace to *ff* at about 2 m/s.
+They must part a couple of centimetres before they can clash again. Meet
+them a little off-centre, as cymbal players do: plates that meet flat and
+centred trap air and sound muffled. To stop the ringing, hold them together
+after the clash (*secco*), lay them together gently, or press either plate
+to your chest. The rims glow while the cymbals ring.
+
+### The triangle
+
+A 7-inch orchestral triangle hangs from a clip: pinch the clip between your
+left thumb and index finger and the triangle hangs plumb below, turned to
+face you. Your right fist holds a steel beater like a drumstick. Strike the
+bar with it; the faster the beater, the louder and brighter the note, and
+where you strike it (near a corner, mid-side, into the face or across it)
+colours the sound. Strikes add to what is already ringing, as on a real
+triangle, so a roll (the beater moved quickly side to side inside a
+corner, touching both sides) builds and sustains. To stop it, touch the bar
+with the free fingers of your holding hand, or rest the beater on it. The
+bar glows while it rings.
 
 ## How it works
 
@@ -84,9 +156,10 @@ components holding data, and systems update them every frame.
   frets, pluck and damp counts, tone, volume), which the panel writes to and
   the tests read.
 - `src/guitar/fretting.ts` reads frets from finger points: fingertip pads
-  always press, the rest of a finger only where it lies flat (a barre), and a
-  fret must stay released for 60 ms before it drops, so tracking flicker cannot
-  cut a note.
+  always press, the rest of a finger only where it lies flat (a barre). A
+  lifted finger releases its fret after 25 ms (quick enough for pull-offs and
+  open notes straight after fretted ones), and frets hold for a moment if hand
+  tracking drops out, so a tracking hiccup cannot cut a note.
 - `src/guitar/pluck-detector.ts` plucks a string when the fingertip crosses it.
   It smooths tracking jitter with a One Euro filter, checks each crossing where
   it happens, keeps a fast strum going through brief tracking dropouts, and
@@ -102,6 +175,88 @@ components holding data, and systems update them every frame.
   guitar so a tracked fingertip lands on one string.
 - `src/guitar/chords.ts` names chords from the notes ringing.
 - `src/guitar/guitar-model.ts` builds the guitar model in code.
+
+The violin lives in `src/violin/`, built the same way:
+
+- `air-violin-system.ts` holds the violin under the chin, reads the left
+  hand into stops and puts the bow in the right hand.
+- `geometry.ts` has a full-size violin's dimensions: a 328 mm string
+  length, the arched bridge and fingerboard, and stopping position to pitch.
+- `stopping.ts` turns finger points into where each string is stopped,
+  with semitone snapping.
+- `bow.ts` places the bow from the right hand's joints and finds which
+  strings the hair crosses, how hard it presses and how fast it moves; a
+  hand moving faster than any bow stroke is a tracking jump and plays
+  nothing.
+- `synth.ts` is a bowed string per voice: the bowed string's sawtooth-like
+  Helmholtz motion with the bow's notches, rosin noise, vibrato, and the
+  resonances of a violin body.
+- `bowed-system.ts` is the system itself, made for each instrument from its
+  geometry, bow, voice, model and where it is held (`air-violin-system.ts`
+  makes the violin's).
+- `src/scene-assets/violin.scene-asset.ts` builds the violin, the cello and
+  their bows; they are also in the asset manifest (`violin`, `violin-bow`,
+  `cello`, `cello-bow`).
+
+The cello (`src/cello/`) is the same family with its own numbers: a 690 mm
+string length and wider arch (`geometry.ts`, which also holds its bow and
+its voice, a body about an octave below the violin's with a formant around
+1.5-2.5 kHz), its state component and its system's placement.
+
+The cymbals (`src/cymbals/`):
+
+- `geometry.ts` is the 18-inch plate's shape (bow, bell, thickness and
+  where the hand grips the strap), shared by the model and the clash
+  detection.
+- `clash.ts` puts a cymbal in a fist (`cymbalPose`) and watches the pair
+  (`ClashDetector`): the rims meet first, since the plates are dished, so
+  the gap is the nearest rim of either plate to the other's rim plane while
+  they face each other. A clash sounds the frame the gap closes, as loud as
+  the plates were closing over the last few frames; a jump in tracking is
+  not a clash, and the plates must part again before the next. Plates held
+  together after a clash, or laid together gently, damp the ringing; so
+  does either plate against the chest (`touchesSphere`).
+- `synth.ts` pre-renders three clashes, soft to loud, off the main thread
+  when the app starts: a noise wash in bands that bloom upward after the
+  impact and lose their highs first, about 150 inharmonic partials for the
+  metal's shimmer, the plate's beating low modes and the impact's crack.
+  Each clash crossfades the two layers either side of its loudness through
+  a lowpass that opens with it, into a hall; a flat clash adds the air
+  pocket's whump. Damping chokes everything ringing in about 0.1 s.
+- `air-cymbals-system.ts` puts the cymbals in the hands, runs the clash
+  detection and the sound, and draws the rims' glow and the HUD.
+- `src/scene-assets/cymbal.scene-asset.ts` builds the cymbal: a lathed
+  bronze plate (its grooves and hammer marks in the surface maps), a leather
+  pad and the strap handle, knotted inside the bell (`cymbal` in the asset
+  manifest).
+
+The triangle (`src/triangle/`):
+
+- `geometry.ts` is the triangle's bar as a polyline (each segment tagged with
+  its side), the loop and clip, and the beater.
+- `strike.ts` hangs the triangle from the left hand's pinch and puts the
+  beater in the right fist, then watches the rod against the bar
+  (`StrikeDetector`). Each frame's motion is checked in twelve steps, so a
+  fast beater cannot pass through the 1 cm bar unseen. A strike is as loud as
+  the beater's average speed into the bar over the 20 ms before it touched
+  (tracked positions jitter, and what it does after touching is not the
+  strike). Each side keeps its own contact, so a roll in a corner strikes
+  every time; a side is struck again only once the beater has come back off
+  it the way it came, so following through a bar you cannot feel is one
+  strike. A beater resting on the bar, or the holding hand's free fingers on
+  it (`touchesBar`), damps it.
+- `synth.ts` rings the triangle's modes on the audio thread (an
+  AudioWorklet): about 50 resonators tuned as a 10 mm steel bar bent into a
+  triangle, each bending mode split in and out of the triangle's plane and
+  coupled at the corners. A strike excites them by where it lands along the
+  bar and how square it is to the face, brighter the harder it is, with the
+  beater's tink; strikes add to what is ringing, and damping switches every
+  resonator to a fast decay.
+- `air-triangle-system.ts` puts the triangle and beater in the hands, runs
+  the strike detection and the sound, and draws the bar's glow and the HUD.
+- `src/scene-assets/triangle.scene-asset.ts` builds the triangle (the bent
+  bar, open at one corner, its nylon loop and clip) and the beater
+  (`triangle` and `triangle-beater` in the asset manifest).
 
 Feel can be tuned in a few constants: how close a finger must be to press
 (`PRESS` in `fretting.ts`), the picking zone, re-pluck lockout and mute timing
@@ -128,7 +283,15 @@ allowed first:
 ```sh
 npx iwsdk dev up --headed --allow-browser-automation
 npm run test:e2e
+npm run test:violin
+npm run test:cello
+npm run test:cymbals
+npm run test:triangle
 npm run play:william-tell
+npm run play:violin
+npm run play:cello
+npm run play:cymbals
+npm run play:triangle
 ```
 
 - `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
@@ -136,14 +299,85 @@ npm run play:william-tell
   deep and slow strums, hammer-ons, re-placing the guitar, the panel buttons
   and hand-tracking loss. Results and screenshots go to `test-results/`.
   Set `E2E_PACE=2` to slow it down to watch.
+- `tests/violin.e2e.mjs` and `tests/cello.e2e.mjs` (both through
+  `tests/bowed-e2e.js`) choose the instrument on the panel, bows each open
+  string and a double stop by tilting the bow, stops a string twice (B4 and
+  E5 on the violin's A string, E3 and A3 on the cello's D), and checks that a lifted bow is silent and that each change of bow
+  direction is one stroke.
 - `tests/william-tell.mjs` performs the galop theme of the *William Tell*
-  Overture finale (bars 243–275) with the emulated hands and reports each note
-  asked for, the note the app played and when the app registered it. Set
-  `WT_TEMPO=110` for a slower take.
+  Overture finale (bars 243–275) the way a guitarist would, and reports each
+  note asked for, the finger and hand position used, the note the app played
+  and when it registered. `tests/performer.js` plans the fingering (hand
+  positions with lookahead, one finger per fret, fingers kept down until they
+  are in the way, shifts with fingers lifted) and the picking (stroke
+  directions chosen for the whole song so the finger rarely lifts over a
+  string, played just ahead of the beat to allow for the app's delay in
+  hearing a pluck), then drives both emulated hands every frame through
+  `tests/hand-rig.js`, which solves each finger's joints to reach its
+  fingertip target without passing through the others. Set `WT_TEMPO=110`
+  for a slower take.
+- `tests/violin-william-tell.mjs` (`npm run play:violin`) plays the same
+  theme on the violin at the written pitch, as the first violins have it (up
+  to C#6), closing on an E major double stop. `tests/violin-performer.js`
+  marks up the part as a violinist would: every note's string, hand
+  position and finger chosen for the whole piece at once (the quiet theme in
+  first position, the tutti mostly in second), fingers that stay down until
+  they would spoil a note and land on a sounding string just as the bow
+  turns, and shifts late in a note. The bow alternates strokes near its
+  middle, crossing strings at the turn, faster, nearer the bridge and
+  pressed harder when loud. Notes are scored from the app's own synth:
+  in the middle of each note the loudest string must play the right pitch
+  and no other string may sound. `npm run check:violin` runs the same
+  performance through the app's stopping reader and bow contact offline, at
+  steady and uneven frame rates.
+- `npm run check:hands` poses the whole song and checks the hands stay
+  plausible: bone lengths, joint limits, no kinked or twisted fingers, no
+  finger through another, and no fingertip pad pressing a string or fret it
+  should not.
+- `npm run check:timing` feeds the posed song through the app's own fret
+  reader and pluck detector at steady (90, 72, 60 Hz) and uneven frame
+  rates, and scores every note and how far off the beat it lands.
 - `tests/render-audio.mjs` (`npm run render:audio`) renders strummed chords,
   a melody and single notes straight from the synth into
   `test-results/audio/<label>-*.wav`, with spectrum statistics, for comparing
   sound changes by ear. Set `AUDIO_LABEL` to name the run.
+- `tests/render-violin.mjs` and `tests/render-cello.mjs` (`npm run
+  render:violin`, `render:cello`, through `tests/bowed-render.js`) do the
+  same for the bowed instruments: long bowed notes up the top string, the
+  loud William Tell passage and the two lowest open strings, into
+  `test-results/audio/<label>-<instrument>-*.wav`.
+- `tests/cello-william-tell.mjs` (`npm run play:cello`) plays the theme on the
+  cello, an octave below the guitar's arrangement, with the cello's
+  fingering (a semitone per finger, extensions for a whole tone) from
+  `tests/cello-performer.js`; `npm run check:cello` checks it offline. The
+  violin and cello performers, checks and play scripts share
+  `tests/bowed-performer.js`, `tests/bowed-check.js` and
+  `tests/bowed-play.js`.
+- `tests/cymbals.e2e.mjs` (`npm run test:cymbals`) chooses the cymbals on the
+  panel, closes both hands into fists round the straps and drives the plates
+  along scripted paths: a fast clash rings *ff*, a slow one is soft, a flat
+  one is muffled, plates passing edge-on are silent, and holding them
+  together or pressing one to the chest stops the ringing.
+- `tests/cymbals-william-tell.mjs` (`npm run play:cymbals`) plays a cymbal
+  part for the theme's loud section (see Credits) from
+  `tests/cymbals-performer.js`: a glancing clash on every downbeat at the
+  speed its dynamic needs, one *secco*, and a last crash swung open and then
+  stopped against the chest. `npm run check:cymbals` checks it offline at
+  four frame rates, and `npm run render:cymbals` renders clashes at *pp*,
+  *mf* and *ff*, a flat one and the whole part to WAV.
+- `tests/triangle.e2e.mjs` (`npm run test:triangle`) chooses the triangle on
+  the panel, pinches the clip and closes the other hand round the beater,
+  and drives the beater along scripted paths: a hard and a soft strike, a
+  roll in the top corner, the beater rested on the bar, and the holding
+  hand's free fingers laid on it.
+- `tests/triangle-william-tell.mjs` (`npm run play:triangle`) plays a
+  triangle part for the theme (see Credits) from
+  `tests/triangle-performer.js`: strikes into the face of the right side at
+  the speed each dynamic needs, the gallop rhythm in sixteenths, and a roll
+  in the top corner stopped by leaving the beater on the bar. `npm run
+  check:triangle` checks it offline at four frame rates, and `npm run
+  render:triangle` renders strikes at *p*, *mf* and *f*, at a corner and
+  mid-side, a roll and the whole part to WAV.
 
 Both bring the browser window to the front; a window behind others renders at
 about 1 fps. Each script must finish within IWSDK's 110-second limit.
@@ -154,6 +388,11 @@ about 1 fps. Each script must finish within IWSDK's 110-second limit.
 iwsdk.config.json      IWSDK project settings: scene, assets, components, XR
 src/index.ts           creates the world and registers the systems
 src/guitar/            the air guitar (see How it works)
+src/violin/            the air violin and bow, and what the bowed instruments share
+src/cello/             the air cello
+src/cymbals/           the air cymbals
+src/triangle/          the air triangle
+src/scene-assets/      the room's models, the violin, cello and bows, the cymbal, and the triangle and beater
 src/panel.ts           the panel's buttons
 src/assets.ts          asset catalog for the scene
 src/components.ts      component catalog
@@ -161,7 +400,12 @@ public/scenes/         the room the guitar is played in
 public/ui/             the panel layout (UIKitML)
 tests/unit/            unit tests
 tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand poses
-tests/william-tell.mjs, tests/performer.js, tests/songs/   song playback
+tests/violin.e2e.mjs, tests/cello.e2e.mjs, tests/bowed-e2e.js   end-to-end tests for the bowed instruments
+tests/{violin,cello}-william-tell.mjs, -performer.js, -check.mjs, tests/bowed-*.js   bowed song playback and its checks
+tests/cymbals.e2e.mjs, tests/cymbals-william-tell.mjs, -performer.js, -check.mjs   cymbal test, playback and its check
+tests/triangle.e2e.mjs, tests/triangle-william-tell.mjs, -performer.js, -check.mjs   triangle test, playback and its check
+tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
+tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
 ```
 
 ## Credits
@@ -171,7 +415,11 @@ tests/william-tell.mjs, tests/performer.js, tests/songs/   song playback
 domain) from "William Tell: Overture to the Opera", full score typeset by
 Max Wilkinson (2008), [IMSLP #22579](https://imslp.org/wiki/Guillaume_Tell_(Rossini,_Gioacchino)),
 licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/).
-Changes: melody only, without articulation, arranged for guitar with the loud
-section an octave lower, and an added closing E major chord.
+Changes: melody only, without articulation; arranged for guitar with the loud
+section an octave lower and an added closing E major chord; for violin at
+the written pitch with an added closing E major double stop; and for cello an
+octave below the guitar arrangement with the same double stop two octaves
+below the violin's. The cymbal part (bars 260–276) and the triangle part
+(bars 252–276) are not from the score: they are arranged here.
 
 Built with [IWSDK](https://iwsdk.dev/).

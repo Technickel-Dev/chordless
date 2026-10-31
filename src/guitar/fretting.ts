@@ -15,8 +15,14 @@ export const PRESS = {
   below: 0.04,
   /** Extra reach, in string spacings, beyond the outer strings (above the board only). */
   edgeSpacings: 0.3,
-  /** A string must stay released this long before its fret drops. */
-  releaseSeconds: 0.06,
+  /**
+   * A string must stay released this long before its fret drops: long
+   * enough to ignore a one-frame wobble, short enough for quick pull-offs
+   * and open notes straight after fretted ones.
+   */
+  releaseSeconds: 0.025,
+  /** While the fretting hand is untracked, frets hold for up to this long. */
+  trackingGapSeconds: 0.25,
 };
 
 /**
@@ -35,6 +41,8 @@ export class FretReader {
   private readonly held = new Uint32Array(STRING_COUNT);
   /** How long each string has wanted to drop to a lower fret. */
   private readonly releaseTime = new Float32Array(STRING_COUNT);
+  /** How long the fretting hand has been untracked. */
+  private untracked = 0;
 
   begin(): void {
     this.strict.fill(0);
@@ -66,10 +74,17 @@ export class FretReader {
    * Settles this frame's frets; returns true when any string changed.
    * Pressing a higher fret takes effect at once (hammer-ons stay snappy);
    * dropping to a lower fret or the open string must persist for
-   * `PRESS.releaseSeconds`, so a one-frame tracking flicker cannot cut a
-   * ringing note.
+   * `PRESS.releaseSeconds`. When hand tracking drops out (`tracked`
+   * false), the frets hold as they were for a moment, so a tracking hiccup
+   * cannot cut a ringing note.
    */
-  commit(dt = 1 / 72): boolean {
+  commit(dt = 1 / 72, tracked = true): boolean {
+    if (!tracked) {
+      this.untracked += dt;
+      if (this.untracked < PRESS.trackingGapSeconds) return false;
+    } else {
+      this.untracked = 0;
+    }
     let changed = false;
     for (let s = 0; s < STRING_COUNT; s++) {
       const current = this.frets[s];

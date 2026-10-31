@@ -7,11 +7,25 @@
 
 import { createSystem, Entity, UIKitMLAsset, VisibilityState } from '@iwsdk/core';
 import { AirGuitar, GuitarToneMode } from './guitar/air-guitar-component.js';
+import { AirCello } from './cello/air-cello-component.js';
+import { AirCymbals } from './cymbals/air-cymbals-component.js';
+import { AirTriangle } from './triangle/air-triangle-component.js';
+import { AirViolin } from './violin/air-violin-component.js';
 import { SCENES, sceneFromQuery, sceneUrl } from './scene-list.js';
+
+/** The instruments, by the panel button that takes each one out. */
+type Instrument = 'guitar' | 'violin' | 'cello' | 'cymbals' | 'triangle';
+const INSTRUMENTS: Instrument[] = ['guitar', 'violin', 'cello', 'cymbals', 'triangle'];
 
 export class PanelSystem extends createSystem({
   guitars: { required: [AirGuitar] },
+  violins: { required: [AirViolin] },
+  cellos: { required: [AirCello] },
+  cymbals: { required: [AirCymbals] },
+  triangles: { required: [AirTriangle] },
 }) {
+  private readonly buttons = new Map<Instrument, ReturnType<UIKitMLAsset['getElementById']>>();
+  private showing: Instrument | null = null;
   private sceneIndex = 0;
   private loadingScene = false;
   /** Listener teardown for the current level's panel; reset on every level load. */
@@ -64,7 +78,7 @@ export class PanelSystem extends createSystem({
     this.panelCleanup = [];
   }
 
-  /** Prev/Next swap the whole level; the persistent guitar and player stay put. */
+  /** Prev/Next swap the whole level; the persistent instruments and player stay put. */
   private wireSceneControls(panel: UIKitMLAsset): void {
     panel.getElementById('scene-name')?.setProperties({ text: SCENES[this.sceneIndex].name });
     const handlers: [string, () => void][] = [
@@ -89,7 +103,10 @@ export class PanelSystem extends createSystem({
     }
   }
 
-  /** Tone, volume and reset buttons write to the AirGuitar component. */
+  /**
+   * Instrument, tone, volume and reset buttons write to the AirGuitar,
+   * AirViolin, AirCello, AirCymbals and AirTriangle components.
+   */
   private wireGuitarControls(panel: UIKitMLAsset): void {
     const clean = panel.getElementById('tone-clean');
     const drive = panel.getElementById('tone-drive');
@@ -100,9 +117,40 @@ export class PanelSystem extends createSystem({
     const forEachGuitar = (fn: (e: Entity) => void) => {
       for (const entity of this.queries.guitars.entities) fn(entity);
     };
-    // A freshly loaded panel defaults to Clean; show the guitar's real tone.
+    // The bowed instruments share their fields.
+    const forEachBowed = (fn: (e: Entity, c: typeof AirViolin) => void) => {
+      for (const entity of this.queries.violins.entities) fn(entity, AirViolin);
+      for (const entity of this.queries.cellos.entities) fn(entity, AirCello);
+    };
+    // A freshly loaded panel shows its defaults; let update() repaint the
+    // instrument buttons and show the guitar's real tone.
+    this.buttons.clear();
+    for (const name of INSTRUMENTS) this.buttons.set(name, panel.getElementById(`instrument-${name}`));
+    this.showing = null;
     forEachGuitar((e) => showTone(e.getValue(AirGuitar, 'tone') ?? GuitarToneMode.Clean));
+    const choose = (name: Instrument) => {
+      forEachGuitar((e) => e.setValue(AirGuitar, 'active', name === 'guitar'));
+      for (const entity of this.queries.violins.entities) entity.setValue(AirViolin, 'active', name === 'violin');
+      for (const entity of this.queries.cellos.entities) entity.setValue(AirCello, 'active', name === 'cello');
+      for (const entity of this.queries.cymbals.entities) entity.setValue(AirCymbals, 'active', name === 'cymbals');
+      for (const entity of this.queries.triangles.entities) entity.setValue(AirTriangle, 'active', name === 'triangle');
+    };
+    const nudgeVolume = (step: number) => {
+      forEachGuitar((e) => e.setValue(AirGuitar, 'volume', clamp01((e.getValue(AirGuitar, 'volume') ?? 0.8) + step)));
+      forEachBowed((e, c) => e.setValue(c, 'volume', clamp01((e.getValue(c, 'volume') ?? 0.8) + step)));
+      for (const e of this.queries.cymbals.entities) {
+        e.setValue(AirCymbals, 'volume', clamp01((e.getValue(AirCymbals, 'volume') ?? 0.8) + step));
+      }
+      for (const e of this.queries.triangles.entities) {
+        e.setValue(AirTriangle, 'volume', clamp01((e.getValue(AirTriangle, 'volume') ?? 0.8) + step));
+      }
+    };
     const handlers: [string, () => void][] = [
+      ['instrument-guitar', () => choose('guitar')],
+      ['instrument-violin', () => choose('violin')],
+      ['instrument-cello', () => choose('cello')],
+      ['instrument-cymbals', () => choose('cymbals')],
+      ['instrument-triangle', () => choose('triangle')],
       [
         'tone-clean',
         () => {
@@ -117,21 +165,15 @@ export class PanelSystem extends createSystem({
           showTone(GuitarToneMode.Drive);
         },
       ],
+      ['volume-down', () => nudgeVolume(-0.1)],
+      ['volume-up', () => nudgeVolume(0.1)],
       [
-        'volume-down',
-        () =>
-          forEachGuitar((e) =>
-            e.setValue(AirGuitar, 'volume', Math.max(0, (e.getValue(AirGuitar, 'volume') ?? 0.8) - 0.1)),
-          ),
+        'reset-guitar',
+        () => {
+          forEachGuitar((e) => e.setValue(AirGuitar, 'resetPlacement', true));
+          forEachBowed((e, c) => e.setValue(c, 'resetPlacement', true));
+        },
       ],
-      [
-        'volume-up',
-        () =>
-          forEachGuitar((e) =>
-            e.setValue(AirGuitar, 'volume', Math.min(1, (e.getValue(AirGuitar, 'volume') ?? 0.8) + 0.1)),
-          ),
-      ],
-      ['reset-guitar', () => forEachGuitar((e) => e.setValue(AirGuitar, 'resetPlacement', true))],
     ];
     this.listen(panel, handlers);
   }
@@ -145,4 +187,18 @@ export class PanelSystem extends createSystem({
       this.panelCleanup.push(() => element.removeEventListener('click', handler));
     }
   }
+
+  /** The instrument buttons show which instrument is out, however it was chosen. */
+  update(): void {
+    let out: Instrument = 'guitar';
+    for (const e of this.queries.violins.entities) if (e.getValue(AirViolin, 'active')) out = 'violin';
+    for (const e of this.queries.cellos.entities) if (e.getValue(AirCello, 'active')) out = 'cello';
+    for (const e of this.queries.cymbals.entities) if (e.getValue(AirCymbals, 'active')) out = 'cymbals';
+    for (const e of this.queries.triangles.entities) if (e.getValue(AirTriangle, 'active')) out = 'triangle';
+    if (out === this.showing) return;
+    this.showing = out;
+    for (const [name, button] of this.buttons) button?.setProperties({ variant: name === out ? 'primary' : 'secondary' });
+  }
 }
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));

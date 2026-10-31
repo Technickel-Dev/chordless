@@ -6,6 +6,7 @@
  */
 
 import { AssetType, defineAssets } from '@iwsdk/core';
+import { CELLO_BOW } from './cello/geometry.js';
 import { createAirportRunwaySet } from './scene-assets/airport-runway.scene-asset.js';
 import { createAutumnClearingSet } from './scene-assets/autumn-clearing.scene-asset.js';
 import { createBalloonBasketSet } from './scene-assets/balloon-basket.scene-asset.js';
@@ -20,6 +21,7 @@ import { createCarWashSet } from './scene-assets/car-wash.scene-asset.js';
 import { createChessboardSet } from './scene-assets/chessboard.scene-asset.js';
 import { createCliffsideSet } from './scene-assets/cliffside.scene-asset.js';
 import { createClockTowerSet } from './scene-assets/clock-tower.scene-asset.js';
+import { createCymbal } from './scene-assets/cymbal.scene-asset.js';
 import { createDentistSet } from './scene-assets/dentist.scene-asset.js';
 import { createDesertCanyonSet } from './scene-assets/desert-canyon.scene-asset.js';
 import { createDriveInSet } from './scene-assets/drive-in.scene-asset.js';
@@ -64,9 +66,11 @@ import { createTheatreHouse } from './scene-assets/theatre-house.scene-asset.js'
 import { createLightingRig } from './scene-assets/theatre-rig.scene-asset.js';
 import { createTheatreStage } from './scene-assets/theatre-stage.scene-asset.js';
 import { createTrainRoofSet } from './scene-assets/train-roof.scene-asset.js';
+import { createBeater, createTriangle } from './scene-assets/triangle.scene-asset.js';
 import { createTropicalBeachSet } from './scene-assets/tropical-beach.scene-asset.js';
 import { createUnderwaterSet } from './scene-assets/underwater.scene-asset.js';
 import { createUpsideDownRoomSet } from './scene-assets/upside-down-room.scene-asset.js';
+import { createBow, createCello, createViolin } from './scene-assets/violin.scene-asset.js';
 import { createVolcanoRimSet } from './scene-assets/volcano-rim.scene-asset.js';
 import { createWaterfallPoolSet } from './scene-assets/waterfall-pool.scene-asset.js';
 import { createWeddingSet } from './scene-assets/wedding.scene-asset.js';
@@ -149,4 +153,12 @@ export default defineAssets({
   'record-player-set': createRecordPlayerSet(),
   'paper-world-set': createPaperWorldSet(),
   'welcome-panel': uikitml('welcome.uikitml', 'Welcome Panel'),
+  // Instrument models, placed by their systems rather than by scenes.
+  violin: createViolin(),
+  'violin-bow': createBow(),
+  cello: createCello(),
+  'cello-bow': createBow(CELLO_BOW),
+  cymbal: createCymbal(),
+  triangle: createTriangle(),
+  'triangle-beater': createBeater(),
 });

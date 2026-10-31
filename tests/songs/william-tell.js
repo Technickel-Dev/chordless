@@ -12,7 +12,13 @@
  * Changes: transcribed the Violin I melody only, dropped articulation,
  * arranged it for guitar (fingering below), played the loud section an
  * octave lower (the violins reach C#6, above the guitar's top fret, B5),
- * and added a closing E major chord that is not in the score.
+ * and added a closing E major chord that is not in the score. The violin
+ * version (WILLIAM_TELL_VIOLIN) plays the melody at the written pitch and
+ * closes with an E major double stop, also not in the score. The cello
+ * version (WILLIAM_TELL_CELLO) plays the guitar arrangement an octave lower
+ * and closes with the same double stop two octaves below the violin's. The
+ * cymbal and triangle parts (WILLIAM_TELL_CYMBALS, WILLIAM_TELL_TRIANGLE)
+ * are not transcribed: they are arranged here.
  *
  * Gioachino Rossini (1792-1868) composed the overture in 1829; the music
  * itself is in the public domain.
@@ -111,5 +117,82 @@ export const WILLIAM_TELL = {
     ...toEvents(QUIET_BARS, QUIET, 'pp'),
     ...toEvents(LOUD_BARS, LOUD, 'ff'),
     { beat: (276 - 244) * 2, chord: 'E', dynamic: 'ff' },
+  ].sort((a, b) => a.beat - b.beat),
+};
+
+/** A note name such as 'C#5' an octave higher. */
+const octaveUp = (note) => note.replace(/\d$/, (d) => String(Number(d) + 1));
+
+/**
+ * The same melody for the violin, as the first violins play it: the loud
+ * section at the written pitch, up to C#6. Notes are names only; the
+ * violin performer chooses strings and fingers. It closes on G#4 and E5
+ * together (a double stop on the D and A strings).
+ */
+export const WILLIAM_TELL_VIOLIN = {
+  title: 'William Tell Overture: finale, bars 243-275 (violin)',
+  tempo: 152,
+  events: [
+    ...toEvents(QUIET_BARS, QUIET, 'pp').map(({ beat, note, dynamic }) => ({ beat, note, dynamic })),
+    ...toEvents(LOUD_BARS, LOUD, 'ff').map(({ beat, note, dynamic }) => ({ beat, note: octaveUp(note), dynamic })),
+    { beat: (276 - 244) * 2, notes: ['G#4', 'E5'], dynamic: 'ff' },
+  ].sort((a, b) => a.beat - b.beat),
+};
+
+/** A note name such as 'C#4' an octave lower. */
+const octaveDown = (note) => note.replace(/\d$/, (d) => String(Number(d) - 1));
+
+/**
+ * The melody for the cello: the guitar's arrangement an octave lower (the
+ * quiet theme B2-B3, the tutti C#3-C#4), in a cello's lower positions. It
+ * closes on G#3 and E4 together (a double stop on the D and A strings).
+ */
+export const WILLIAM_TELL_CELLO = {
+  title: 'William Tell Overture: finale, bars 243-275 (cello)',
+  tempo: 152,
+  events: [
+    ...toEvents(QUIET_BARS, QUIET, 'pp').map(({ beat, note, dynamic }) => ({ beat, note: octaveDown(note), dynamic })),
+    ...toEvents(LOUD_BARS, LOUD, 'ff').map(({ beat, note, dynamic }) => ({ beat, note: octaveDown(note), dynamic })),
+    { beat: (276 - 244) * 2, notes: ['G#3', 'E4'], dynamic: 'ff' },
+  ].sort((a, b) => a.beat - b.beat),
+};
+
+/**
+ * A cymbal part for the same passage, arranged here (not transcribed from
+ * the score): tacet through the quiet theme, then a crash on every
+ * downbeat of the tutti, fortissimo at each phrase and forte between, one
+ * held together to stop it short (secco) at the end of the third phrase,
+ * and a last fortissimo crash on the closing chord, let ring, swung open,
+ * then stopped against the chest (`choke`, in beats after the crash).
+ */
+const CYMBAL_BARS = [
+  [260, 'ff'], [261, 'f'], [262, 'f'], [263, 'f'],
+  [264, 'ff'], [265, 'f'], [266, 'f'], [267, 'f'],
+  [268, 'ff'], [269, 'f'], [270, 'f'], [271, 'f', { secco: true }],
+  [272, 'ff'], [273, 'f'], [274, 'f'], [275, 'ff'],
+  [276, 'ff', { choke: 3 }],
+];
+export const WILLIAM_TELL_CYMBALS = {
+  title: 'William Tell Overture: finale, bars 260-276 (cymbals)',
+  tempo: 152,
+  events: CYMBAL_BARS.map(([bar, dynamic, extra]) => ({ beat: (bar - 244) * 2, dynamic, ...extra })),
+};
+
+/**
+ * A triangle part for the same passage, also arranged here (not
+ * transcribed): tacet through the first quiet theme, a light ting on each
+ * downbeat of the second, then in the tutti the gallop rhythm itself in
+ * each phrase's first bar and a strike on the other downbeats, and a roll
+ * on the closing chord, stopped short (`roll`, in beats).
+ */
+const GALLOP = [0, 0.5, 0.75, 1, 1.5, 1.75];
+export const WILLIAM_TELL_TRIANGLE = {
+  title: 'William Tell Overture: finale, bars 252-276 (triangle)',
+  tempo: 152,
+  events: [
+    ...[252, 253, 254, 255, 256, 257, 258, 259].map((bar) => ({ beat: (bar - 244) * 2, dynamic: 'p' })),
+    ...[260, 264, 268, 272].flatMap((bar) => GALLOP.map((b) => ({ beat: (bar - 244) * 2 + b, dynamic: 'f' }))),
+    ...[261, 262, 263, 265, 266, 267, 269, 270, 271, 273, 274, 275].map((bar) => ({ beat: (bar - 244) * 2, dynamic: 'mf' })),
+    { beat: (276 - 244) * 2, dynamic: 'f', roll: 3 },
   ].sort((a, b) => a.beat - b.beat),
 };

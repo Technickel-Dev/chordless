@@ -154,19 +154,30 @@ export class GuitarSynth {
     this.master.gain.setTargetAtTime(volume, this.ctx.currentTime, 0.03);
   }
 
+  /** Resolves once `prewarm` has rendered every note it was given. */
+  warm: Promise<void> = Promise.resolve();
+
   /**
-   * Renders notes ahead of time in the background, one per task, so the
-   * first pluck of a note does not hitch the frame it is played in.
+   * Renders notes ahead of time, one at a time in the browser's idle time
+   * between frames, so neither the first pluck of a note nor the rendering
+   * itself hitches a frame.
    */
   prewarm(midiNotes: Iterable<number>): void {
     const queue = [...midiNotes];
-    const next = () => {
-      const midi = queue.shift();
-      if (midi == null) return;
-      this.getBuffer(midi, false);
-      setTimeout(next, 0);
-    };
-    setTimeout(next, 0);
+    const idle = (fn: () => void) =>
+      typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 500 }) : setTimeout(fn, 0);
+    this.warm = new Promise((resolve) => {
+      const next = () => {
+        const midi = queue.shift();
+        if (midi == null) {
+          resolve();
+          return;
+        }
+        this.getBuffer(midi, false);
+        idle(next);
+      };
+      idle(next);
+    });
   }
 
   /**
@@ -425,7 +436,7 @@ function makeDriveCurve(amount: number): Float32Array<ArrayBuffer> {
  * A small room: a short gap, then a dense tail that loses its highs as it
  * decays, as real rooms do.
  */
-function makeRoomImpulse(ctx: BaseAudioContext, seconds: number): AudioBuffer {
+export function makeRoomImpulse(ctx: BaseAudioContext, seconds: number): AudioBuffer {
   const sr = ctx.sampleRate;
   const length = Math.floor(sr * seconds);
   const preDelay = Math.floor(sr * 0.012);

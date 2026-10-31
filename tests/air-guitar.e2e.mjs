@@ -13,6 +13,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { reloadApp } from './app-start.js';
 
 export default async function run({ page, frame, workspaceRoot }) {
   const outDir = path.join(workspaceRoot, 'test-results');
@@ -209,18 +210,13 @@ export default async function run({ page, frame, workspaceRoot }) {
   };
 
   // A window behind other windows renders at about 1 fps; bring it forward.
-  await page.bringToFront();
-
   // Fresh page so every run starts from the app's initial state.
   await frame.evaluate(() => {
     try {
       localStorage.removeItem('chordless.placement');
     } catch {}
-    return window.IWER_MCP.dispatch('reload_page', {});
   });
-  await wait(1500);
-  await frame.waitForFunction(() => window.FRAMEWORK_MCP_RUNTIME?.world?.scene != null, null, { timeout: 60000 });
-  await wait(1200);
+  await reloadApp({ page, frame }, 'AirGuitar');
   page.on('console', onConsole);
   page.on('pageerror', onPageError);
 

@@ -2,8 +2,9 @@
   Panel, Button and ButtonLabel come from the bundled Horizon kit.
   RectangleGoggles and LogIn are bundled Lucide icon components. The :dark
   styles apply because iwsdk.config.json prefers the dark color scheme.
-  PanelSystem wires the guitar button ids below to the AirGuitar component
-  and scene-prev / scene-next to the level list in src/scene-list.ts.
+  PanelSystem wires the instrument, tone, volume and reset ids below to the
+  AirGuitar, AirViolin, AirCello, AirCymbals and AirTriangle components, and
+  scene-prev / scene-next to the level list in src/scene-list.ts.
 -->
 <style>
   .panel-root {
@@ -94,13 +95,33 @@
 </style>
 <Panel class="panel-root">
   <div class="panel-content">
-    <div class="eyebrow">CHORDLESS - AIR GUITAR</div>
+    <div class="eyebrow">CHORDLESS - AIR INSTRUMENTS</div>
     <div class="heading">Play with your hands</div>
     <div class="body">Put the controllers down. The guitar hangs in front of you.</div>
     <div class="body">Left fingertips press the strings between the frets.</div>
     <div class="body">Right index fingertip plucks: sweep to strum, flick for one string.</div>
     <div class="body">Lift above the strings to move back silently; rest on one to mute it.</div>
     <div class="body">Pinch both hands for a second to move the guitar to them.</div>
+    <div class="body">Violin and cello: stop the strings anywhere on the fingerboard. The bow is in your right hand: draw it across near the bridge, tilt it to change string.</div>
+    <div class="body">Cymbals: one in each hand. Clash them together, faster for louder; press them together or to your chest to stop the ringing.</div>
+    <div class="body">Triangle: pinch its clip in your left hand; strike it with the beater in your right fist. Touch it with your free fingers, or rest the beater on it, to stop it.</div>
+  </div>
+  <div class="row">
+    <Button id="instrument-guitar" variant="primary">
+      <ButtonLabel>Guitar</ButtonLabel>
+    </Button>
+    <Button id="instrument-violin" variant="secondary">
+      <ButtonLabel>Violin</ButtonLabel>
+    </Button>
+    <Button id="instrument-cello" variant="secondary">
+      <ButtonLabel>Cello</ButtonLabel>
+    </Button>
+    <Button id="instrument-cymbals" variant="secondary">
+      <ButtonLabel>Cymbals</ButtonLabel>
+    </Button>
+    <Button id="instrument-triangle" variant="secondary">
+      <ButtonLabel>Triangle</ButtonLabel>
+    </Button>
   </div>
   <div class="row">
     <Button id="tone-clean" variant="primary">
@@ -116,7 +137,7 @@
       <ButtonLabel>Vol +</ButtonLabel>
     </Button>
     <Button id="reset-guitar" variant="secondary">
-      <ButtonLabel>Reset guitar</ButtonLabel>
+      <ButtonLabel>Reset position</ButtonLabel>
     </Button>
   </div>
   <div class="scene-row">

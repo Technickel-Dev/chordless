@@ -156,6 +156,25 @@ describe('BowContact', () => {
     expect(bow.contactX[2]).toBeCloseTo(X, 3);
   });
 
+  it('carries a stroke on through a hiccup in tracking mid-stroke', () => {
+    const bow = new BowContact();
+    const dt = 1 / 72;
+    let slide = 0;
+    const draw = (step: number, frames: number) => {
+      for (let i = 0; i < frames; i++) {
+        slide += step;
+        bow.update(bowOn(2, 0.002, slide), dt);
+      }
+    };
+    draw(0.4 * dt, 20);
+    expect(bow.strokes).toBe(1);
+    // A frame that saw no movement, then one that saw two frames' and more at once.
+    draw(0, 1);
+    draw(0.06, 1);
+    draw(0.4 * dt, 20);
+    expect(bow.strokes).toBe(1);
+  });
+
   it('holds the bow across a right hand, hair on the palm side', () => {
     // A right hand palm down, fingers forward (-Z), thumb and index to the left (-X).
     const joints = new Float32Array(25 * 3);

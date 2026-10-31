@@ -163,7 +163,9 @@ export class BowContact {
 
   update(pose: BowPose, dt: number): void {
     // Speed: the hand moving the bow along itself. A move faster than any
-    // bow stroke is a jump in tracking: the bow starts again from rest.
+    // bow stroke is a jump in tracking: it is ignored, the speed and the
+    // stroke carrying on as they were (a hiccup mid-stroke is not a new
+    // stroke, nor a burst of sound).
     let jumped = false;
     if (this.started && dt > 0) {
       let along = 0;
@@ -174,8 +176,7 @@ export class BowContact {
         moved += d * d;
       }
       jumped = Math.sqrt(moved) / dt > MAX_BOW_SPEED;
-      if (jumped) this.velocity = 0;
-      else this.velocity += (along / dt - this.velocity) * (1 - Math.exp(-dt / 0.03));
+      if (!jumped) this.velocity += (along / dt - this.velocity) * (1 - Math.exp(-dt / 0.03));
     }
     for (let k = 0; k < 3; k++) this.prevFrog[k] = pose.frog[k];
     this.started = true;
@@ -193,8 +194,8 @@ export class BowContact {
 
     // A stroke: one continuous draw in one direction on the strings.
     const speed = Math.abs(this.velocity);
-    if (!this.touching || jumped || speed < SPEAKING_SPEED) this.stroking = false;
-    if (this.touching && speed > STROKE_SPEED) {
+    if (!this.touching || speed < SPEAKING_SPEED) this.stroking = false;
+    if (this.touching && speed > STROKE_SPEED && !jumped) {
       const direction = Math.sign(this.velocity);
       if (!this.stroking || direction !== this.direction) this.strokes++;
       this.stroking = true;

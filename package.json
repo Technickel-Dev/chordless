@@ -17,6 +17,7 @@
     "test:violin": "iwsdk browser run tests/violin.e2e.mjs --timeout 110000",
     "test:cello": "iwsdk browser run tests/cello.e2e.mjs --timeout 110000",
     "test:cymbals": "iwsdk browser run tests/cymbals.e2e.mjs --timeout 110000",
+    "test:drums": "iwsdk browser run tests/drums.e2e.mjs --timeout 110000",
     "test:unit": "vitest run",
     "play:william-tell": "iwsdk browser run tests/william-tell.mjs --timeout 110000",
     "play:violin": "iwsdk browser run tests/violin-william-tell.mjs --timeout 110000",

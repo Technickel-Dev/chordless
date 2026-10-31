@@ -1,12 +1,13 @@
 # Chordless
 
 Air instruments for Meta Quest, played with your bare hands: a guitar, a
-violin, a cello and a pair of orchestral cymbals. On the guitar your left fingers fret real strings at real fret
+violin, a cello, a pair of orchestral cymbals and a drum kit. On the guitar your left fingers fret real strings at real fret
 positions on a full-size steel-string guitar, and your right index fingertip
 plucks: sweep across the strings to strum, flick one string to pick a single
 note. On the violin and cello your left fingers stop the strings anywhere on
 a fretless fingerboard and your right hand draws a bow. The cymbals are one
-in each hand: clash them together. The sound is synthesized in the
+in each hand: clash them together. The drum kit stands in front of you with
+a stick in each fist. The sound is synthesized in the
 browser, so there are no audio files.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
@@ -71,8 +72,9 @@ a second: the sound hole moves to your right pinch and the neck points toward
 your left. The placement is remembered.
 
 **Panel.** Point a hand at the panel and pinch to press **Guitar**,
-**Violin**, **Cello** or **Cymbals** (which instrument to play), **Clean** or **Overdrive**, **Vol −** /
-**Vol +**, or **Reset position** (back to the default position).
+**Violin**, **Cello**, **Cymbals** or **Drums** (which instrument to play), **Clean** or **Overdrive**, **Vol −** /
+**Vol +**, or **Reset position** (back to the default position; the drum kit
+moves to where you stand).
 
 ### The violin
 
@@ -128,6 +130,22 @@ them a little off-centre, as cymbal players do: plates that meet flat and
 centred trap air and sound muffled. To stop the ringing, hold them together
 after the clash (*secco*), lay them together gently, or press either plate
 to your chest. The rims glow while the cymbals ring.
+
+### The drums
+
+A five-piece kit on stands: snare, two rack toms on the bass drum, a floor
+tom, hi-hat, crash and ride. Make a fist and a 5A stick runs through it,
+out between thumb and forefinger. Bring the tips down on a head or a
+cymbal; the faster the tip, the louder and brighter the stroke, from a
+tap at walking pace to *ff* at about 4 m/s. Lift the tip a centimetre off
+before striking the same head again. The snare's rim plays a rimshot, the
+hi-hat's outer edge plays it open (any hi-hat stroke closes it again), and
+the ride's bell rings its ping. Hands cannot reach a bass drum pedal, so
+the kick is the round black pad in front of your right knee: strike it and
+the pedal's beater swings. A stick that comes down on a head stops on it
+instead of passing through. The kit is set out where you stand when you
+choose it, with the snare 72 cm below your eyes (the stands go from 65 cm
+to 1.1 m); **Reset position** moves it to you again.
 
 ## How it works
 
@@ -216,6 +234,34 @@ The cymbals (`src/cymbals/`):
   pad and the strap handle, knotted inside the bell (`cymbal` in the asset
   manifest).
 
+The drums (`src/drums/`):
+
+- `geometry.ts` lays out the kit (each piece's centre, size and tilt
+  toward the drummer, relative to the snare's height) and the stick, shared
+  by the models and the stroke detection.
+- `strokes.ts` puts a stick in a fist (`stickPose`) and watches both tips
+  (`StrokeDetector`): a stroke lands the frame a tip crosses a playing
+  surface from above, within its rim, as loud as the tip was approaching
+  over the last two frames; the tip must rise clear before that surface
+  sounds again, and a tip coming up from below, jumping in tracking, or
+  passing on through what it landed on is silent. `restOn` turns a stick
+  about the grip so its tip stops on the surface.
+- `synth.ts` pre-renders every articulation soft and hard off the main
+  thread when the app starts: pitch-bent membranes with their overtones,
+  the stick's crack and the snare wires for the drums; noise bands,
+  inharmonic partials and bell partials for the cymbals. Each stroke
+  crossfades the two through a lowpass that opens with it, panned to where
+  the piece stands, into a small room. A hi-hat stroke chokes the open
+  hi-hat; a cymbal restruck damps what it was ringing.
+- `air-drums-system.ts` sets out the kit, puts the sticks in the hands,
+  runs the detection and the sound, and flashes the struck rim, sways the
+  cymbals, swings the beater and draws the HUD.
+- `src/scene-assets/drum-kit.scene-asset.ts` builds the kit and the stick
+  (`drum-kit` and `drumstick` in the asset manifest). The kit is a `Base`
+  on the floor (bass drum, pedal, tripods and outer tubes, the floor tom's
+  legs) and a `Rig` on the stands' inner tubes, which the system raises or
+  lowers to the player.
+
 Feel can be tuned in a few constants: how close a finger must be to press
 (`PRESS` in `fretting.ts`), the picking zone, re-pluck lockout and mute timing
 (`pluck-detector.ts`), and where the guitar hangs and how far it tilts toward
@@ -244,6 +290,7 @@ npm run test:e2e
 npm run test:violin
 npm run test:cello
 npm run test:cymbals
+npm run test:drums
 npm run play:william-tell
 npm run play:violin
 npm run play:cello
@@ -321,6 +368,12 @@ npm run play:cymbals
   stopped against the chest. `npm run check:cymbals` checks it offline at
   four frame rates, and `npm run render:cymbals` renders clashes at *pp*,
   *mf* and *ff*, a flat one and the whole part to WAV.
+- `tests/drums.e2e.mjs` (`npm run test:drums`) chooses the drums on the
+  panel, closes both hands round the sticks and drives the tips: a fast
+  snare stroke is loud, a slow one soft, a tip lowered gently is silent, a
+  stick pushed into a head stops on it, every piece and zone sounds its own
+  articulation, a tip rising through a drum is silent, and **Reset
+  position** sets the kit out at the player's new spot and height.
 
 Both bring the browser window to the front; a window behind others renders at
 about 1 fps. Each script must finish within IWSDK's 110-second limit.
@@ -334,7 +387,8 @@ src/guitar/            the air guitar (see How it works)
 src/violin/            the air violin and bow, and what the bowed instruments share
 src/cello/             the air cello
 src/cymbals/           the air cymbals
-src/scene-assets/      the room's models, the violin, cello and bows, and the cymbal
+src/drums/             the air drums
+src/scene-assets/      the room's models, the violin, cello and bows, the cymbal, and the drum kit and stick
 src/panel.ts           the panel's buttons
 src/assets.ts          asset catalog for the scene
 src/components.ts      component catalog
@@ -345,6 +399,7 @@ tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand p
 tests/violin.e2e.mjs, tests/cello.e2e.mjs, tests/bowed-e2e.js   end-to-end tests for the bowed instruments
 tests/{violin,cello}-william-tell.mjs, -performer.js, -check.mjs, tests/bowed-*.js   bowed song playback and its checks
 tests/cymbals.e2e.mjs, tests/cymbals-william-tell.mjs, -performer.js, -check.mjs   cymbal test, playback and its check
+tests/drums.e2e.mjs    drums end-to-end test
 tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
 tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
 ```

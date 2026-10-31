@@ -10,7 +10,7 @@ export interface SceneEntry {
 }
 
 export const SCENES: readonly SceneEntry[] = [
-  { file: 'main', name: 'Theatre' },
+  { file: 'stage', name: 'Theatre' },
   { file: 'farm', name: 'Farm Festival' },
   { file: 'living-room', name: "Grandma's Living Room" },
   { file: 'birthday-cake', name: 'Giant Birthday Cake' },

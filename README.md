@@ -72,7 +72,9 @@ a second: the sound hole moves to your right pinch and the neck points toward
 your left. The placement is remembered.
 
 **Panel.** Point a hand at the panel and pinch to press **Guitar**,
-**Violin**, **Cello**, **Cymbals** or **Triangle** (which instrument to play), **Clean** or **Overdrive**, **Vol −** /
+**Violin**, **Cello**, **Cymbals** or **Triangle** (which instrument to play),
+**Prev scene** / **Next scene** (where you play: the theatre stage first, then
+the other scenes in `src/scene-list.ts`), **Clean** or **Overdrive**, **Vol −** /
 **Vol +**, or **Reset position** (back to the default position).
 
 ### The violin
@@ -392,11 +394,12 @@ src/violin/            the air violin and bow, and what the bowed instruments sh
 src/cello/             the air cello
 src/cymbals/           the air cymbals
 src/triangle/          the air triangle
-src/scene-assets/      the room's models, the violin, cello and bows, the cymbal, and the triangle and beater
+src/scene-assets/      the theatre's and the other scenes' models, the violin, cello and bows, the cymbal, and the triangle and beater
+src/scene-list.ts      the scenes Prev/Next cycles through; the first, the stage, opens by default
 src/panel.ts           the panel's buttons
 src/assets.ts          asset catalog for the scene
 src/components.ts      component catalog
-public/scenes/         the room the guitar is played in
+public/scenes/         the scenes: stage.iwsdk.scene.json (the theatre stage, the default) and the rest
 public/ui/             the panel layout (UIKitML)
 tests/unit/            unit tests
 tests/air-guitar.e2e.mjs, tests/chord-hand.js   end-to-end test and chord hand poses

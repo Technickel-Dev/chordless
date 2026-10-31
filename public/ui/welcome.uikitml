@@ -3,7 +3,7 @@
   RectangleGoggles and LogIn are bundled Lucide icon components. The :dark
   styles apply because iwsdk.config.json prefers the dark color scheme.
   PanelSystem wires every button id below to the AirGuitar, AirViolin,
-  AirCello and AirCymbals components.
+  AirCello, AirCymbals and AirPiano components.
 -->
 <style>
   .panel-root {
@@ -82,6 +82,7 @@
     <div class="body">Pinch both hands for a second to move the guitar to them.</div>
     <div class="body">Violin and cello: stop the strings anywhere on the fingerboard. The bow is in your right hand: draw it across near the bridge, tilt it to change string.</div>
     <div class="body">Cymbals: one in each hand. Clash them together, faster for louder; press them together or to your chest to stop the ringing.</div>
+    <div class="body">Piano: it stands in front of you. Press the keys with any fingertip; faster is louder.</div>
   </div>
   <div class="row">
     <Button id="instrument-guitar" variant="primary">
@@ -95,6 +96,9 @@
     </Button>
     <Button id="instrument-cymbals" variant="secondary">
       <ButtonLabel>Cymbals</ButtonLabel>
+    </Button>
+    <Button id="instrument-piano" variant="secondary">
+      <ButtonLabel>Piano</ButtonLabel>
     </Button>
   </div>
   <div class="row">

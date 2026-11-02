@@ -2,7 +2,11 @@
  * The galop theme that opens the finale of Rossini's William Tell Overture
  * (Allegro vivace, quarter = 152, E major, 2/4): the first violins from
  * bar 243 (pickup) to bar 275 — the quiet theme twice, then the loud
- * sixteen-bar tutti — followed by an added E major chord.
+ * sixteen-bar tutti — followed by an added E major chord. The guitar goes
+ * on to bar 299 (WILLIAM_TELL): the second tune that follows the tutti
+ * (clarinets and oboe), then the gallop theme twice more in the low
+ * violins, swelling each time to the full orchestra, closing on bar 300's
+ * downbeat with the E major chord.
  *
  * Source: "William Tell: Overture to the Opera", full score, typeset by
  * Max Wilkinson (2008), IMSLP #22579,
@@ -12,7 +16,13 @@
  * Changes: transcribed the Violin I melody only, dropped articulation,
  * arranged it for guitar (fingering below), played the loud section an
  * octave lower (the violins reach C#6, above the guitar's top fret, B5),
- * and added a closing E major chord that is not in the score. The violin
+ * and added a closing E major chord that is not in the score. From bar
+ * 275 the guitar plays the melody wherever it is: the clarinets' second
+ * tune (at their sounding pitch, an octave below the oboe that joins them),
+ * then the first violins' gallop theme; the violins' seven-note run up into
+ * the tutti at bar 299 is left out (the strum needs the time to reach the
+ * low string), and the chord falls on bar 300, where the tutti begins. The
+ * violin
  * version (WILLIAM_TELL_VIOLIN) plays the melody at the written pitch and
  * closes with an E major double stop, also not in the score. The cello
  * version (WILLIAM_TELL_CELLO) plays the guitar arrangement an octave lower
@@ -106,6 +116,32 @@ const LOUD_BARS = {
   275: [[0, 'B4']],
 };
 
+/**
+ * After the tutti, bars 275-299. The second tune: repeated notes under a
+ * turn, twice, from a pickup in bar 275.
+ */
+const tuneBars = (firstBar) => ({
+  [firstBar]: [[0, 'F#4'], [0.5, 'F#4'], [0.75, 'F#4'], [1, 'F#4'], [1.5, 'G#4']],
+  [firstBar + 1]: [[0, 'A4'], [0.5, 'F#4'], [1.5, 'A4']],
+  [firstBar + 2]: [[0, 'G#4'], [0.5, 'E4'], [1.5, 'G#4']],
+});
+const SECOND_BARS = {
+  275: [[1.5, 'F#4'], [1.75, 'F#4']],
+  ...tuneBars(276),
+  279: [[0, 'F#4'], [0.5, 'F#4'], [1, 'F#4'], [1.5, 'F#4'], [1.75, 'F#4']],
+  ...tuneBars(280),
+  283: [[0, 'F#4'], [1.5, 'B3'], [1.75, 'B3']],
+  // The gallop theme twice more, the second time rising into the tutti.
+  ...quietTheme(284, [[1.5, 'B3'], [1.75, 'B3']]),
+  ...quietTheme(292, []),
+};
+/** Where the theme swells to the full orchestra (beats, from-to): forte. */
+const SWELLS = [
+  [(289 - 244) * 2 + 1.5, (291 - 244) * 2 + 1],
+  [(297 - 244) * 2 + 1.5, (299 - 244) * 2 + 2],
+];
+const swelling = (e) => (SWELLS.some(([a, b]) => e.beat >= a && e.beat <= b) ? { ...e, dynamic: 'f' } : e);
+
 const toEvents = (bars, on, dynamic) =>
   Object.entries(bars).flatMap(([bar, notes]) =>
     notes.map(([beat, note]) => ({
@@ -118,12 +154,13 @@ const toEvents = (bars, on, dynamic) =>
   );
 
 export const WILLIAM_TELL = {
-  title: 'William Tell Overture: finale, bars 243-275',
+  title: 'William Tell Overture: finale, bars 243-299',
   tempo: 152,
   events: [
     ...toEvents(QUIET_BARS, QUIET, 'pp'),
     ...toEvents(LOUD_BARS, LOUD, 'ff'),
-    { beat: (276 - 244) * 2, chord: 'E', dynamic: 'ff' },
+    ...toEvents(SECOND_BARS, QUIET, 'p').map(swelling),
+    { beat: (300 - 244) * 2, chord: 'E', dynamic: 'ff' },
   ].sort((a, b) => a.beat - b.beat),
 };
 

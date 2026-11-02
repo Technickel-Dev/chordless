@@ -404,7 +404,7 @@ npm run play:drums
   E5 on the violin's A string, E3 and A3 on the cello's D), and checks that a lifted bow is silent and that each change of bow
   direction is one stroke.
 - `tests/william-tell.mjs` performs the galop theme of the *William Tell*
-  Overture finale (bars 243–275) the way a guitarist would, and reports each
+  Overture finale (bars 243–299) the way a guitarist would, and reports each
   note asked for, the finger and hand position used, the note the app played
   and when it registered. `tests/performer.js` plans the fingering (hand
   positions with lookahead, one finger per fret, fingers kept down until they
@@ -546,13 +546,16 @@ tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands a
 
 ## Credits
 
-`tests/songs/william-tell.js` transcribes the first-violin melody of the finale
-(bars 243–275) of Gioachino Rossini's *William Tell* Overture (1829, public
+`tests/songs/william-tell.js` transcribes the melody of the finale (bars
+243–275 from the first violins; for the guitar, on to bar 299 from the
+clarinets' second tune and the first violins) of Gioachino Rossini's *William Tell* Overture (1829, public
 domain) from "William Tell: Overture to the Opera", full score typeset by
 Max Wilkinson (2008), [IMSLP #22579](https://imslp.org/wiki/Guillaume_Tell_(Rossini,_Gioacchino)),
 licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/).
 Changes: melody only, without articulation; arranged for guitar with the loud
-section an octave lower and an added closing E major chord; for violin at
+section an octave lower, the clarinets' tune at their sounding pitch, the
+violins' run into the tutti at bar 299 left out, and an added closing E
+major chord on bar 300; for violin at
 the written pitch with an added closing E major double stop; and for cello an
 octave below the guitar arrangement with the same double stop two octaves
 below the violin's. The cymbal part (bars 260–276) and the triangle part

@@ -18,7 +18,9 @@
  * version (WILLIAM_TELL_CELLO) plays the guitar arrangement an octave lower
  * and closes with the same double stop two octaves below the violin's. The
  * cymbal part (WILLIAM_TELL_CYMBALS) is not transcribed: it is arranged
- * here, a crash on each downbeat of the loud section.
+ * here, a crash on each downbeat of the loud section. The trumpet version
+ * (WILLIAM_TELL_TRUMPET) plays the guitar's arrangement at its sounding
+ * pitch and closes on a held E5, not in the score.
  *
  * Gioachino Rossini (1792-1868) composed the overture in 1829; the music
  * itself is in the public domain.
@@ -176,4 +178,20 @@ export const WILLIAM_TELL_CYMBALS = {
   title: 'William Tell Overture: finale, bars 260-276 (cymbals)',
   tempo: 152,
   events: CYMBAL_BARS.map(([bar, dynamic, extra]) => ({ beat: (bar - 244) * 2, dynamic, ...extra })),
+};
+
+/**
+ * The melody for a B-flat trumpet, at the guitar arrangement's pitch
+ * (sounding B3-B4 quiet, C#4-C#5 loud: written C#4-D#5, the middle of the
+ * horn, partials 3 to 5). Notes are sounding pitches; the trumpet performer
+ * transposes and fingers them. It closes on a held E5 (written F#5).
+ */
+export const WILLIAM_TELL_TRUMPET = {
+  title: 'William Tell Overture: finale, bars 243-275 (trumpet)',
+  tempo: 152,
+  events: [
+    ...toEvents(QUIET_BARS, QUIET, 'pp').map(({ beat, note, dynamic }) => ({ beat, note, dynamic })),
+    ...toEvents(LOUD_BARS, LOUD, 'ff').map(({ beat, note, dynamic }) => ({ beat, note, dynamic })),
+    { beat: (276 - 244) * 2, note: 'E5', dynamic: 'ff', hold: 2 },
+  ].sort((a, b) => a.beat - b.beat),
 };

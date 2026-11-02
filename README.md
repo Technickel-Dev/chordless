@@ -1,14 +1,15 @@
 # Chordless
 
 Air instruments for Meta Quest, played with your bare hands: a guitar, a
-violin, a cello, a pair of orchestral cymbals, a triangle and a piano. On the guitar your left fingers fret real strings at real fret
+violin, a cello, a pair of orchestral cymbals, a triangle, a piano and a drum kit. On the guitar your left fingers fret real strings at real fret
 positions on a full-size steel-string guitar, and your right index fingertip
 plucks: sweep across the strings to strum, flick one string to pick a single
 note. On the violin and cello your left fingers stop the strings anywhere on
 a fretless fingerboard and your right hand draws a bow. The cymbals are one
 in each hand: clash them together. The triangle hangs from your left hand
 and the beater is in your right. The piano stands in front of you and
-you play its keys with all ten fingertips. The sound is synthesized in the
+you play its keys with all ten fingertips. The drum kit stands in front of you
+with a stick in each fist. The sound is synthesized in the
 browser, so there are no audio files.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
@@ -73,10 +74,11 @@ a second: the sound hole moves to your right pinch and the neck points toward
 your left. The placement is remembered.
 
 **Panel.** Point a hand at the panel and pinch to press **Guitar**,
-**Violin**, **Cello**, **Cymbals**, **Triangle** or **Piano** (which instrument to play),
+**Violin**, **Cello**, **Cymbals**, **Triangle**, **Piano** or **Drums** (which instrument to play),
 **Prev scene** / **Next scene** (where you play: the theatre stage first, then
 the other scenes in `src/scene-list.ts`), **Clean** or **Overdrive**, **Vol −** /
-**Vol +**, or **Reset position** (back to the default position).
+**Vol +**, or **Reset position** (back to the default position; the piano and
+drum kit move to where you stand).
 
 ### The violin
 
@@ -161,6 +163,21 @@ between the whites. A finger keeps the key it came down on while it rocks
 or slides a little, and a hand that slips in under the tops of the keys
 from the front or side plays nothing. Sounding keys glow, and the HUD above
 the music rest names the chord (three or more keys) or the notes held.
+### The drums
+
+A five-piece kit on stands: snare, two rack toms on the bass drum, a floor
+tom, hi-hat, crash and ride. Make a fist and a 5A stick runs through it,
+out between thumb and forefinger. Bring the tips down on a head or a
+cymbal; the faster the tip, the louder and brighter the stroke, from a
+tap at walking pace to *ff* at about 4 m/s. Lift the tip a centimetre off
+before striking the same head again. The snare's rim plays a rimshot, the
+hi-hat's outer edge plays it open (any hi-hat stroke closes it again), and
+the ride's bell rings its ping. Hands cannot reach a bass drum pedal, so
+the kick is the round black pad in front of your right knee: strike it and
+the pedal's beater swings. A stick that comes down on a head stops on it
+instead of passing through. The kit is set out where you stand when you
+choose it, with the snare 72 cm below your eyes (the stands go from 65 cm
+to 1.1 m); **Reset position** moves it to you again.
 
 ## How it works
 
@@ -276,6 +293,33 @@ The triangle (`src/triangle/`):
 - `src/scene-assets/triangle.scene-asset.ts` builds the triangle (the bent
   bar, open at one corner, its nylon loop and clip) and the beater
   (`triangle` and `triangle-beater` in the asset manifest).
+The drums (`src/drums/`):
+
+- `geometry.ts` lays out the kit (each piece's centre, size and tilt
+  toward the drummer, relative to the snare's height) and the stick, shared
+  by the models and the stroke detection.
+- `strokes.ts` puts a stick in a fist (`stickPose`) and watches both tips
+  (`StrokeDetector`): a stroke lands the frame a tip crosses a playing
+  surface from above, within its rim, as loud as the tip was approaching
+  over the last two frames; the tip must rise clear before that surface
+  sounds again, and a tip coming up from below, jumping in tracking, or
+  passing on through what it landed on is silent. `restOn` turns a stick
+  about the grip so its tip stops on the surface.
+- `synth.ts` pre-renders every articulation soft and hard off the main
+  thread when the app starts: pitch-bent membranes with their overtones,
+  the stick's crack and the snare wires for the drums; noise bands,
+  inharmonic partials and bell partials for the cymbals. Each stroke
+  crossfades the two through a lowpass that opens with it, panned to where
+  the piece stands, into a small room. A hi-hat stroke chokes the open
+  hi-hat; a cymbal restruck damps what it was ringing.
+- `air-drums-system.ts` sets out the kit, puts the sticks in the hands,
+  runs the detection and the sound, and flashes the struck rim, sways the
+  cymbals, swings the beater and draws the HUD.
+- `src/scene-assets/drum-kit.scene-asset.ts` builds the kit and the stick
+  (`drum-kit` and `drumstick` in the asset manifest). The kit is a `Base`
+  on the floor (bass drum, pedal, tripods and outer tubes, the floor tom's
+  legs) and a `Rig` on the stands' inner tubes, which the system raises or
+  lowers to the player.
 
 Feel can be tuned in a few constants: how close a finger must be to press
 (`PRESS` in `fretting.ts`), the picking zone, re-pluck lockout and mute timing
@@ -339,12 +383,14 @@ npm run test:cello
 npm run test:cymbals
 npm run test:triangle
 npm run test:piano
+npm run test:drums
 npm run play:william-tell
 npm run play:violin
 npm run play:cello
 npm run play:cymbals
 npm run play:triangle
 npm run play:piano
+npm run play:drums
 ```
 
 - `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
@@ -418,10 +464,51 @@ npm run play:piano
   stopped against the chest. `npm run check:cymbals` checks it offline at
   four frame rates, and `npm run render:cymbals` renders clashes at *pp*,
   *mf* and *ff*, a flat one and the whole part to WAV.
-src/triangle/          the air triangle
-src/piano/             the air piano
-src/scene-assets/      the theatre's and the other scenes' models, the violin, cello and bows, the cymbal, the triangle and beater, and the piano
-src/scene-list.ts      the scenes Prev/Next cycles through; the first, the stage, opens by default
+- `tests/triangle.e2e.mjs` (`npm run test:triangle`) chooses the triangle on
+  the panel, pinches the clip and closes the other hand round the beater,
+  and drives the beater along scripted paths: a hard and a soft strike, a
+  roll in the top corner, the beater rested on the bar, and the holding
+  hand's free fingers laid on it.
+- `tests/triangle-william-tell.mjs` (`npm run play:triangle`) plays a
+  triangle part for the theme (see Credits) from
+  `tests/triangle-performer.js`: strikes into the face of the right side at
+  the speed each dynamic needs, the gallop rhythm in sixteenths, and a roll
+  in the top corner stopped by leaving the beater on the bar. `npm run
+  check:triangle` checks it offline at four frame rates, and `npm run
+  render:triangle` renders strikes at *p*, *mf* and *f*, at a corner and
+  mid-side, a roll and the whole part to WAV.
+- `tests/piano.e2e.mjs` (`npm run test:piano`) chooses the piano on the
+  panel, points both index fingers and pins their tips along scripted
+  paths in piano space: a firm press sounds middle C and turns and lights
+  the key, a slow press is soft and a fast strike loud, black keys play,
+  both hands hold a fifth (screenshot), the undamped top keys ring on while
+  the rest stop, a hand sliding in under the key tops is silent, **Reset
+  position** turns the piano to face the player, and the other instruments'
+  buttons put it away. It also renders middle C at both blows to WAV.
+- `tests/piano-william-tell.mjs` (`npm run play:piano`) plays the galop
+  finale on the piano from `tests/piano-performer.js`: the theme in the right
+  hand (quiet, then tutti an octave up) over the left hand's *oom-pah* bass,
+  fingered thumb to little finger with every finger posed by the guitar's
+  hand rig (the idle ones hover over the keys beside the playing one),
+  288 strikes at *p*, *f* and *ff*, ending on E2 and E6. It prints how many
+  keys sounded on time and as loud as asked and renders what the piano
+  played to `test-results/piano-william-tell.wav`. `npm run check:piano`
+  runs the same part offline through the key detection at four frame rates.
+- `tests/drums-william-tell.mjs` (`npm run play:drums`) plays a drum part
+  for the whole passage (see Credits) from `tests/drums-performer.js`:
+  hi-hat gallop with kick and snare through the quiet theme, a snare fill, a
+  ride gallop with a crash on each phrase in the tutti, a tom fill and two
+  closing crashes. Each stick tip is planned to meet its surface at the speed
+  its dynamic needs. `npm run check:drums` scores the plan offline through
+  the app's own stroke detector at four frame rates (all strokes right at
+  steady rates). Live, strokes are only as accurate as the browser's frame
+  rate: a slow, stalling headless window skews the measured loudness.
+- `tests/drums.e2e.mjs` (`npm run test:drums`) chooses the drums on the
+  panel, closes both hands round the sticks and drives the tips: a fast
+  snare stroke is loud, a slow one soft, a tip lowered gently is silent, a
+  stick pushed into a head stops on it, every piece and zone sounds its own
+  articulation, a tip rising through a drum is silent, and **Reset
+  position** sets the kit out at the player's new spot and height.
 
 Both bring the browser window to the front; a window behind others renders at
 about 1 fps. Each script must finish within IWSDK's 110-second limit.
@@ -436,10 +523,10 @@ src/violin/            the air violin and bow, and what the bowed instruments sh
 src/cello/             the air cello
 src/cymbals/           the air cymbals
 src/triangle/          the air triangle
-src/scene-assets/      the theatre's and the other scenes' models, the violin, cello and bows, the cymbal, and the triangle and beater
-src/scene-list.ts      the scenes Prev/Next cycles through; the first, the stage, opens by default
 src/piano/             the air piano
-src/scene-assets/      the room's models, the violin, cello and bows, the cymbal and the piano
+src/drums/             the air drums
+src/scene-assets/      the theatre's and the other scenes' models, the violin, cello and bows, the cymbal, the triangle and beater, the piano, and the drum kit and stick
+src/scene-list.ts      the scenes Prev/Next cycles through; the first, the stage, opens by default
 src/panel.ts           the panel's buttons
 src/assets.ts          asset catalog for the scene
 src/components.ts      component catalog
@@ -452,6 +539,7 @@ tests/{violin,cello}-william-tell.mjs, -performer.js, -check.mjs, tests/bowed-*.
 tests/cymbals.e2e.mjs, tests/cymbals-william-tell.mjs, -performer.js, -check.mjs   cymbal test, playback and its check
 tests/triangle.e2e.mjs, tests/triangle-william-tell.mjs, -performer.js, -check.mjs   triangle test, playback and its check
 tests/piano.e2e.mjs    piano end-to-end test
+tests/drums.e2e.mjs, tests/drums-william-tell.mjs, -performer.js, -check.mjs   drums test, playback and its check
 tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
 tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
 ```

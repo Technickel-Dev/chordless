@@ -83,7 +83,8 @@ function candidates(midis) {
   const out = [];
   const single = (midi, s, p) => {
     const semis = midi - geo().OPEN_MIDI[s];
-    if (semis < 0 || semis > 14) return null;
+    // As far up as the fingerboard goes, short of its end.
+    if (semis < 0 || semis > geo().MAX_STOP - 2) return null;
     if (semis === 0) return { string: s, semis: 0, finger: 0 };
     const finger = I.fingerAt(semis, I.positions[p]);
     return finger ? { string: s, semis, finger } : null;

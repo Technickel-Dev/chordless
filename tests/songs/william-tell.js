@@ -276,12 +276,27 @@ const octaveUp = (note) => note.replace(/\d$/, (d) => String(Number(d) + 1));
  * together (a double stop on the D and A strings).
  */
 export const WILLIAM_TELL_VIOLIN = {
-  title: 'William Tell Overture: finale, bars 243-275 (violin)',
+  title: 'William Tell Overture: finale, bars 226-453 (violin)',
   tempo: 152,
   events: [
+    // The trumpets' fanfare at their pitch; its long note bowed in two strokes.
+    ...toEvents(FANFARE_BARS, FANFARE, 'ff').map(({ beat, note, dynamic }) => ({ beat, note: octaveUp(note), dynamic })),
+    { beat: (241 - 244) * 2, note: 'B4', dynamic: 'ff' },
     ...toEvents(QUIET_BARS, QUIET, 'pp').map(({ beat, note, dynamic }) => ({ beat, note, dynamic })),
     ...toEvents(LOUD_BARS, LOUD, 'ff').map(({ beat, note, dynamic }) => ({ beat, note: octaveUp(note), dynamic })),
-    { beat: (276 - 244) * 2, notes: ['G#4', 'E5'], dynamic: 'ff' },
+    // The second tune at the oboe's octave.
+    ...toEvents(SECOND_BARS, QUIET, 'p')
+      .map(swelling)
+      .map(({ beat, note, dynamic }) => ({ beat, note: Number(beat) < (283 - 244) * 2 + 1 ? octaveUp(note) : note, dynamic })),
+    // From bar 300, the first violins' own part, as written.
+    ...Object.entries(FINALE_BARS)
+      .filter(([bar]) => Number(bar) <= 452)
+      .flatMap(([bar, notes]) =>
+        notes
+          .filter(([beat]) => !(Number(bar) === 452 && beat > 0))
+          .map(([beat, midi]) => ({ beat: (Number(bar) - 244) * 2 + beat, note: nameOf(midi), dynamic: inRange(FINALE_DYNAMICS, Number(bar)) })),
+      ),
+    { beat: (452 - 244) * 2 + 1, notes: ['G#4', 'E5'], dynamic: 'ff' },
   ].sort((a, b) => a.beat - b.beat),
 };
 

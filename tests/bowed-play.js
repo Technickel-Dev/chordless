@@ -15,9 +15,15 @@ import { startApp } from './app-start.js';
 /** Plays one instrument's version: { instrument, root (model name), song ([module, export]), performer (module), view (headset orientation) }. */
 export async function runBowedPlay({ page, frame, workspaceRoot }, I) {
   const tempo = Number(process.env.WT_TEMPO) || undefined;
+  // The violin's whole finale lasts longer than one browser run may (110 s):
+  // a run with WT_PHASE=wait picks up the performance an earlier run started
+  // (tests/play-long.mjs chains them).
+  const phase = process.env.WT_PHASE ?? 'start';
   const dispatch = (method, params = {}) =>
     frame.evaluate(([m, p]) => window.IWER_MCP.dispatch(m, p), [method, params]);
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const shot = path.join(workspaceRoot, 'test-results', `${I.instrument}-william-tell.png`);
+  if (phase === 'wait') return finish(frame, dispatch, workspaceRoot, shot, 95000);
 
   await startApp({ page, frame }, { root: I.root, view: I.view, modules: [I.song[0], I.performer] });
 
@@ -38,27 +44,59 @@ export async function runBowedPlay({ page, frame, workspaceRoot }, I) {
       }, text)
       .catch(() => {});
 
-  const playing = frame.evaluate(async ([t, I]) => {
-    const WILLIAM_TELL_VIOLIN = (await import(I.song[0]))[I.song[1]];
-    const { perform } = await import(I.performer);
-    const el = () => document.getElementById('e2e-banner');
-    const names = WILLIAM_TELL_VIOLIN.events.map((e) => (e.notes ? e.notes.join('+') : e.note));
-    return perform(WILLIAM_TELL_VIOLIN, {
-      tempo: t,
-      onEvent: (i) => {
-        const shown = names.map((n, k) => (k === i ? `[${n}]` : n));
-        const from = Math.max(0, i - 8);
-        if (el()) el().textContent = `🎻 ${WILLIAM_TELL_VIOLIN.title}   ${shown.slice(from, from + 12).join(' ')}`;
-      },
-    });
+  // Start the performance and leave it playing in the page; finish() waits for it.
+  await frame.evaluate(([t, I]) => {
+    const state = { done: false };
+    window.__performance = state;
+    (async () => {
+      const WILLIAM_TELL_VIOLIN = (await import(I.song[0]))[I.song[1]];
+      const { perform } = await import(I.performer);
+      const el = () => document.getElementById('e2e-banner');
+      const names = WILLIAM_TELL_VIOLIN.events.map((e) => (e.notes ? e.notes.join('+') : e.note));
+      return perform(WILLIAM_TELL_VIOLIN, {
+        tempo: t,
+        onEvent: (i) => {
+          const shown = names.map((n, k) => (k === i ? `[${n}]` : n));
+          const from = Math.max(0, i - 8);
+          if (el()) el().textContent = `🎻 ${WILLIAM_TELL_VIOLIN.title}   ${shown.slice(from, from + 12).join(' ')}`;
+        },
+      });
+    })().then(
+      (result) => Object.assign(state, { done: true, result }),
+      (err) => Object.assign(state, { done: true, error: String(err?.stack ?? err) }),
+    );
   }, [tempo, I]);
   // A picture of the loud section, mid-performance.
-  const outDir = path.join(workspaceRoot, 'test-results');
-  await mkdir(outDir, { recursive: true });
+  await mkdir(path.dirname(shot), { recursive: true });
   await wait(17000);
-  const shot = path.join(outDir, `${I.instrument}-william-tell.png`);
   await (await frame.frameElement()).screenshot({ path: shot }).catch(() => {});
-  const result = await playing;
+  return finish(frame, dispatch, workspaceRoot, shot, 80000);
+}
+
+/**
+ * Waits for the performance in the page, at most `timeout` ms (what is left
+ * of this run); reports { pending: true } if it is still playing, else the
+ * score.
+ */
+async function finish(frame, dispatch, workspaceRoot, shot, timeout) {
+  const done = await frame
+    .waitForFunction(() => window.__performance?.done, null, { timeout, polling: 500 })
+    .then(
+      () => true,
+      () => false,
+    );
+  if (!done) return { pending: true };
+  const result = await frame.evaluate(() => {
+    if (window.__performance.error) throw new Error(window.__performance.error);
+    return window.__performance.result;
+  });
+  const banner = (text) =>
+    frame
+      .evaluate((t) => {
+        const el = document.getElementById('e2e-banner');
+        if (el) el.textContent = t;
+      }, text)
+      .catch(() => {});
 
   await banner(`🎻 Done: ${result.notesRight}/${result.notesTotal} notes right`);
   await frame.evaluate(() => {

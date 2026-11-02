@@ -9,7 +9,10 @@
 
 /** Runs the check for one instrument: { song, performer, geometry, bow } as [module, export] (performer: its module). */
 export async function runBowedCheck({ frame }, instrument) {
-  return frame.evaluate(async (I) => {
+  // The whole finale takes longer to check than one run may last:
+  // TIMING_PATTERNS names the frame patterns to check (comma-separated).
+  const only = process.env.TIMING_PATTERNS?.split(',').map((s) => s.trim()) ?? null;
+  return frame.evaluate(async ([I, only]) => {
     const song = (await import(I.song[0]))[I.song[1]];
     const { planPerformance, handsFor, scoreNotes } = await import(I.performer);
     const geo = (await import(I.geometry[0]))[I.geometry[1]];
@@ -61,6 +64,7 @@ export async function runBowedCheck({ frame }, instrument) {
 
     const results = {};
     for (const [name, step] of Object.entries(PATTERNS)) {
+      if (only && !only.includes(name)) continue;
       seed = 1;
       const handsAt = handsFor(plan);
       const reader = new StopReader(geo);
@@ -95,5 +99,5 @@ export async function runBowedCheck({ frame }, instrument) {
     }
     const fingering = plan.notes.map((n) => `${n.note ?? n.notes.join('+')}:${n.stops.map((s) => geo.STRING_NAMES[s.string] + s.finger).join('')}@${n.position}`);
     return { results, positions: [...new Set(plan.notes.map((n) => n.position))], fingering: fingering.slice(0, 40).join(' ') };
-  }, instrument);
+  }, [instrument, only]);
 }

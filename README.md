@@ -416,9 +416,15 @@ npm run play:drums
   `tests/hand-rig.js`, which solves each finger's joints to reach its
   fingertip target without passing through the others. Set `WT_TEMPO=110`
   for a slower take.
-- `tests/violin-william-tell.mjs` (`npm run play:violin`) plays the same
-  theme on the violin at the written pitch, as the first violins have it (up
-  to C#6), closing on an E major double stop. `tests/violin-performer.js`
+- `tests/violin-william-tell.mjs` (`npm run play:violin`) plays the whole
+  finale on the violin: the trumpets' fanfare, the theme at the written
+  pitch, the second tune at the oboe's octave, and from bar 300 the first
+  violins' own part as written (up to B6, two octaves up the E string, in
+  positions up to the eighth), closing on an E major double stop. Like the
+  guitar's, it outlasts one browser run and goes through
+  `tests/play-long.mjs`; so do `npm run play:trumpet`, which plays the
+  guitar's line on the trumpet with the fanfare at the trumpets' own pitch,
+  and `npm run play:cello`. `tests/violin-performer.js`
   marks up the part as a violinist would: every note's string, hand
   position and finger chosen for the whole piece at once (the quiet theme in
   first position, the tutti mostly in second), fingers that stay down until
@@ -566,8 +572,11 @@ trumpets' fanfare (bars 226–242, an octave below them), with the loud
 section an octave lower, the clarinets' tune at their sounding pitch, the
 violins' run into the tutti at bar 299 left out, the high passages from
 bar 300 an octave below the violins, the repeat of bars 399–422 not
-taken, and the closing E major chord strummed on the last cadence; for violin at
-the written pitch with an added closing E major double stop; and for cello an
+taken, and the closing E major chord strummed on the last cadence; for violin
+the whole finale too, the fanfare at the trumpets' pitch, the second tune at
+the oboe's and from bar 300 the first violins' part as written, with an
+added closing E major double stop; for trumpet the guitar's line at its
+sounding pitch, the fanfare at the trumpets' own, closing on a held E5; and for cello an
 octave below the guitar arrangement with the same double stop two octaves
 below the violin's. The cymbal part (bars 260–276) and the triangle part
 (bars 252–276) are not from the score: they are arranged here.

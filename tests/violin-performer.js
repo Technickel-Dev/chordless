@@ -1,6 +1,7 @@
 /**
  * The violin's performer (see bowed-performer.js): hand positions first to
- * fifth, fingers about a tone apart, bowing near the bridge when loud.
+ * ninth (the finale climbs to B6, two octaves up the E string), fingers
+ * about a tone apart, bowing near the bridge when loud.
  */
 
 import { AirViolin } from '/src/violin/air-violin-component.ts';
@@ -16,7 +17,7 @@ export const VIOLIN_PERFORMER = {
   component: AirViolin,
   geo: VIOLIN_GEOMETRY,
   bow: BOW,
-  positions: { 1: 2, 2: 4, 3: 5, 4: 7, 5: 9 },
+  positions: { 1: 2, 2: 4, 3: 5, 4: 7, 5: 9, 6: 10, 7: 12, 8: 14, 9: 16 },
   /** First finger on the position's note (or a semitone below), then a finger to each tone. */
   fingerAt: (semis, base) => {
     const off = semis - base;

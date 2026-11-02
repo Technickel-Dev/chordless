@@ -1,8 +1,8 @@
 /**
  * Plays the galop theme from the William Tell Overture finale (see
  * songs/william-tell.js) on the air piano, the melody in the right hand and
- * the galop bass in the left, with IWER's emulated hands pointing their
- * index fingers, in IWSDK's managed browser:
+ * the galop bass in the left, with IWER's emulated hands, all five fingers
+ * each (the guitar's hand rig), in IWSDK's managed browser:
  *
  *   npx iwsdk dev up --headed --allow-browser-automation
  *   npm run play:piano

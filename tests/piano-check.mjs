@@ -12,11 +12,11 @@
 export default async function run({ frame }) {
   return frame.evaluate(async () => {
     const { WILLIAM_TELL_PIANO } = await import('/tests/songs/william-tell.js');
-    const { planPerformance, tipsAt, scoreStrikes } = await import('/tests/piano-performer.js');
+    const { planPerformance, handsAt, scoreStrikes } = await import('/tests/piano-performer.js');
     const { Keyboard, TIP_COUNT } = await import('/src/piano/keys.ts');
 
     const plan = planPerformance(WILLIAM_TELL_PIANO);
-    const at = tipsAt(plan);
+    const at = handsAt(plan);
     let seed = 1;
     const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const PATTERNS = {
@@ -25,9 +25,7 @@ export default async function run({ frame }) {
       '60 Hz uneven': () => (random() < 0.35 ? 0.0208 : 1 / 60),
       busy: () => 1 / 60 + random() * 0.0173,
     };
-    // Only the index tips (1 and 6) play; the other fingers are curled well above the keys.
     const tips = new Float32Array(TIP_COUNT * 3);
-    for (let i = 0; i < TIP_COUNT; i++) tips.set([0, 0.3, 0.1], i * 3);
     const tracked = Array(TIP_COUNT).fill(true);
 
     const results = {};
@@ -37,11 +35,11 @@ export default async function run({ frame }) {
       for (let t = 0; t < plan.end; ) {
         const dt = step();
         t += dt;
-        const p = at(t);
-        tips.set(p.left, 3);
-        tips.set(p.right, 6 * 3);
+        const hands = at(t);
+        hands.left.tips.forEach((p, k) => tips.set(p, k * 3));
+        hands.right.tips.forEach((p, k) => tips.set(p, (5 + k) * 3));
         kb.update(tips, tracked, dt);
-        for (let i = 0; i < kb.struckCount; i++) heard.push({ t, midi: kb.struck[i].midi, velocity: kb.struck[i].velocity });
+        for (let i = 0; i < kb.struckCount; i++) heard.push({ t, midi: kb.struck[i].midi, velocity: kb.struck[i].velocity, tip: kb.struck[i].tip });
       }
       const { report, extra } = scoreStrikes(plan, heard);
       results[name] = {

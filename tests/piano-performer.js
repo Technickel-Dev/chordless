@@ -1,7 +1,8 @@
 /**
  * Plays a piano part on the air piano (see songs/william-tell.js), one key
- * at a time per hand with the index fingertip, planning each fingertip's
- * path the way a finger moves over a keyboard, and performs it live with
+ * at a time per hand, fingered the way a pianist would (thumb to little
+ * finger by where the note lies in the hand's position), planning each
+ * fingertip's path the way a finger moves over a keyboard, and performs it live with
  * IWER's emulated hands, or offline for the check (piano-check.mjs).
  *
  * Every strike comes down onto its key at the steady speed that gives its
@@ -20,7 +21,8 @@
  * below it.
  */
 
-import { isBlack, keyCenterX, keyTop, PIANO } from '/src/piano/geometry.ts';
+import { isBlack, keyAt, keyCenterX, keyTop, PIANO } from '/src/piano/geometry.ts';
+import { handBasis, applyPose, poseHand, quatFromAxes, v } from '/tests/hand-rig.js';
 import { PRESS } from '/src/piano/keys.ts';
 
 /** The player's head during a performance (world, m), looking along -Z. */
@@ -72,6 +74,44 @@ export function midiOf(name) {
 const over = (midi, y) => [keyCenterX(midi), keyTop(midi) + y, isBlack(midi) ? Z_BLACK : Z_WHITE];
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
+
+/**
+ * Fingers every strike of one hand (0 thumb to 4 little finger, whichever
+ * hand it is). The notes are cut into hand positions that span a sixth;
+ * within one the pitches, low to high, take the fingers in order (the right
+ * thumb lowest, the left thumb highest), a thumb never on a black key. A
+ * repeated note alternates between two neighbouring fingers.
+ */
+function assignFingers(mine, hand) {
+  let i = 0;
+  while (i < mine.length) {
+    let j = i;
+    let low = mine[i].midi;
+    let high = low;
+    while (j + 1 < mine.length && Math.max(high, mine[j + 1].midi) - Math.min(low, mine[j + 1].midi) <= 9) {
+      j++;
+      low = Math.min(low, mine[j].midi);
+      high = Math.max(high, mine[j].midi);
+    }
+    const pitches = [...new Set(mine.slice(i, j + 1).map((s) => s.midi))].sort((a, b) => a - b);
+    for (let k = i; k <= j; k++) {
+      const rank = pitches.indexOf(mine[k].midi);
+      const spread = pitches.length > 1 ? Math.round((rank * 4) / (pitches.length - 1)) : 2;
+      // Up to five pitches take neighbouring fingers from the middle out; more are spread across all five.
+      const span = Math.min(4, pitches.length - 1);
+      const offset = Math.round((4 - span) / 2);
+      let finger = pitches.length > 5 ? spread : offset + Math.min(4 - offset, rank);
+      finger = hand === 'right' ? finger : 4 - finger;
+      if (finger === 0 && isBlack(mine[k].midi)) finger = 1;
+      mine[k].finger = finger;
+    }
+    i = j + 1;
+  }
+  mine.forEach((s, k) => {
+    if (k > 0 && mine[k - 1].midi === s.midi) s.finger = mine[k - 1].finger === 2 ? 1 : mine[k - 1].finger === 1 ? 2 : mine[k - 1].finger + (mine[k - 1].finger < 4 ? 1 : -1);
+  });
+}
+
 /**
  * Plans a performance: each hand's strikes, and the keyframes of its
  * fingertip ({ t, p }, pad positions in piano space). Times are seconds
@@ -99,9 +139,11 @@ export function planPerformance(song, tempo = song.tempo, gain = 1) {
     };
   });
   const paths = {};
+  const ramps = {};
   let end = 0;
   for (const hand of ['left', 'right']) {
     const mine = strikes.filter((s) => s.hand === hand).sort((a, b) => a.time - b.time);
+    assignFingers(mine, hand);
     // First where each strike comes down from, and when.
     mine.forEach((s, i) => {
       const prev = mine[i - 1];
@@ -123,6 +165,7 @@ export function planPerformance(song, tempo = song.tempo, gain = 1) {
       keys.push({ t: s.down, p: s.from }, { t: s.bottomAt, p: s.bottom });
       if (next == null) {
         const release = s.time + (s.beats ?? 1) * beat * ARTICULATION;
+        s.release = release;
         const up = over(s.midi, HOVER);
         keys.push({ t: release, p: s.bottom }, { t: release + 0.05, p: up }, { t: release + 0.4, p: [up[0], up[1] + WAIT.up, WAIT.z] });
         end = Math.max(end, release + 0.6);
@@ -150,6 +193,7 @@ export function planPerformance(song, tempo = song.tempo, gain = 1) {
       // A repeated note lets its key right up early, so every frame rate sees it let go.
       if (next.midi === s.midi) release = Math.max(s.bottomAt + MIN_HOLD, s.bottomAt + (latest - s.bottomAt) * 0.4);
       if (release > latest + 1e-6) throw new Error(`no time to get from ${s.note} to ${next.note} at beat ${next.beat}`);
+      s.release = release;
       keys.push({ t: release, p: s.bottom });
       // Spread the legs over the time left, each in proportion to its length.
       const span = next.down - release;
@@ -162,8 +206,16 @@ export function planPerformance(song, tempo = song.tempo, gain = 1) {
       });
     });
     paths[hand] = keys;
+    // The hand changes finger on the way between two keys: the finger rises off its key first, then the hand slides across to the next finger.
+    ramps[hand] = {
+      first: mine[0].finger,
+      list: mine.slice(1).map((s, i) => {
+        const t1 = Math.max(s.down, mine[i].release + 0.01);
+        return { t0: (mine[i].release + t1) / 2, t1, from: mine[i].finger, to: s.finger };
+      }),
+    };
   }
-  return { strikes: strikes.sort((a, b) => a.time - b.time), paths, end, beat };
+  return { strikes: strikes.sort((a, b) => a.time - b.time), paths, ramps, end, beat };
 }
 
 /** Where both fingertips (the tip joints) are at time t: { left, right }, piano space. */
@@ -178,6 +230,87 @@ export function tipsAt(plan) {
     return p;
   };
   return (t) => ({ left: at(plan.paths.left, t), right: at(plan.paths.right, t) });
+}
+
+// ------------------------------------------------------------ the hands
+
+/** The hand's fingers point forward and tipped this far down. */
+const HAND_TILT = (30 * Math.PI) / 180;
+/**
+ * Each finger's tip from the hand's wrist, thumb first: how far along the
+ * fingers, and across the hand toward the thumb (m). The fingers fan out a
+ * little to reach neighbouring white keys.
+ */
+const REACH = [0.085, 0.15, 0.16, 0.152, 0.135];
+const ACROSS = [0.05, 0.035, 0.01, -0.013, -0.034];
+/** Beyond here (toward the black keys) the idle fingers do not stray while a white key is played. */
+const Z_FRONT = -0.03;
+/** A finger that is not playing hovers this far over the key under it (m): clear of its release point. */
+const CLEARANCE = 0.005;
+
+const smooth = (u) => u * u * (3 - 2 * u);
+const between = (table, f) => {
+  const k = Math.min(3, Math.max(0, Math.floor(f)));
+  return table[k] + (table[k + 1] - table[k]) * (f - k);
+};
+
+/**
+ * Where each hand's five fingertips and its wrist are at time t, for the
+ * live hands and the offline check: { left, right }, each { tips, wrist,
+ * forward, thumbSide, active } with the tips thumb first, in piano space,
+ * and `active[k]` how much finger k is the one playing (0 to 1). The
+ * playing fingertip follows the planned path; the hand is built round it,
+ * the other fingers hovering over the keys beside it. Between two keys the
+ * hand slides from one finger to the next.
+ */
+export function handsAt(plan) {
+  const path = tipsAt(plan);
+  const forward = [0, -Math.sin(HAND_TILT), -Math.cos(HAND_TILT)];
+  const fingerAt = (r, t) => {
+    let f = r.first;
+    for (const c of r.list) {
+      if (t < c.t0) break;
+      f = t >= c.t1 ? c.to : c.from + (c.to - c.from) * smooth((t - c.t0) / (c.t1 - c.t0));
+    }
+    return f;
+  };
+  const one = (side, p, f) => {
+    const sign = side === 'right' ? 1 : -1;
+    const thumbSide = [-sign, 0, 0];
+    const reach = between(REACH, f);
+    const across = between(ACROSS, f);
+    const wrist = [0, 1, 2].map((i) => p[i] - forward[i] * reach - thumbSide[i] * across);
+    const tips = [];
+    const active = [];
+    for (let k = 0; k < 5; k++) {
+      const x = wrist[0] + forward[0] * REACH[k] + thumbSide[0] * ACROSS[k];
+      // The fingers beside the playing one stay over the front of the white keys, never in among the black ones.
+      const z0 = wrist[2] + forward[2] * REACH[k];
+      const a = Math.max(0, 1 - Math.abs(k - f) / 0.15);
+      const z = Math.max(z0, Z_FRONT) + (z0 - Math.max(z0, Z_FRONT)) * a;
+      const under = keyAt(x, z);
+      const clear = (under >= 0 ? keyTop(under) : 0) + PRESS.fingerRadius + CLEARANCE;
+      // The idle fingers hover just over the keys; the playing one follows the path.
+      tips.push([x, clear + (p[1] - clear) * a, z]);
+      active.push(a);
+    }
+    return { tips, wrist, forward, thumbSide, active };
+  };
+  return (t) => {
+    const p = path(t);
+    return { left: one('left', p.left, fingerAt(plan.ramps.left, t)), right: one('right', p.right, fingerAt(plan.ramps.right, t)) };
+  };
+}
+
+/** Poses a hand (see handsAt) as a full set of joints for IWER, in piano space. */
+export function poseFor(hand, side) {
+  const rig = handBasis(hand.wrist, hand.forward, hand.thumbSide, side === 'right');
+  const names = ['index', 'middle', 'ring', 'pinky'];
+  const targets = { index: hand.tips[1], middle: hand.tips[2], ring: hand.tips[3], pinky: hand.tips[4] };
+  return poseHand(
+    { ...rig, upright: v(0, 1, 0.25), strays: () => 0 },
+    { targets, pressingOf: (f) => hand.active[names.indexOf(f) + 1], thumbTip: hand.tips[0], thumbWeights: [0.6, 0.55, 0.55] },
+  );
 }
 
 /**
@@ -205,7 +338,7 @@ export function scoreStrikes(plan, heard) {
       ok: h != null && Math.abs(h.velocity - s.velocity) <= VELOCITY_TOLERANCE,
     };
   });
-  const extra = heard.filter((_, j) => !used.has(j)).map((h) => ({ t: Math.round(h.t * 1000) / 1000, midi: h.midi, velocity: h.velocity }));
+  const extra = heard.filter((_, j) => !used.has(j)).map((h) => ({ t: Math.round(h.t * 1000) / 1000, midi: h.midi, velocity: h.velocity, tip: h.tip }));
   return { report, extra };
 }
 
@@ -219,7 +352,7 @@ const dispatch = (method, params = {}) => window.IWER_MCP.dispatch(method, param
 
 /**
  * Plays `song` live: takes out the piano (set down in front of the head),
- * points both emulated hands' index fingers, drives the fingertips every
+ * poses both emulated hands, all five fingers each, drives the fingertips every
  * frame and records every key the app strikes and lets up, straight from
  * its synth. Calls `onEvent(index)` as each strike is due. Returns the
  * score, and every note on and off heard, for rendering.
@@ -238,38 +371,32 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
   await sys.synth.warm();
 
   const plan = planPerformance(song, tempo, LIVE_GAIN);
-  const at = tipsAt(plan);
+  const handsFor = handsAt(plan);
   await dispatch('set_input_mode', { mode: 'hand' });
   const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
   // The piano is set down the frame after it is chosen.
   while (!sys.model.root.visible) await nextFrame();
   const hands = { left: window.IWER_DEVICE.hands.left, right: window.IWER_DEVICE.hands.right };
-  for (const hand of Object.values(hands)) {
-    hand.poseId = hand.poseIds.includes('open') ? 'open' : 'default';
-    for (const f of ['thumb', 'middle', 'ring', 'pinky']) hand.setFingerPose(f, 'fist', 1);
-  }
-
   const root = sys.model.root;
-  const V = (x = 0, y = 0, z = 0) => root.position.clone().set(x, y, z);
-  // Palm down, fingers forward and tipped 35 degrees down onto the keys
-  // (the wrist frame has -Z along the fingers, +Y out of the back of the hand).
-  const tilt = (35 * Math.PI) / 180;
-  const Y = V(0, Math.cos(tilt), -Math.sin(tilt));
-  const Z = V(0, Math.sin(tilt), Math.cos(tilt));
-  const X = V().crossVectors(Y, Z);
-  const local = root.quaternion.clone().setFromRotationMatrix(root.matrixWorld.clone().makeBasis(X, Y, Z));
-  const q = root.getWorldQuaternion(root.quaternion.clone()).multiply(local);
-  const wristRotation = [q.x, q.y, q.z, q.w];
-  const W = V();
-  const place = (tips) => {
+  // A live pose for each hand, updated in place every frame (both share IWER's pose table, so each gets its own entry).
+  const poses = {};
+  for (const [side, hand] of Object.entries(hands)) {
+    const sym = Object.getOwnPropertySymbols(hand).find((s) => hand[s]?.poses);
+    poses[side] = { jointTransforms: {}, gripOffsetMatrix: new Float32Array(16) };
+    hand[sym].poses[`performer-${side}`] = poses[side];
+  }
+  root.updateMatrixWorld(true);
+  const rootMatrix = Array.from(root.matrixWorld.elements);
+  const place = (frame) => {
     for (const side of ['left', 'right']) {
-      W.set(tips[side][0], tips[side][1], tips[side][2]);
-      root.localToWorld(W);
-      hands[side].setPin({ anchor: 'index-tip', target: [W.x, W.y, W.z], wristRotation });
+      const w = applyPose(poses[side], poseFor(frame[side], side), rootMatrix, side === 'right');
+      const hand = hands[side];
+      if (hand.poseId !== `performer-${side}`) hand.poseId = `performer-${side}`;
+      hand.setPin({ anchor: 'wrist', target: w.position, wristRotation: quatFromAxes(w.x, w.y, w.z) });
     }
   };
   for (let i = 0; i < 20; i++) {
-    place(at(0));
+    place(handsFor(0));
     await nextFrame();
   }
 
@@ -301,7 +428,7 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
           wall = now;
           if (step > MAX_STEP) stalls++;
           clock += Math.min(step, MAX_STEP);
-          place(at(clock));
+          place(handsFor(clock));
           frames++;
           while (shown + 1 < plan.strikes.length && plan.strikes[shown + 1].time <= clock) onEvent(++shown);
           if (clock < plan.end) requestAnimationFrame(tick);

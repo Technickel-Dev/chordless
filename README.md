@@ -383,6 +383,8 @@ npm run play:piano
 - `tests/piano-william-tell.mjs` (`npm run play:piano`) plays the galop
   finale on the piano from `tests/piano-performer.js`: the theme in the right
   hand (quiet, then tutti an octave up) over the left hand's *oom-pah* bass,
+  fingered thumb to little finger with every finger posed by the guitar's
+  hand rig (the idle ones hover over the keys beside the playing one),
   288 strikes at *p*, *f* and *ff*, ending on E2 and E6. It prints how many
   keys sounded on time and as loud as asked and renders what the piano
   played to `test-results/piano-william-tell.wav`. `npm run check:piano`

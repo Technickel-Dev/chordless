@@ -7,7 +7,7 @@
  *   npx iwsdk dev up --headed --allow-browser-automation
  *   npm run play:piano
  *
- * Optional: WT_TEMPO=110 to slow it down. Prints how many keys were struck
+ * Optional: WT_TEMPO=110 to slow it down; WT_SHOT=5 to take the picture 5 s in. Prints how many keys were struck
  * on time and as loud as asked, any wrong ones, and renders what the piano
  * played to test-results/piano-william-tell.wav.
  */
@@ -68,7 +68,7 @@ export default async function run({ page, frame, workspaceRoot }) {
   // A picture in the loud section, both hands at work.
   const outDir = path.join(workspaceRoot, 'test-results');
   await mkdir(outDir, { recursive: true });
-  const loudAt = (0.8 + 33 * (60 / (tempo ?? 152))) * 1000;
+  const loudAt = process.env.WT_SHOT ? (Number(process.env.WT_SHOT) - 2.5) * 1000 : (0.8 + 33 * (60 / (tempo ?? 152))) * 1000;
   await wait(Math.max(0, loudAt + 2500 - (Date.now() - started)));
   const shot = path.join(outDir, 'piano-william-tell.png');
   await (await frame.frameElement()).screenshot({ path: shot }).catch(() => {});

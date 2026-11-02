@@ -75,41 +75,56 @@ const over = (midi, y) => [keyCenterX(midi), keyTop(midi) + y, isBlack(midi) ? Z
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 
+/** How many white keys up the keyboard a key is (a black key sits half a step above the white key below it). */
+const whiteSteps = (midi) => Math.floor(midi / 12) * 7 + [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6][midi % 12] + (isBlack(midi) ? 0.5 : 0);
+
 /**
  * Fingers every strike of one hand (0 thumb to 4 little finger, whichever
- * hand it is). The notes are cut into hand positions that span a sixth;
- * within one the pitches, low to high, take the fingers in order (the right
- * thumb lowest, the left thumb highest), a thumb never on a black key. A
- * repeated note alternates between two neighbouring fingers.
+ * hand it is) as a pianist would, by the cheapest way through the notes:
+ * the finger numbers follow the line up and down (up the keyboard the right
+ * hand's fingers count up, the left hand's down), a leap lets the hand move
+ * to a new position, a repeated note changes finger, and the long fingers
+ * take the black keys, never the thumb or little finger.
  */
 function assignFingers(mine, hand) {
-  let i = 0;
-  while (i < mine.length) {
-    let j = i;
-    let low = mine[i].midi;
-    let high = low;
-    while (j + 1 < mine.length && Math.max(high, mine[j + 1].midi) - Math.min(low, mine[j + 1].midi) <= 9) {
-      j++;
-      low = Math.min(low, mine[j].midi);
-      high = Math.max(high, mine[j].midi);
+  const dir = hand === 'right' ? 1 : -1;
+  const own = (s, f) => {
+    // Where the fingers like to be: near the middle, and the long fingers on the black keys.
+    let c = Math.abs(f - 2) * 0.3;
+    if (isBlack(s.midi)) c += f === 0 || f === 4 ? 40 : f === 2 ? 0 : 1.5;
+    return c;
+  };
+  const move = (a, b, fa, fb) => {
+    const steps = whiteSteps(b.midi) - whiteSteps(a.midi);
+    if (steps === 0) return Math.abs(fb - fa) === 1 ? 0 : 6;
+    // A leap of more than a hand's span lets the hand go anywhere.
+    if (Math.abs(steps) > 5) return 0;
+    const want = Math.max(-4, Math.min(4, Math.round(steps)));
+    return Math.abs((fb - fa) * dir - want) * 2;
+  };
+  let costs = [0, 1, 2, 3, 4].map((f) => own(mine[0], f));
+  const back = [];
+  for (let i = 1; i < mine.length; i++) {
+    const next = [];
+    const from = [];
+    for (let fb = 0; fb < 5; fb++) {
+      let best = Infinity;
+      let arg = 0;
+      for (let fa = 0; fa < 5; fa++) {
+        const c = costs[fa] + move(mine[i - 1], mine[i], fa, fb);
+        if (c < best) [best, arg] = [c, fa];
+      }
+      next.push(best + own(mine[i], fb));
+      from.push(arg);
     }
-    const pitches = [...new Set(mine.slice(i, j + 1).map((s) => s.midi))].sort((a, b) => a - b);
-    for (let k = i; k <= j; k++) {
-      const rank = pitches.indexOf(mine[k].midi);
-      const spread = pitches.length > 1 ? Math.round((rank * 4) / (pitches.length - 1)) : 2;
-      // Up to five pitches take neighbouring fingers from the middle out; more are spread across all five.
-      const span = Math.min(4, pitches.length - 1);
-      const offset = Math.round((4 - span) / 2);
-      let finger = pitches.length > 5 ? spread : offset + Math.min(4 - offset, rank);
-      finger = hand === 'right' ? finger : 4 - finger;
-      if (finger === 0 && isBlack(mine[k].midi)) finger = 1;
-      mine[k].finger = finger;
-    }
-    i = j + 1;
+    costs = next;
+    back.push(from);
   }
-  mine.forEach((s, k) => {
-    if (k > 0 && mine[k - 1].midi === s.midi) s.finger = mine[k - 1].finger === 2 ? 1 : mine[k - 1].finger === 1 ? 2 : mine[k - 1].finger + (mine[k - 1].finger < 4 ? 1 : -1);
-  });
+  let f = costs.indexOf(Math.min(...costs));
+  for (let i = mine.length - 1; i >= 0; i--) {
+    mine[i].finger = f;
+    if (i > 0) f = back[i - 1][f];
+  }
 }
 
 /**

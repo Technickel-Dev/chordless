@@ -41,7 +41,7 @@ export function partialHz(f0: number, n: number, b: number): number {
 
 /** How long a note's fundamental takes to fall by 1/e once its first, fast fall is over (s). */
 export function sustainSeconds(midi: number): number {
-  return Math.min(6, Math.max(0.35, 2.8 * 2 ** ((-(midi - 60) / 12) * 0.8)));
+  return Math.min(6, Math.max(0.35, 3.4 * 2 ** ((-(midi - 60) / 12) * 0.8)));
 }
 
 /** How long a note is rendered (s). Softer blows fade into silence sooner. */
@@ -53,6 +53,35 @@ export function noteSeconds(midi: number, velocity: number): number {
 export function sampleFor(midi: number): { root: number; rate: number } {
   const i = Math.min(ROOTS.length - 1, Math.max(0, Math.round((midi - ROOTS[0]) / 3)));
   return { root: i, rate: 2 ** ((midi - ROOTS[i]) / 12) };
+}
+
+/**
+ * The soundboard and case as a short impulse response: the direct sound
+ * plus a few dozen damped resonances, strongest in the low mids and
+ * thinning out into the treble. Every note is played through the same one,
+ * so each pitch is coloured by it differently, as on a real instrument.
+ */
+function soundboardImpulse(ctx: BaseAudioContext): AudioBuffer {
+  const rate = ctx.sampleRate;
+  const buffer = ctx.createBuffer(1, Math.floor(rate * 0.4), rate);
+  const data = buffer.getChannelData(0);
+  const rand = seeded(88);
+  const modes = 70;
+  for (let m = 0; m < modes; m++) {
+    const f = 80 * (4200 / 80) ** rand();
+    const amp = (0.4 + rand()) / Math.sqrt(1 + (f / 250) ** 2);
+    const decay = (0.02 + 0.14 * rand()) * (250 / Math.max(250, f)) ** 0.35;
+    const phase = rand() * Math.PI * 2;
+    for (let i = 0; i < data.length; i++) {
+      const t = i / rate;
+      data[i] += amp * Math.exp(-t / decay) * Math.sin(2 * Math.PI * f * t + phase);
+    }
+  }
+  let peak = 0;
+  for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+  for (let i = 0; i < data.length; i++) data[i] *= 0.3 / (peak || 1);
+  data[0] += 1;
+  return buffer;
 }
 
 /** A seeded random source, so every load renders the same piano. */
@@ -75,7 +104,7 @@ export function partialLevels(midi: number, velocity: number, sampleRate = 48000
   // multiples of 8 are weak. A harder blow compresses the felt, which
   // then acts as a brighter (higher) lowpass.
   const strike = 0.122;
-  const felt = (700 + 4500 * velocity ** 1.4) * (f0 / 262) ** 0.3;
+  const felt = (600 + 3800 * velocity ** 1.4) * (f0 / 262) ** 0.3;
   const top = Math.min(14000, sampleRate * 0.45);
   const hz: number[] = [];
   const level: number[] = [];
@@ -99,7 +128,10 @@ export async function renderNote(sampleRate: number, midi: number, velocity: num
   const ctx = new OfflineAudioContext(1, length, sampleRate);
   const rand = seeded(midi * 131 + Math.round(velocity * 100));
   const bus = ctx.createGain();
-  bus.connect(ctx.destination);
+  const board = ctx.createConvolver();
+  board.normalize = false;
+  board.buffer = soundboardImpulse(ctx);
+  bus.connect(board).connect(ctx.destination);
   const tau = sustainSeconds(midi);
   const f0 = midiToHz(midi);
   // A soft blow pushes the string more gently: a slower attack.
@@ -118,8 +150,8 @@ export async function renderNote(sampleRate: number, midi: number, velocity: num
   const { hz, level } = partialLevels(midi, velocity, sampleRate);
   for (let k = 0; k < hz.length; k++) {
     const f = hz[k];
-    // Higher partials die sooner.
-    const slow = tau * (f0 / f) ** 0.55;
+    // Higher partials die much sooner, so the tone mellows as it rings.
+    const slow = Math.max(0.12, tau * (f0 / f) ** 0.95);
     const prompt = Math.max(0.03, slow * 0.12);
     // The unison strings start in step (the fast fall) and drift apart (the long ring, beating).
     const cents = 0.35 + 0.9 * rand();
@@ -147,6 +179,19 @@ export async function renderNote(sampleRate: number, midi: number, velocity: num
   knockEnv.gain.setTargetAtTime(0, 0.0008, 0.009);
   knock.connect(knockTone).connect(knockEnv).connect(bus);
   knock.start(0);
+  // And the felt's dull thud, which a low note carries more of.
+  const thud = ctx.createBufferSource();
+  thud.buffer = noise;
+  const thudTone = ctx.createBiquadFilter();
+  thudTone.type = 'lowpass';
+  thudTone.frequency.value = 220 + 200 * velocity;
+  const thudEnv = ctx.createGain();
+  const thudLevel = 0.16 * velocity ** 1.2 * Math.min(1, Math.max(0.25, (96 - midi) / 48));
+  thudEnv.gain.setValueAtTime(0, 0);
+  thudEnv.gain.linearRampToValueAtTime(thudLevel, 0.002);
+  thudEnv.gain.setTargetAtTime(0, 0.002, 0.014);
+  thud.connect(thudTone).connect(thudEnv).connect(bus);
+  thud.start(0);
 
   const out = await ctx.startRendering();
   const samples = out.getChannelData(0);
@@ -204,17 +249,17 @@ export class PianoSynth {
     body.type = 'peaking';
     body.frequency.value = 220;
     body.Q.value = 0.8;
-    body.gain.value = 2.5;
+    body.gain.value = 1;
     const air = ctx.createBiquadFilter();
     air.type = 'highshelf';
     air.frequency.value = 4000;
-    air.gain.value = 1.5;
+    air.gain.value = 0.5;
     this.dry.connect(body).connect(air);
 
     const reverb = ctx.createConvolver();
-    reverb.buffer = makeRoomImpulse(ctx, 2.2);
+    reverb.buffer = makeRoomImpulse(ctx, 2.8);
     const wet = ctx.createGain();
-    wet.gain.value = 0.22;
+    wet.gain.value = 0.3;
     air.connect(reverb).connect(wet);
 
     const limiter = ctx.createDynamicsCompressor();

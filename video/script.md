@@ -1,9 +1,9 @@
-# Chordless: The AI Conductor
+# Chordless: The Conductor of AI
 
 **Video Length:** 2:55 (the rules say *less than* three minutes; judges may stop at 3:00)
 **Competition:** Meta VR Start Developer Competition 2026 (deadline Nov 18, 2026, 12:00 PM PT)
 **Theme:** A grand concert hall where the orchestra has no instruments
-**Speaker:** Technickel (AI Conductor)
+**Speaker:** Technickel (Conductor of AI, a human who directs AI tools; never presented as an AI himself)
 **Tech:** Built with IWSDK, Meta's Immersive Web SDK, as a WebXR app in the Quest browser
 **Music:** Gioachino Rossini, *William Tell* Overture, Finale (1829), public domain, played in
 Chordless by its own synthesized instruments. No recording of the piece is used anywhere.
@@ -72,13 +72,13 @@ every bar in the coda, so the editing speeds up as the orchestra grows.
 Same convention as the earlier videos:
 
 - `clips/1-3.mp4`: an AI clip (act-shot)
-- `clips/c-2.mp4`: an AI conductor cutaway used during the performance
+- `clips/c-2.mp4`: an AI-generated cutaway of the conductor, used during the performance
 - `takes/<instrument>-<scene>.mp4`: a screen-captured Chordless performance (scene = the file
   name from `src/scene-list.ts`)
 - `audio/vo-1-2.mp3`: a voiceover line
 - `audio/stems/<instrument>-<scene>.wav`: that take's audio
 
-**Character sheet** (paste into every Technickel prompt): *TECHNICKEL, an AI Conductor: a man
+**Character sheet** (paste into every Technickel prompt): *TECHNICKEL, an orchestra conductor: a man
 whose head is a yellow "cool" sunglasses emoji (😎). He wears a black concert tailcoat, a
 white bow tie, white gloves, and holds a slim white conductor's baton.*
 
@@ -105,7 +105,7 @@ white bow tie, white gloves, and holds a slim white conductor's baton.*
 > **Video Prompt:** "TECHNICKEL turns to face the camera, gives a small bow, and gestures with his baton at the empty chairs behind him, as if presenting them."
 
 **Technickel (VO, warm and theatrical):**
-Good evening! Technickel, your AI Conductor. Every musician I lead has the same problem.
+Good evening! I'm Technickel, conductor of AI. And every musician I know has the same problem.
 
 #### Shots 1-3 to 1-6: The Gag Montage (0:09 – 0:21, 3 s each)
 

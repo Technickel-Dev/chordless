@@ -1,4 +1,4 @@
-# Edit plan for "Chordless: The AI Conductor": the machine half of video/script.md.
+# Edit plan for "Chordless: The Conductor of AI": the machine half of video/script.md.
 #
 # Every shot ID here matches one in script.md. An agent driving the DaVinci
 # Resolve MCP builds the timeline from this file, top to bottom:
@@ -37,7 +37,7 @@
 # and last bar, then lay its clips out with its `cut_every_bars` rule.
 
 timeline:
-  name: chordless-ai-conductor-v1
+  name: chordless-conductor-of-ai-v1
   fps: 60
   width: 1920
   height: 1080

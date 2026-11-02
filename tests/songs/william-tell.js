@@ -330,13 +330,25 @@ export const WILLIAM_TELL_CYMBALS = {
  * horn, partials 3 to 5). Notes are sounding pitches; the trumpet performer
  * transposes and fingers them. It closes on a held E5 (written F#5).
  */
+/** A trumpet sounds from E3 to B-flat 5: notes of the guitar's line beyond that move by an octave. */
+const intoTrumpet = (midi) => (midi > 82 ? midi - 12 : midi < 52 ? midi + 12 : midi);
+
 export const WILLIAM_TELL_TRUMPET = {
-  title: 'William Tell Overture: finale, bars 243-275 (trumpet)',
+  title: 'William Tell Overture: finale, bars 226-453 (trumpet)',
   tempo: 152,
   events: [
+    // The fanfare is the trumpets' own: at their pitch, its long note held.
+    ...toEvents(FANFARE_BARS, FANFARE, 'ff').map(({ beat, note, dynamic }) => ({
+      beat,
+      note: octaveUp(note),
+      dynamic,
+      ...(beat === (240 - 244) * 2 ? { hold: 4 } : {}),
+    })),
     ...toEvents(QUIET_BARS, QUIET, 'pp').map(({ beat, note, dynamic }) => ({ beat, note, dynamic })),
     ...toEvents(LOUD_BARS, LOUD, 'ff').map(({ beat, note, dynamic }) => ({ beat, note, dynamic })),
-    { beat: (276 - 244) * 2, note: 'E5', dynamic: 'ff', hold: 2 },
+    ...toEvents(SECOND_BARS, QUIET, 'p').map(swelling).map(({ beat, note, dynamic }) => ({ beat, note, dynamic })),
+    ...finaleLine.map((n) => ({ beat: n.beat, note: nameOf(intoTrumpet(n.midi)), dynamic: n.dynamic })),
+    { beat: (452 - 244) * 2 + 1, note: 'E5', dynamic: 'ff', hold: 2 },
   ].sort((a, b) => a.beat - b.beat),
 };
 

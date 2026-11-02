@@ -69,12 +69,16 @@ export function fingeringFor(midi) {
 /** Notes with their times (s), fingerings and air. */
 export function planPerformance(song, tempo = song.tempo) {
   const spb = 60 / tempo;
+  // Timed from the song's first note, wherever its beats are counted from.
+  const first = Math.min(...song.events.map((e) => e.beat));
   const notes = song.events.map((e) => {
     const midi = noteMidi(e.note);
-    return { ...e, time: LEAD_IN + e.beat * spb, midi, ...fingeringFor(midi), air: AIR[e.dynamic] ?? 0.7 };
+    return { ...e, time: LEAD_IN + (e.beat - first) * spb, midi, ...fingeringFor(midi), air: AIR[e.dynamic] ?? 0.7 };
   });
+  // Each note lasts until the next, or for its `hold` (beats) if that ends sooner.
   notes.forEach((n, i) => {
-    n.duration = i + 1 < notes.length ? notes[i + 1].time - n.time : (n.hold ?? 1) * spb;
+    const toNext = i + 1 < notes.length ? notes[i + 1].time - n.time : Infinity;
+    n.duration = Math.min(toNext, (n.hold ?? (i + 1 < notes.length ? Infinity : 1)) * spb);
   });
   const last = notes.at(-1);
   return { notes, end: last.time + last.duration + 0.4 };

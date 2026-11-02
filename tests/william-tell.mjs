@@ -13,8 +13,13 @@ import { startApp } from './app-start.js';
 
 export default async function run({ page, frame }) {
   const tempo = Number(process.env.WT_TEMPO) || undefined;
+  // The whole finale lasts longer than one browser run may (110 s): a run
+  // with WT_PHASE=wait picks up the performance an earlier run started
+  // (tests/play-long.mjs chains them).
+  const phase = process.env.WT_PHASE ?? 'start';
   const dispatch = (method, params = {}) =>
     frame.evaluate(([m, p]) => window.IWER_MCP.dispatch(m, p), [method, params]);
+  if (phase === 'wait') return finish(frame, dispatch, null);
 
   await startApp(
     { page, frame },
@@ -48,20 +53,55 @@ export default async function run({ page, frame }) {
     return guitar?.synth.ctx.state ?? 'unknown';
   });
 
-  const result = await frame.evaluate(async (t) => {
-    const { WILLIAM_TELL } = await import('/tests/songs/william-tell.js');
-    const { perform } = await import('/tests/performer.js');
-    const el = () => document.getElementById('e2e-banner');
-    const notes = WILLIAM_TELL.events.map((e) => (e.chord ? `${e.chord}!` : e.note.replace(/\d/, '')));
-    return perform(WILLIAM_TELL, {
-      tempo: t,
-      onEvent: (i) => {
-        const shown = notes.map((n, k) => (k === i ? `[${n}]` : n));
-        const from = Math.max(0, i - 8);
-        if (el()) el().textContent = `♪ ${WILLIAM_TELL.title}   ${shown.slice(from, from + 14).join(' ')}`;
-      },
-    });
+  // Start the performance and leave it playing in the page; finish() waits for it.
+  await banner('♪ William Tell: guitar');
+  await frame.evaluate((t) => {
+    const state = { done: false };
+    window.__performance = state;
+    (async () => {
+      const { WILLIAM_TELL } = await import('/tests/songs/william-tell.js');
+      const { perform } = await import('/tests/performer.js');
+      const el = () => document.getElementById('e2e-banner');
+      const notes = WILLIAM_TELL.events.map((e) => (e.chord ? `${e.chord}!` : e.note.replace(/\d/, '')));
+      return perform(WILLIAM_TELL, {
+        tempo: t,
+        onEvent: (i) => {
+          const shown = notes.map((n, k) => (k === i ? `[${n}]` : n));
+          const from = Math.max(0, i - 8);
+          if (el()) el().textContent = `♪ ${WILLIAM_TELL.title}   ${shown.slice(from, from + 14).join(' ')}`;
+        },
+      });
+    })().then(
+      (result) => Object.assign(state, { done: true, result }),
+      (err) => Object.assign(state, { done: true, error: String(err?.stack ?? err) }),
+    );
   }, tempo);
+  return finish(frame, dispatch, audio);
+}
+
+/**
+ * Waits for the performance in the page, as long as this run may; reports
+ * { pending: true } if it is still playing, else the score.
+ */
+async function finish(frame, dispatch, audio) {
+  const done = await frame
+    .waitForFunction(() => window.__performance?.done, null, { timeout: 95000, polling: 500 })
+    .then(
+      () => true,
+      () => false,
+    );
+  if (!done) return { pending: true };
+  const result = await frame.evaluate(() => {
+    if (window.__performance.error) throw new Error(window.__performance.error);
+    return window.__performance.result;
+  });
+  const banner = (text) =>
+    frame
+      .evaluate((t) => {
+        const el = document.getElementById('e2e-banner');
+        if (el) el.textContent = t;
+      }, text)
+      .catch(() => {});
 
   await banner(`♪ Done: ${result.notes.filter((n) => n.ok !== false).length}/${result.notes.length} notes right`);
   await dispatch('end_session');

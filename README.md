@@ -404,7 +404,8 @@ npm run play:drums
   E5 on the violin's A string, E3 and A3 on the cello's D), and checks that a lifted bow is silent and that each change of bow
   direction is one stroke.
 - `tests/william-tell.mjs` performs the galop theme of the *William Tell*
-  Overture finale (bars 226–299, from the fanfare that opens it) the way a guitarist would, and reports each
+  Overture finale, all of it (bars 226–453, from the fanfare that opens it,
+  about three minutes), the way a guitarist would, and reports each
   note asked for, the finger and hand position used, the note the app played
   and when it registered. `tests/performer.js` plans the fingering (hand
   positions with lookahead, one finger per fret, fingers kept down until they
@@ -435,7 +436,9 @@ npm run play:drums
   should not.
 - `npm run check:timing` feeds the posed song through the app's own fret
   reader and pluck detector at steady (90, 72, 60 Hz) and uneven frame
-  rates, and scores every note and how far off the beat it lands.
+  rates, and scores every note and how far off the beat it lands. The whole
+  finale takes longer to check than one run may last, so
+  `TIMING_PATTERNS="90 Hz,72 Hz"` checks only the patterns named.
 - `tests/render-audio.mjs` (`npm run render:audio`) renders strummed chords,
   a melody and single notes straight from the synth into
   `test-results/audio/<label>-*.wav`, with spectrum statistics, for comparing
@@ -511,7 +514,10 @@ npm run play:drums
   position** sets the kit out at the player's new spot and height.
 
 Both bring the browser window to the front; a window behind others renders at
-about 1 fps. Each script must finish within IWSDK's 110-second limit.
+about 1 fps. Each script must finish within IWSDK's 110-second limit; a
+performance that lasts longer (the guitar's whole finale) is started by one
+run and picked up by the next: `npm run play:william-tell` runs
+`tests/play-long.mjs`, which chains them.
 
 ## Project layout
 
@@ -547,16 +553,20 @@ tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands a
 ## Credits
 
 `tests/songs/william-tell.js` transcribes the melody of the finale (bars
-243–275 from the first violins; for the guitar, on to bar 299 from the
-clarinets' second tune and the first violins) of Gioachino Rossini's *William Tell* Overture (1829, public
+243–275 from the first violins; for the guitar, the whole finale: the
+trumpets' fanfare, the clarinets' second tune, and from bar 300 to the end
+the first violins' part, with the flutes' where the violins rest, in
+`tests/songs/william-tell-finale.js`, read from the engraving of the PDF)
+of Gioachino Rossini's *William Tell* Overture (1829, public
 domain) from "William Tell: Overture to the Opera", full score typeset by
 Max Wilkinson (2008), [IMSLP #22579](https://imslp.org/wiki/Guillaume_Tell_(Rossini,_Gioacchino)),
 licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/).
 Changes: melody only, without articulation; arranged for guitar from the
 trumpets' fanfare (bars 226–242, an octave below them), with the loud
 section an octave lower, the clarinets' tune at their sounding pitch, the
-violins' run into the tutti at bar 299 left out, and an added closing E
-major chord on bar 300; for violin at
+violins' run into the tutti at bar 299 left out, the high passages from
+bar 300 an octave below the violins, the repeat of bars 399–422 not
+taken, and the closing E major chord strummed on the last cadence; for violin at
 the written pitch with an added closing E major double stop; and for cello an
 octave below the guitar arrangement with the same double stop two octaves
 below the violin's. The cymbal part (bars 260–276) and the triangle part

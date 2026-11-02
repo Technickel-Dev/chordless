@@ -48,6 +48,8 @@
  * strum.
  */
 
+import { FINALE_BARS } from './william-tell-finale.js';
+
 /** Where each note is played: [string, fret], string 0 = low E. */
 const QUIET = {
   B3: [4, 0],
@@ -182,15 +184,85 @@ const toEvents = (bars, on, dynamic) =>
     })),
   );
 
+/**
+ * Bar 300 to the end: the melody from william-tell-finale.js, an octave
+ * below the violins wherever they climb past the guitar's top fret (the
+ * quiet middle section and the theme's low statement stay at pitch), at
+ * the dynamics of each section, and fingered by fingerGuitar. The closing
+ * E chord is strummed on the last cadence, bar 452.
+ */
+const GUITAR_OCTAVE = [[300, 315, -12], [316, 342, 0], [343, 382, -12], [383, 398, 0], [399, 452, -12]];
+const FINALE_DYNAMICS = [[300, 315, 'ff'], [316, 342, 'p'], [343, 382, 'ff'], [383, 390, 'p'], [391, 398, 'f'], [399, 452, 'ff']];
+const inRange = (ranges, bar) => ranges.find(([a, b]) => bar >= a && bar <= b)[2];
+const GUITAR_OPEN = [40, 45, 50, 55, 59, 64];
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const nameOf = (midi) => NOTE_NAMES[midi % 12] + String(Math.floor(midi / 12) - 1);
+
+/**
+ * Chooses a string and fret for each note of a line, as a guitarist would:
+ * the hand moves as little as it can, and the pick crosses as few strings
+ * (both above all between quick notes),
+ * prefers the lower frets (the top ones, to B5 at the 19th, only when it
+ * must), and crosses strings rather than jumping along one. Open strings
+ * cost no movement.
+ */
+export function fingerGuitar(line, beatSeconds) {
+  const options = line.map((n) =>
+    GUITAR_OPEN.map((open, s) => ({ s, f: n.midi - open })).filter((o) => o.f >= 0 && o.f <= 19),
+  );
+  const cost = options.map((o) => o.map(() => Infinity));
+  const back = options.map((o) => o.map(() => 0));
+  options[0].forEach((o, k) => (cost[0][k] = o.f * 0.05));
+  for (let i = 1; i < line.length; i++) {
+    const gap = Math.max(0.05, (line[i].beat - line[i - 1].beat) * beatSeconds);
+    const urgency = 1 + 0.25 / gap;
+    options[i].forEach((o, k) => {
+      options[i - 1].forEach((p, j) => {
+        const shift = o.f && p.f ? Math.abs(o.f - p.f) : 0;
+        const c = cost[i - 1][j] + shift * urgency + Math.abs(o.s - p.s) * 0.6 * urgency + o.f * 0.05 + Math.max(0, o.f - 15) * 0.5;
+        if (c < cost[i][k]) {
+          cost[i][k] = c;
+          back[i][k] = j;
+        }
+      });
+    });
+  }
+  const last = line.length - 1;
+  let k = cost[last].indexOf(Math.min(...cost[last]));
+  const picks = [];
+  for (let i = last; i >= 0; i--) {
+    picks[i] = options[i][k];
+    k = back[i][k];
+  }
+  return picks;
+}
+
+const finaleLine = Object.entries(FINALE_BARS)
+  .filter(([bar]) => Number(bar) <= 452)
+  .flatMap(([bar, notes]) =>
+    notes
+      // Bar 452 ends on the strummed chord instead of the low E.
+      .filter(([beat]) => !(Number(bar) === 452 && beat > 0))
+      .map(([beat, midi]) => ({
+        bar: Number(bar),
+        beat: (Number(bar) - 244) * 2 + beat,
+        // Bar 383 opens on the note the figure before it lands on, an octave down with it.
+        midi: midi + inRange(GUITAR_OCTAVE, Number(bar)) - (Number(bar) === 383 && beat === 0 ? 12 : 0),
+        dynamic: inRange(FINALE_DYNAMICS, Number(bar)),
+      })),
+  );
+const finaleFingers = fingerGuitar(finaleLine, 60 / 152);
+
 export const WILLIAM_TELL = {
-  title: 'William Tell Overture: finale, bars 226-299',
+  title: 'William Tell Overture: finale, bars 226-453',
   tempo: 152,
   events: [
     ...toEvents(FANFARE_BARS, FANFARE, 'ff'),
     ...toEvents(QUIET_BARS, QUIET, 'pp'),
     ...toEvents(LOUD_BARS, LOUD, 'ff'),
     ...toEvents(SECOND_BARS, QUIET, 'p').map(swelling),
-    { beat: (300 - 244) * 2, chord: 'E', dynamic: 'ff' },
+    ...finaleLine.map((n, i) => ({ beat: n.beat, note: nameOf(n.midi), string: finaleFingers[i].s, fret: finaleFingers[i].f, dynamic: n.dynamic })),
+    { beat: (452 - 244) * 2 + 1, chord: 'E', dynamic: 'ff' },
   ].sort((a, b) => a.beat - b.beat),
 };
 

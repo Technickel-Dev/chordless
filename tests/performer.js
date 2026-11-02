@@ -526,12 +526,16 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
   }
 
   // Match what the app played to the score by time: each note takes the
-  // earliest unclaimed pluck heard shortly after it, so one missed or extra
-  // pluck counts once instead of shifting every note after it.
+  // earliest unclaimed pluck heard shortly after it, within its own share
+  // of the time to the next note (a pluck nearer the next note is that
+  // note's), so one missed or extra pluck counts once instead of shifting
+  // every note after it.
   const report = [];
   const claimed = new Set();
+  const nextTime = new Map(notes.map((n, k) => [n, notes[k + 1]?.time ?? Infinity]));
   const pluckFor = (n) => {
-    const i = heard.findIndex((h, j) => !claimed.has(j) && h.at > n.time - 0.04 && h.at < n.time + 0.16);
+    const until = n.time + Math.min(0.16, 0.6 * (nextTime.get(n) - n.time));
+    const i = heard.findIndex((h, j) => !claimed.has(j) && h.at > n.time - 0.04 && h.at < until);
     if (i < 0) return null;
     claimed.add(i);
     return heard[i];

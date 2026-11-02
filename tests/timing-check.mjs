@@ -7,10 +7,15 @@
  *
  *   npx iwsdk dev up --allow-browser-automation
  *   npm run check:timing
+ *
+ * The whole finale takes longer to check than one browser run may last, so
+ * TIMING_PATTERNS can name the frame patterns to check, comma-separated
+ * (for example TIMING_PATTERNS="90 Hz,72 Hz"); by default, all of them.
  */
 
 export default async function run({ frame }) {
-  return frame.evaluate(async () => {
+  const only = process.env.TIMING_PATTERNS?.split(',').map((s) => s.trim()) ?? null;
+  return frame.evaluate(async (only) => {
     const { WILLIAM_TELL } = await import('/tests/songs/william-tell.js');
     const { planPerformance, handsFor } = await import('/tests/performer.js');
     const { FretReader, PRESS } = await import('/src/guitar/fretting.ts');
@@ -59,6 +64,7 @@ export default async function run({ frame }) {
 
     const results = {};
     for (const [name, step] of Object.entries(PATTERNS)) {
+      if (only && !only.includes(name)) continue;
       seed = 1;
       const handsAt = handsFor(plan);
       const reader = new FretReader();
@@ -91,7 +97,10 @@ export default async function run({ frame }) {
           if (chord !== n.chord) wrong.push(`${n.beat} ${n.chord} chord: heard ${chord}`);
           continue;
         }
-        const i = heard.findIndex((h, j) => !claimed.has(j) && h.at > n.time - 0.04 && h.at < n.time + 0.16);
+        // Within the note's own share of the time to the next (as the live score counts).
+        const next = plan.notes[plan.notes.indexOf(n) + 1]?.time ?? Infinity;
+        const until = n.time + Math.min(0.16, 0.6 * (next - n.time));
+        const i = heard.findIndex((h, j) => !claimed.has(j) && h.at > n.time - 0.04 && h.at < until);
         const want = midiName(OPEN_MIDI[n.string] + n.fret);
         if (i < 0) {
           wrong.push(`${n.beat} ${want}: missed`);
@@ -112,5 +121,5 @@ export default async function run({ frame }) {
       };
     }
     return results;
-  });
+  }, only);
 }

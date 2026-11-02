@@ -12,7 +12,7 @@
  * knuckles to reach frets further apart than the hand is wide.
  */
 
-import { fretAt, fretX, GUITAR, nearestString, stringSpacing, stringSpan, stringY } from '/src/guitar/geometry.ts';
+import { fretAt, fretX, GUITAR, nearestString, STRING_COUNT, stringSpacing, stringSpan, stringY } from '/src/guitar/geometry.ts';
 import { PRESS } from '/src/guitar/fretting.ts';
 
 export const FINGERS = ['index', 'middle', 'ring', 'pinky'];
@@ -40,6 +40,12 @@ const SKIN = 0.009;
 /** Fretting knuckles: how far out from the fretboard's treble edge, and above the strings, at most. */
 const KNUCKLE_GAP = 0.012;
 const KNUCKLE_HEIGHT = 0.008;
+/**
+ * Reaching the treble strings the knuckles drop back from the fretboard's
+ * edge, up to this far: closer in, a finger is too long for the gap to the
+ * high E and hooks over onto it from the bass side, its pad across the B.
+ */
+const TREBLE_REACH = 0.042;
 /** The back of the neck (the neck is about 4 cm deep below the strings). */
 const NECK_BACK_Z = -0.028;
 
@@ -148,8 +154,12 @@ export function padStrays(tip, dip, pip) {
       const p = lerp(a, b, (i / 4) * reach);
       // Once a string is held it stays held up to the release height.
       if (p[2] - GUITAR.stringZ > PRESS.release) break;
-      const off = Math.abs(p[1] - stringY(string, p[0])) / stringSpacing(p[0]);
-      if (fretAt(p[0] - 0.002) > fret || off > 0.33) strays++;
+      // Leaning toward a neighbouring string strays; past the low or high E,
+      // over the fretboard's edge, there is no string to touch.
+      const signed = (p[1] - stringY(string, p[0])) / stringSpacing(p[0]);
+      const towardBass = string > 0 && signed * Math.sign(stringY(0, p[0]) - stringY(string, p[0])) > 0.33;
+      const towardTreble = string < STRING_COUNT - 1 && signed * Math.sign(stringY(STRING_COUNT - 1, p[0]) - stringY(string, p[0])) > 0.33;
+      if (fretAt(p[0] - 0.002) > fret || towardBass || towardTreble) strays++;
     }
   }
   return strays;
@@ -398,7 +408,7 @@ export function leftHand({ position, tips }) {
     across += w * tips[f][1];
   }
   const neckEdge = -neckHalfWidth(hx);
-  const knuckleY = Math.min(neckEdge - KNUCKLE_GAP, Math.max(neckEdge - 0.03, across / weight - 0.05));
+  const knuckleY = Math.min(neckEdge - KNUCKLE_GAP, Math.max(neckEdge - TREBLE_REACH, across / weight - 0.05));
   const middleKnuckle = v(hx, knuckleY, GUITAR.stringZ + KNUCKLE_HEIGHT);
   const forward = norm(v(0, 0.33, 0.94));
   const wrist = sub(middleKnuckle, scale(forward, PALM_LENGTH));

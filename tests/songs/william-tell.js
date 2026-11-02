@@ -202,8 +202,8 @@ const nameOf = (midi) => NOTE_NAMES[midi % 12] + String(Math.floor(midi / 12) - 
  * Chooses a string and fret for each note of a line, as a guitarist would:
  * the hand moves as little as it can, and the pick crosses as few strings
  * (both above all between quick notes),
- * prefers the lower frets (the top ones, to B5 at the 19th, only when it
- * must), and crosses strings rather than jumping along one. Open strings
+ * prefers the lower frets (above the 12th, where the frets crowd the
+ * fingers, only as far as it must; the top is B5 at the 19th), and crosses strings rather than jumping along one. Open strings
  * cost no movement.
  */
 export function fingerGuitar(line, beatSeconds) {
@@ -219,7 +219,7 @@ export function fingerGuitar(line, beatSeconds) {
     options[i].forEach((o, k) => {
       options[i - 1].forEach((p, j) => {
         const shift = o.f && p.f ? Math.abs(o.f - p.f) : 0;
-        const c = cost[i - 1][j] + shift * urgency + Math.abs(o.s - p.s) * 0.6 * urgency + o.f * 0.05 + Math.max(0, o.f - 15) * 0.5;
+        const c = cost[i - 1][j] + shift * urgency + Math.abs(o.s - p.s) * 0.6 * urgency + o.f * 0.05 + Math.max(0, o.f - 12) * 1.0;
         if (c < cost[i][k]) {
           cost[i][k] = c;
           back[i][k] = j;

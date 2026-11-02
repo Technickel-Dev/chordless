@@ -404,7 +404,7 @@ npm run play:drums
   E5 on the violin's A string, E3 and A3 on the cello's D), and checks that a lifted bow is silent and that each change of bow
   direction is one stroke.
 - `tests/william-tell.mjs` performs the galop theme of the *William Tell*
-  Overture finale (bars 243–299) the way a guitarist would, and reports each
+  Overture finale (bars 226–299, from the fanfare that opens it) the way a guitarist would, and reports each
   note asked for, the finger and hand position used, the note the app played
   and when it registered. `tests/performer.js` plans the fingering (hand
   positions with lookahead, one finger per fret, fingers kept down until they
@@ -552,7 +552,8 @@ clarinets' second tune and the first violins) of Gioachino Rossini's *William Te
 domain) from "William Tell: Overture to the Opera", full score typeset by
 Max Wilkinson (2008), [IMSLP #22579](https://imslp.org/wiki/Guillaume_Tell_(Rossini,_Gioacchino)),
 licensed under [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/).
-Changes: melody only, without articulation; arranged for guitar with the loud
+Changes: melody only, without articulation; arranged for guitar from the
+trumpets' fanfare (bars 226–242, an octave below them), with the loud
 section an octave lower, the clarinets' tune at their sounding pitch, the
 violins' run into the tutti at bar 299 left out, and an added closing E
 major chord on bar 300; for violin at

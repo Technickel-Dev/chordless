@@ -190,7 +190,8 @@ function planRightHand(notes) {
   // over a string it just played is the likeliest to catch it). A lift
   // that cannot be avoided goes where there is most time for it.
   const options = notes.map((n) =>
-    n.chord ? [[0, 6]] : [[n.string, n.string + 1], [n.string + 1, n.string]],
+    // A chord strums from its lowest string (a B7 leaves the low E alone).
+    n.chord ? [[CHORDS[n.chord].strumFrom ?? 0, 6]] : [[n.string, n.string + 1], [n.string + 1, n.string]],
   );
   const hop = (from, to, time) => (from === to ? 0 : (1 + 0.2 * Math.abs(from - to)) * Math.max(1, 0.25 / time));
   // cost[i][k]: fewest lifts to play notes 0..i with note i picked option k.
@@ -324,7 +325,8 @@ export function planPerformance(song, tempo = song.tempo) {
     if (e.chord) {
       const shape = CHORDS[e.chord];
       const presses = Object.entries(shape.fingers).map(([finger, [string, fret]]) => ({ finger, string, fret }));
-      return { ...e, time, presses, strings: [0, 1, 2, 3, 4, 5], frets: presses.map((p) => p.fret), dynamic: e.dynamic ?? 'f' };
+      const strings = [0, 1, 2, 3, 4, 5].slice(shape.strumFrom ?? 0);
+      return { ...e, time, presses, strings, frets: presses.map((p) => p.fret), dynamic: e.dynamic ?? 'f' };
     }
     return { ...e, time, strings: [e.string], frets: e.fret > 0 ? [e.fret] : [], presses: [] };
   });

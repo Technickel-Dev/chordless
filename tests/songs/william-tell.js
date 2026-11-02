@@ -2,8 +2,9 @@
  * The galop theme that opens the finale of Rossini's William Tell Overture
  * (Allegro vivace, quarter = 152, E major, 2/4): the first violins from
  * bar 243 (pickup) to bar 275 — the quiet theme twice, then the loud
- * sixteen-bar tutti — followed by an added E major chord. The guitar goes
- * on to bar 299 (WILLIAM_TELL): the second tune that follows the tutti
+ * sixteen-bar tutti — followed by an added E major chord. The guitar starts
+ * earlier, with the trumpets' fanfare that opens the Allegro vivace (bars
+ * 226-242), and goes on to bar 299 (WILLIAM_TELL): the second tune that follows the tutti
  * (clarinets and oboe), then the gallop theme twice more in the low
  * violins, swelling each time to the full orchestra, closing on bar 300's
  * downbeat with the E major chord.
@@ -16,7 +17,9 @@
  * Changes: transcribed the Violin I melody only, dropped articulation,
  * arranged it for guitar (fingering below), played the loud section an
  * octave lower (the violins reach C#6, above the guitar's top fret, B5),
- * and added a closing E major chord that is not in the score. From bar
+ * and added a closing E major chord that is not in the score. The fanfare
+ * is the trumpets' call an octave below their sounding pitch, its held
+ * note plucked once and let ring. From bar
  * 275 the guitar plays the melody wherever it is: the clarinets' second
  * tune (at their sounding pitch, an octave below the oboe that joins them),
  * then the first violins' gallop theme; the violins' seven-note run up into
@@ -117,6 +120,32 @@ const LOUD_BARS = {
 };
 
 /**
+ * The fanfare that opens the Allegro vivace, bars 226-242: the trumpets'
+ * call, then their gallop, then a held B into the theme. An octave below
+ * the trumpets, all in first position.
+ */
+const FANFARE = { 'E3': [2, 2], 'G#3': [3, 1], B3: [4, 0], E4: [5, 0] };
+const call = [[0, 'B3'], [1.5, 'B3'], [1.75, 'B3']];
+const FANFARE_BARS = {
+  226: call,
+  227: call,
+  228: [[0, 'B3'], [0.5, 'G#3'], [1, 'E3'], [1.5, 'G#3']],
+  229: [[0, 'B3'], [0.5, 'G#3'], [1, 'B3'], [1.5, 'E4']],
+  230: [[0, 'B3'], [0.5, 'G#3'], [1, 'E3'], [1.5, 'G#3']],
+  231: [[0, 'B3'], [0.5, 'G#3'], [1, 'B3'], [1.5, 'E4']],
+  232: call,
+  233: call,
+  234: call,
+  235: call,
+  236: gallop('B3'),
+  237: gallop('B3'),
+  238: gallop('B3'),
+  239: gallop('B3'),
+  // The held note, let ring.
+  240: [[0, 'B3']],
+};
+
+/**
  * After the tutti, bars 275-299. The second tune: repeated notes under a
  * turn, twice, from a pickup in bar 275.
  */
@@ -154,9 +183,10 @@ const toEvents = (bars, on, dynamic) =>
   );
 
 export const WILLIAM_TELL = {
-  title: 'William Tell Overture: finale, bars 243-299',
+  title: 'William Tell Overture: finale, bars 226-299',
   tempo: 152,
   events: [
+    ...toEvents(FANFARE_BARS, FANFARE, 'ff'),
     ...toEvents(QUIET_BARS, QUIET, 'pp'),
     ...toEvents(LOUD_BARS, LOUD, 'ff'),
     ...toEvents(SECOND_BARS, QUIET, 'p').map(swelling),

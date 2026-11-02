@@ -70,6 +70,7 @@ import { createBeater, createTriangle } from './scene-assets/triangle.scene-asse
 import { createTropicalBeachSet } from './scene-assets/tropical-beach.scene-asset.js';
 import { createUnderwaterSet } from './scene-assets/underwater.scene-asset.js';
 import { createUpsideDownRoomSet } from './scene-assets/upside-down-room.scene-asset.js';
+import { createPiano } from './scene-assets/piano.scene-asset.js';
 import { createBow, createCello, createViolin } from './scene-assets/violin.scene-asset.js';
 import { createVolcanoRimSet } from './scene-assets/volcano-rim.scene-asset.js';
 import { createWaterfallPoolSet } from './scene-assets/waterfall-pool.scene-asset.js';
@@ -161,4 +162,5 @@ export default defineAssets({
   cymbal: createCymbal(),
   triangle: createTriangle(),
   'triangle-beater': createBeater(),
+  piano: createPiano(),
 });

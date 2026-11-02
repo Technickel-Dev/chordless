@@ -1,13 +1,14 @@
 # Chordless
 
 Air instruments for Meta Quest, played with your bare hands: a guitar, a
-violin, a cello, a pair of orchestral cymbals and a triangle. On the guitar your left fingers fret real strings at real fret
+violin, a cello, a pair of orchestral cymbals, a triangle and a piano. On the guitar your left fingers fret real strings at real fret
 positions on a full-size steel-string guitar, and your right index fingertip
 plucks: sweep across the strings to strum, flick one string to pick a single
 note. On the violin and cello your left fingers stop the strings anywhere on
 a fretless fingerboard and your right hand draws a bow. The cymbals are one
 in each hand: clash them together. The triangle hangs from your left hand
-and the beater is in your right. The sound is synthesized in the
+and the beater is in your right. The piano stands in front of you and
+you play its keys with all ten fingertips. The sound is synthesized in the
 browser, so there are no audio files.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
@@ -72,7 +73,7 @@ a second: the sound hole moves to your right pinch and the neck points toward
 your left. The placement is remembered.
 
 **Panel.** Point a hand at the panel and pinch to press **Guitar**,
-**Violin**, **Cello**, **Cymbals** or **Triangle** (which instrument to play),
+**Violin**, **Cello**, **Cymbals**, **Triangle** or **Piano** (which instrument to play),
 **Prev scene** / **Next scene** (where you play: the theatre stage first, then
 the other scenes in `src/scene-list.ts`), **Clean** or **Overdrive**, **Vol −** /
 **Vol +**, or **Reset position** (back to the default position).
@@ -144,6 +145,22 @@ triangle, so a roll (the beater moved quickly side to side inside a
 corner, touching both sides) builds and sustains. To stop it, touch the bar
 with the free fingers of your holding hand, or rest the beater on it. The
 bar glows while it rings.
+
+### The piano
+
+A 61-key console piano, C2 to C7, at real piano scale (164.5 mm to the
+octave), set down in front of you when you choose it: the keys at about
+elbow height, their front edge 30 cm ahead of your eyes, square to the way
+you face. **Reset position** sets it down again in front of you. Play with
+any fingertip, thumbs included: a key goes down as far as you push it, and
+sounds when it is two thirds of the way down, as loud as your finger was
+moving (a gentle press is *pp*, a fast strike *ff*). It stops when you let
+it up, except the top octave and a half, which has no dampers, as on a real
+piano. Black keys play at the back of the keyboard, where they stand
+between the whites. A finger keeps the key it came down on while it rocks
+or slides a little, and a hand that slips in under the tops of the keys
+from the front or side plays nothing. Sounding keys glow, and the HUD above
+the music rest names the chord (three or more keys) or the notes held.
 
 ## How it works
 
@@ -265,6 +282,38 @@ Feel can be tuned in a few constants: how close a finger must be to press
 (`pluck-detector.ts`), and where the guitar hangs and how far it tilts toward
 you (`DEFAULT_PLACEMENT` and `FACE_TILT` in `air-guitar-system.ts`).
 
+The piano (`src/piano/`):
+
+- `geometry.ts` lays out the keyboard: the white keys on a regular pitch,
+  the black keys spread evenly within their groups of two and three as on a
+  real piano, each white key's outline cut back round its black neighbours,
+  and `keyAt`, which finds the key under a point (black keys first).
+- `keys.ts` turns fingertips into key presses (`Keyboard`): a tip takes
+  hold of the key it comes down onto from above, the key goes down as far
+  as the tip's pad pushes it, a note sounds at 6.5 mm of the 10 mm dip and
+  stops when the key is back above 3 mm. A strike's velocity is the tip's
+  downward speed just before it, smoothed and peak-held over about 50 ms so
+  a two-frame strike still counts fully.
+- `synth.ts` renders every third key at a soft and a hard blow, off the
+  main thread, the first time the piano is chosen, from the middle of the
+  keyboard outward; keys between play a neighbour a semitone up or down,
+  and keys not yet rendered borrow the nearest one that is. A rendered note
+  is up to 40 partials, stretched sharp as a stiff string's are, each made
+  of unison strings slightly out of tune with one another that beat and
+  decay fast then slow (a piano's two-stage decay), shaped by where the
+  hammer strikes and by its felt, which brightens with a harder blow, plus
+  the hammer's knock. Playback crossfades the two blows by velocity, pans
+  bass to treble, colours it with a soundboard and room, and drops a damper
+  on release.
+- `air-piano-system.ts` places the piano, reads the ten fingertips into
+  piano space, plays and stops notes, turns each key about its pivot,
+  lights the sounding keys and draws the HUD.
+- `src/scene-assets/piano.scene-asset.ts` builds the piano: ivory and ebony
+  keys, each its own lever, a black lacquer case with cheek blocks, a
+  fallboard over the red key felt, a lid and music rest, side panels and a
+  three-pedal box (`piano` in the asset manifest). `fitPianoStand`
+  stretches the side panels to the floor for the height the keys are set at.
+
 ## Tests
 
 ```sh
@@ -289,11 +338,13 @@ npm run test:violin
 npm run test:cello
 npm run test:cymbals
 npm run test:triangle
+npm run test:piano
 npm run play:william-tell
 npm run play:violin
 npm run play:cello
 npm run play:cymbals
 npm run play:triangle
+npm run play:piano
 ```
 
 - `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
@@ -367,19 +418,10 @@ npm run play:triangle
   stopped against the chest. `npm run check:cymbals` checks it offline at
   four frame rates, and `npm run render:cymbals` renders clashes at *pp*,
   *mf* and *ff*, a flat one and the whole part to WAV.
-- `tests/triangle.e2e.mjs` (`npm run test:triangle`) chooses the triangle on
-  the panel, pinches the clip and closes the other hand round the beater,
-  and drives the beater along scripted paths: a hard and a soft strike, a
-  roll in the top corner, the beater rested on the bar, and the holding
-  hand's free fingers laid on it.
-- `tests/triangle-william-tell.mjs` (`npm run play:triangle`) plays a
-  triangle part for the theme (see Credits) from
-  `tests/triangle-performer.js`: strikes into the face of the right side at
-  the speed each dynamic needs, the gallop rhythm in sixteenths, and a roll
-  in the top corner stopped by leaving the beater on the bar. `npm run
-  check:triangle` checks it offline at four frame rates, and `npm run
-  render:triangle` renders strikes at *p*, *mf* and *f*, at a corner and
-  mid-side, a roll and the whole part to WAV.
+src/triangle/          the air triangle
+src/piano/             the air piano
+src/scene-assets/      the theatre's and the other scenes' models, the violin, cello and bows, the cymbal, the triangle and beater, and the piano
+src/scene-list.ts      the scenes Prev/Next cycles through; the first, the stage, opens by default
 
 Both bring the browser window to the front; a window behind others renders at
 about 1 fps. Each script must finish within IWSDK's 110-second limit.
@@ -396,6 +438,8 @@ src/cymbals/           the air cymbals
 src/triangle/          the air triangle
 src/scene-assets/      the theatre's and the other scenes' models, the violin, cello and bows, the cymbal, and the triangle and beater
 src/scene-list.ts      the scenes Prev/Next cycles through; the first, the stage, opens by default
+src/piano/             the air piano
+src/scene-assets/      the room's models, the violin, cello and bows, the cymbal and the piano
 src/panel.ts           the panel's buttons
 src/assets.ts          asset catalog for the scene
 src/components.ts      component catalog
@@ -407,6 +451,7 @@ tests/violin.e2e.mjs, tests/cello.e2e.mjs, tests/bowed-e2e.js   end-to-end tests
 tests/{violin,cello}-william-tell.mjs, -performer.js, -check.mjs, tests/bowed-*.js   bowed song playback and its checks
 tests/cymbals.e2e.mjs, tests/cymbals-william-tell.mjs, -performer.js, -check.mjs   cymbal test, playback and its check
 tests/triangle.e2e.mjs, tests/triangle-william-tell.mjs, -performer.js, -check.mjs   triangle test, playback and its check
+tests/piano.e2e.mjs    piano end-to-end test
 tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
 tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
 ```

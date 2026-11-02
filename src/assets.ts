@@ -72,6 +72,7 @@ import { createUnderwaterSet } from './scene-assets/underwater.scene-asset.js';
 import { createUpsideDownRoomSet } from './scene-assets/upside-down-room.scene-asset.js';
 import { createPiano } from './scene-assets/piano.scene-asset.js';
 import { createDrumKit, createDrumstick } from './scene-assets/drum-kit.scene-asset.js';
+import { createTrumpet } from './scene-assets/trumpet.scene-asset.js';
 import { createBow, createCello, createViolin } from './scene-assets/violin.scene-asset.js';
 import { createVolcanoRimSet } from './scene-assets/volcano-rim.scene-asset.js';
 import { createWaterfallPoolSet } from './scene-assets/waterfall-pool.scene-asset.js';
@@ -166,4 +167,5 @@ export default defineAssets({
   piano: createPiano(),
   'drum-kit': createDrumKit(),
   drumstick: createDrumstick(),
+  trumpet: createTrumpet(),
 });

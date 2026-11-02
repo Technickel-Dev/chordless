@@ -28,11 +28,13 @@
     "play:triangle": "iwsdk browser run tests/triangle-william-tell.mjs --timeout 110000",
     "play:piano": "iwsdk browser run tests/piano-william-tell.mjs --timeout 110000",
     "play:drums": "iwsdk browser run tests/drums-william-tell.mjs --timeout 110000",
+    "play:trumpet": "iwsdk browser run tests/trumpet-william-tell.mjs --timeout 110000",
     "render:audio": "iwsdk browser run tests/render-audio.mjs --timeout 110000",
     "render:violin": "iwsdk browser run tests/render-violin.mjs --timeout 110000",
     "render:cello": "iwsdk browser run tests/render-cello.mjs --timeout 110000",
     "render:cymbals": "iwsdk browser run tests/render-cymbals.mjs --timeout 110000",
     "render:triangle": "iwsdk browser run tests/render-triangle.mjs --timeout 110000",
+    "render:trumpet": "iwsdk browser run tests/render-trumpet.mjs --timeout 110000",
     "check:hands": "iwsdk browser run tests/hand-check.mjs --timeout 110000",
     "check:timing": "iwsdk browser run tests/timing-check.mjs --timeout 110000",
     "check:violin": "iwsdk browser run tests/violin-check.mjs --timeout 110000",
@@ -40,7 +42,9 @@
     "check:cymbals": "iwsdk browser run tests/cymbals-check.mjs --timeout 110000",
     "check:triangle": "iwsdk browser run tests/triangle-check.mjs --timeout 110000",
     "check:piano": "iwsdk browser run tests/piano-check.mjs --timeout 110000",
-    "check:drums": "iwsdk browser run tests/drums-check.mjs --timeout 110000"
+    "check:drums": "iwsdk browser run tests/drums-check.mjs --timeout 110000",
+    "check:trumpet": "iwsdk browser run tests/trumpet-check.mjs --timeout 110000",
+    "watch:trumpet": "iwsdk browser run tests/trumpet-watch.mjs --timeout 110000"
   },
   "dependencies": {
     "@iwsdk/core": "1.1.0-rc.2",

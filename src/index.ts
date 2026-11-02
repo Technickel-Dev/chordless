@@ -15,6 +15,7 @@ import { AirCymbalsSystem } from './cymbals/air-cymbals-system.js';
 import { AirTriangleSystem } from './triangle/air-triangle-system.js';
 import { AirPianoSystem } from './piano/air-piano-system.js';
 import { AirDrumsSystem } from './drums/air-drums-system.js';
+import { AirTrumpetSystem } from './trumpet/air-trumpet-system.js';
 
 World.create(
   document.getElementById('scene-container') as HTMLDivElement,
@@ -27,5 +28,6 @@ World.create(
   world.registerSystem(AirTriangleSystem);
   world.registerSystem(AirPianoSystem);
   world.registerSystem(AirDrumsSystem);
+  world.registerSystem(AirTrumpetSystem);
   world.registerSystem(PanelSystem);
 });

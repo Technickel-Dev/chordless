@@ -298,6 +298,7 @@ npm run play:william-tell
 npm run play:violin
 npm run play:cello
 npm run play:cymbals
+npm run play:piano
 ```
 
 - `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
@@ -379,6 +380,13 @@ npm run play:cymbals
   the rest stop, a hand sliding in under the key tops is silent, **Reset
   position** turns the piano to face the player, and the other instruments'
   buttons put it away. It also renders middle C at both blows to WAV.
+- `tests/piano-william-tell.mjs` (`npm run play:piano`) plays the galop
+  finale on the piano from `tests/piano-performer.js`: the theme in the right
+  hand (quiet, then tutti an octave up) over the left hand's *oom-pah* bass,
+  288 strikes at *p*, *f* and *ff*, ending on E2 and E6. It prints how many
+  keys sounded on time and as loud as asked and renders what the piano
+  played to `test-results/piano-william-tell.wav`. `npm run check:piano`
+  runs the same part offline through the key detection at four frame rates.
 
 Both bring the browser window to the front; a window behind others renders at
 about 1 fps. Each script must finish within IWSDK's 110-second limit.

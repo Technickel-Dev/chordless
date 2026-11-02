@@ -182,7 +182,7 @@ interface Voice {
  * soundboard colour into a room.
  */
 export class PianoSynth {
-  readonly ctx: AudioContext;
+  readonly ctx: BaseAudioContext;
   private rendering: Promise<void> | null = null;
   /** Rendered recordings by root, then by layer; null until rendered. */
   private readonly buffers: (AudioBuffer[] | null)[] = ROOTS.map(() => null);
@@ -190,7 +190,11 @@ export class PianoSynth {
   private readonly dry: GainNode;
   private count = 0;
 
-  constructor(context?: AudioContext) {
+  /**
+   * Plays through a live AudioContext by default; pass an
+   * OfflineAudioContext to render to a buffer instead (for listening tests).
+   */
+  constructor(context?: BaseAudioContext) {
     this.ctx = context ?? new AudioContext({ latencyHint: 'interactive' });
     const ctx = this.ctx;
     this.dry = ctx.createGain();
@@ -324,7 +328,7 @@ export class PianoSynth {
 
   /** Browsers start audio suspended until a user gesture; call from one. */
   resume(): void {
-    if (this.ctx.state !== 'running') void this.ctx.resume();
+    if (this.ctx instanceof AudioContext && this.ctx.state !== 'running') void this.ctx.resume();
   }
 
   stopAll(): void {
@@ -338,7 +342,7 @@ export class PianoSynth {
   }
 
   dispose(): void {
-    void this.ctx.close();
+    if (this.ctx instanceof AudioContext) void this.ctx.close();
   }
 
   private stealOldest(at: number): void {

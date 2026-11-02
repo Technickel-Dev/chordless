@@ -18,7 +18,10 @@
  * version (WILLIAM_TELL_CELLO) plays the guitar arrangement an octave lower
  * and closes with the same double stop two octaves below the violin's. The
  * cymbal part (WILLIAM_TELL_CYMBALS) is not transcribed: it is arranged
- * here, a crash on each downbeat of the loud section.
+ * here, a crash on each downbeat of the loud section. The piano part
+ * (WILLIAM_TELL_PIANO) is arranged here too: the melody in the right hand
+ * (the quiet theme an octave up, the tutti at the violins' pitch) over a
+ * galop bass in the left, from chords chosen for the arrangement.
  *
  * Gioachino Rossini (1792-1868) composed the overture in 1829; the music
  * itself is in the public domain.
@@ -176,4 +179,63 @@ export const WILLIAM_TELL_CYMBALS = {
   title: 'William Tell Overture: finale, bars 260-276 (cymbals)',
   tempo: 152,
   events: CYMBAL_BARS.map(([bar, dynamic, extra]) => ({ beat: (bar - 244) * 2, dynamic, ...extra })),
+};
+
+/**
+ * The left hand's chords, as [bass, other bass, chord tone]: the bass falls
+ * on each beat (root, then the other bass note), the chord tone on each
+ * off-beat, the way a galop is accompanied.
+ */
+const LEFT_CHORDS = {
+  E: ['E2', 'B2', 'G#3'],
+  'C#m': ['C#2', 'G#2', 'E3'],
+  B: ['B2', 'F#2', 'D#3'],
+  B7: ['B2', 'F#2', 'A3'],
+  'F#7': ['F#2', 'C#3', 'A#3'],
+};
+/** A bar of the left hand: one chord for both beats, or [first beat, second beat]. */
+const oomPah = (chord) => {
+  if (Array.isArray(chord)) {
+    const [a, b] = chord.map((c) => LEFT_CHORDS[c]);
+    return [[0, a[0]], [0.5, a[2]], [1, b[0]], [1.5, b[2]]];
+  }
+  const [root, other, tone] = LEFT_CHORDS[chord];
+  return [[0, root], [0.5, tone], [1, other], [1.5, tone]];
+};
+/** The harmony of the quiet theme's eight bars, and of the tutti's phrases. */
+const QUIET_CHORDS = ['E', 'E', 'E', 'B', 'E', 'E', 'B7', 'E'];
+const FALL_CHORDS = ['E', 'C#m', ['C#m', 'B7'], 'E'];
+const RISE_CHORDS = ['E', 'C#m', ['C#m', 'F#7'], 'B'];
+const chordBars = (firstBar, chords) => Object.fromEntries(chords.map((c, i) => [firstBar + i, oomPah(c)]));
+const LEFT_BARS = {
+  ...chordBars(244, QUIET_CHORDS),
+  ...chordBars(252, QUIET_CHORDS),
+  ...chordBars(260, FALL_CHORDS),
+  ...chordBars(264, RISE_CHORDS),
+  ...chordBars(268, FALL_CHORDS),
+  ...chordBars(272, ['E', 'C#m', ['C#m', 'F#7'], 'B']),
+};
+
+const handEvents = (bars, hand, dynamic, transpose = (n) => n) =>
+  Object.entries(bars).flatMap(([bar, notes]) =>
+    notes.map(([beat, note]) => ({ beat: (Number(bar) - 244) * 2 + beat, note: transpose(note), hand, dynamic })),
+  );
+
+/**
+ * The piano part: the right hand has the melody, the quiet theme an octave
+ * above the violins (B4-B5, clear of the left hand) and the tutti where the
+ * violins have it (C#5-C#6); the left hand the galop bass, quiet then
+ * forte. It closes on E2 and E6 held together. Each event is one key for
+ * one hand, by note name; `beats` is how long the last notes are held.
+ */
+export const WILLIAM_TELL_PIANO = {
+  title: 'William Tell Overture: finale, bars 243-276 (piano)',
+  tempo: 152,
+  events: [
+    ...handEvents(QUIET_BARS, 'right', 'p', octaveUp),
+    ...handEvents(LOUD_BARS, 'right', 'ff', octaveUp),
+    ...handEvents(LEFT_BARS, 'left', 'p').map((e) => (e.beat >= (260 - 244) * 2 ? { ...e, dynamic: 'f' } : e)),
+    { beat: (276 - 244) * 2, note: 'E2', hand: 'left', dynamic: 'ff', beats: 3 },
+    { beat: (276 - 244) * 2, note: 'E6', hand: 'right', dynamic: 'ff', beats: 3 },
+  ].sort((a, b) => a.beat - b.beat || a.hand.localeCompare(b.hand)),
 };

@@ -9,7 +9,7 @@ import { runBowedCheck } from './bowed-check.js';
 
 export default (ctx) =>
   runBowedCheck(ctx, {
-    song: ['/tests/songs/william-tell.js', 'WILLIAM_TELL_VIOLIN'],
+    song: ['/tests/songs/william-tell.js', process.env.WT_SONG || 'WILLIAM_TELL_VIOLIN'],
     performer: '/tests/violin-performer.js',
     geometry: ['/src/violin/geometry.ts', 'VIOLIN_GEOMETRY'],
     bow: ['/src/violin/bow.ts', 'BOW'],

@@ -387,6 +387,7 @@ npm run test:drums
 npm run play:william-tell
 npm run play:william-tell-cut
 npm run play:violin
+npm run play:violin-cut
 npm run play:cello
 npm run play:cymbals
 npm run play:triangle

@@ -4,6 +4,7 @@
  *
  *   npx iwsdk dev up --headed --allow-browser-automation
  *   npm run play:violin
+ *   npm run play:violin-cut     (bars 316-390 cut: WT_SONG=WILLIAM_TELL_VIOLIN_CUT)
  */
 
 import { runBowedPlay } from './bowed-play.js';
@@ -12,7 +13,7 @@ export default (ctx) =>
   runBowedPlay(ctx, {
     instrument: 'violin',
     root: 'AirViolin',
-    song: ['/tests/songs/william-tell.js', 'WILLIAM_TELL_VIOLIN'],
+    song: ['/tests/songs/william-tell.js', process.env.WT_SONG || 'WILLIAM_TELL_VIOLIN'],
     performer: '/tests/violin-performer.js',
     // Looking down along the violin's neck, as a violinist does.
     view: { pitch: -32, yaw: 28, roll: 0 },

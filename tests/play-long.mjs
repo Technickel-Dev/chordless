@@ -6,7 +6,9 @@
  * WT_PHASE=wait, which picks the same performance up, until a run reports
  * the result instead of { pending: true }. Prints that result.
  *
- *   node tests/play-long.mjs tests/william-tell.mjs
+ *   node tests/play-long.mjs tests/william-tell.mjs [song export]
+ *
+ * A song export (for example WILLIAM_TELL_CUT) is passed on as WT_SONG.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -19,7 +21,7 @@ if (!script) {
 
 const run = (phase) => {
   const r = spawnSync(`iwsdk browser run "${script}" --timeout 110000`, {
-    env: { ...process.env, WT_PHASE: phase },
+    env: { ...process.env, WT_PHASE: phase, ...(process.argv[3] && { WT_SONG: process.argv[3] }) },
     encoding: 'utf8',
     shell: true,
     maxBuffer: 64 * 1024 * 1024,

@@ -5,7 +5,8 @@
  *   npx iwsdk dev up --headed --allow-browser-automation
  *   npm run play:william-tell
  *
- * Optional: WT_TEMPO=110 to slow it down. Prints each note asked for and
+ * Optional: WT_TEMPO=110 to slow it down; WT_SONG=WILLIAM_TELL_CUT for the
+ * concert cut (npm run play:william-tell-cut). Prints each note asked for and
  * the note the app played, plus how far off the beat it landed.
  */
 
@@ -13,6 +14,7 @@ import { startApp } from './app-start.js';
 
 export default async function run({ page, frame }) {
   const tempo = Number(process.env.WT_TEMPO) || undefined;
+  const song = process.env.WT_SONG || 'WILLIAM_TELL';
   // The whole finale lasts longer than one browser run may (110 s): a run
   // with WT_PHASE=wait picks up the performance an earlier run started
   // (tests/play-long.mjs chains them).
@@ -55,11 +57,11 @@ export default async function run({ page, frame }) {
 
   // Start the performance and leave it playing in the page; finish() waits for it.
   await banner('♪ William Tell: guitar');
-  await frame.evaluate((t) => {
+  await frame.evaluate(([t, song]) => {
     const state = { done: false };
     window.__performance = state;
     (async () => {
-      const { WILLIAM_TELL } = await import('/tests/songs/william-tell.js');
+      const WILLIAM_TELL = (await import('/tests/songs/william-tell.js'))[song];
       const { perform } = await import('/tests/performer.js');
       const el = () => document.getElementById('e2e-banner');
       const notes = WILLIAM_TELL.events.map((e) => (e.chord ? `${e.chord}!` : e.note.replace(/\d/, '')));
@@ -75,7 +77,7 @@ export default async function run({ page, frame }) {
       (result) => Object.assign(state, { done: true, result }),
       (err) => Object.assign(state, { done: true, error: String(err?.stack ?? err) }),
     );
-  }, tempo);
+  }, [tempo, song]);
   return finish(frame, dispatch, audio);
 }
 

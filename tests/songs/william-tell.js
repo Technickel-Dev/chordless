@@ -266,6 +266,29 @@ export const WILLIAM_TELL = {
   ].sort((a, b) => a.beat - b.beat),
 };
 
+/**
+ * Bars a concert cut of the finale leaves out (as the Milwaukee Symphony
+ * Orchestra plays it, about two minutes long): the quiet tune at bar 316
+ * up to bar 390, so the tutti of bar 315 runs straight into bar 391.
+ */
+const CUT = [316, 390];
+const CUT_BEATS = (CUT[1] - CUT[0] + 1) * 2;
+const cutLine = finaleLine
+  .filter((n) => n.bar < CUT[0] || n.bar > CUT[1])
+  .map((n) => (n.bar > CUT[1] ? { ...n, beat: n.beat - CUT_BEATS } : n));
+const cutFingers = fingerGuitar(cutLine, 60 / 152);
+
+/** The guitar's finale with bars 316-390 cut (WILLIAM_TELL plays them all). */
+export const WILLIAM_TELL_CUT = {
+  title: 'William Tell Overture: finale, bars 226-453, cut 316-390',
+  tempo: 152,
+  events: [
+    ...WILLIAM_TELL.events.filter((e) => e.beat < (300 - 244) * 2),
+    ...cutLine.map((n, i) => ({ beat: n.beat, note: nameOf(n.midi), string: cutFingers[i].s, fret: cutFingers[i].f, dynamic: n.dynamic })),
+    { beat: (452 - 244) * 2 + 1 - CUT_BEATS, chord: 'E', dynamic: 'ff' },
+  ],
+};
+
 /** A note name such as 'C#5' an octave higher. */
 const octaveUp = (note) => note.replace(/\d$/, (d) => String(Number(d) + 1));
 

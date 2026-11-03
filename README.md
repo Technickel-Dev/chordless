@@ -385,6 +385,7 @@ npm run test:triangle
 npm run test:piano
 npm run test:drums
 npm run play:william-tell
+npm run play:william-tell-cut
 npm run play:violin
 npm run play:cello
 npm run play:cymbals
@@ -405,7 +406,8 @@ npm run play:drums
   direction is one stroke.
 - `tests/william-tell.mjs` performs the galop theme of the *William Tell*
   Overture finale, all of it (bars 226–453, from the fanfare that opens it,
-  about three minutes), the way a guitarist would, and reports each
+  about three minutes; `play:william-tell-cut` leaves out bars 316–390, as
+  concert cuts of the finale do, for about two minutes), the way a guitarist would, and reports each
   note asked for, the finger and hand position used, the note the app played
   and when it registered. `tests/performer.js` plans the fingering (hand
   positions with lookahead, one finger per fret, fingers kept down until they

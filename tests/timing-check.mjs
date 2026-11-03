@@ -11,12 +11,14 @@
  * The whole finale takes longer to check than one browser run may last, so
  * TIMING_PATTERNS can name the frame patterns to check, comma-separated
  * (for example TIMING_PATTERNS="90 Hz,72 Hz"); by default, all of them.
+ * WT_SONG=WILLIAM_TELL_CUT checks the concert cut instead.
  */
 
 export default async function run({ frame }) {
   const only = process.env.TIMING_PATTERNS?.split(',').map((s) => s.trim()) ?? null;
-  return frame.evaluate(async (only) => {
-    const { WILLIAM_TELL } = await import('/tests/songs/william-tell.js');
+  const song = process.env.WT_SONG || 'WILLIAM_TELL';
+  return frame.evaluate(async ([only, song]) => {
+    const WILLIAM_TELL = (await import('/tests/songs/william-tell.js'))[song];
     const { planPerformance, handsFor } = await import('/tests/performer.js');
     const { FretReader, PRESS } = await import('/src/guitar/fretting.ts');
     const { PluckDetector } = await import('/src/guitar/pluck-detector.ts');
@@ -121,5 +123,5 @@ export default async function run({ frame }) {
       };
     }
     return results;
-  }, only);
+  }, [only, song]);
 }

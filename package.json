@@ -22,6 +22,7 @@
     "test:drums": "iwsdk browser run tests/drums.e2e.mjs --timeout 110000",
     "test:unit": "vitest run",
     "play:william-tell": "node tests/play-long.mjs tests/william-tell.mjs",
+    "play:william-tell-cut": "node tests/play-long.mjs tests/william-tell.mjs WILLIAM_TELL_CUT",
     "play:violin": "node tests/play-long.mjs tests/violin-william-tell.mjs",
     "play:cello": "node tests/play-long.mjs tests/cello-william-tell.mjs",
     "play:cymbals": "iwsdk browser run tests/cymbals-william-tell.mjs --timeout 110000",

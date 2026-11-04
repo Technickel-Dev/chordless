@@ -146,7 +146,7 @@ export function fingerChain(hand, finger, c, right) {
  * down onto the button at PAD_SLOPE, and the first two bones arch up and
  * over from the knuckle, beside and below the button, to meet it.
  */
-function padFinger(hand, finger, target) {
+export function padFinger(hand, finger, target) {
   const k = hand.knuckles[finger];
   const L = BONES[finger];
   const to = sub(target, k);
@@ -183,7 +183,7 @@ function padFinger(hand, finger, target) {
  * its other two joints, as a raised little finger does. It bends only the
  * way fingers bend, in its own plane turned out from the hand's.
  */
-function raisedPinky(hand) {
+export function raisedPinky(hand) {
   const SPLAY = 0.35;
   const LIFT = -0.45;
   const k = hand.knuckles.pinky;

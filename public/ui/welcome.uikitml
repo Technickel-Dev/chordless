@@ -4,7 +4,7 @@
   styles apply because iwsdk.config.json prefers the dark color scheme.
   PanelSystem wires the instrument, tone, volume and reset ids below to the
   AirGuitar, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums,
-  AirTrumpet and AirTrombone components, and scene-prev / scene-next to the level list in
+  AirTrumpet, AirTrombone and AirHorn components, and scene-prev / scene-next to the level list in
   src/scene-list.ts.
 -->
 <style>
@@ -110,6 +110,7 @@
     <div class="body">Drums: a stick in each fist. Bring the tips down on the heads and cymbals; hit the snare's rim for a rimshot, the hi-hat's edge to open it, the ride's bell for its ping. The round pad by your right knee is the kick.</div>
     <div class="body">Trumpet: right fingers press the valves; hold it out to your lips and tilt the bell up for higher notes. Pinch your left hand to blow; cup it over the bell to mute.</div>
     <div class="body">Trombone: hold it to your lips in your left hand and tilt it up for higher notes; pinch that hand to blow. Right fingertips on the slide brace move the slide.</div>
+    <div class="body">French horn: hold it to your lips in your left hand, its fingers on the valve levers, and tilt it up for higher notes. Your right hand goes in the bell: pinch it to blow, deeper in for a darker tone.</div>
   </div>
   <div class="row">
     <Button id="instrument-guitar" variant="primary">
@@ -138,6 +139,9 @@
     </Button>
     <Button id="instrument-trombone" variant="secondary">
       <ButtonLabel>Trombone</ButtonLabel>
+    </Button>
+    <Button id="instrument-horn" variant="secondary">
+      <ButtonLabel>Horn</ButtonLabel>
     </Button>
   </div>
   <div class="row">

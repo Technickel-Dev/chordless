@@ -84,7 +84,8 @@ export default async function run({ page, frame, workspaceRoot }) {
   await wait(16000);
   const shot = path.join(outDir, 'trombone-william-tell.png');
   await screenshotApp({ page, frame }, { path: shot }).catch(() => {});
-  return finish(frame, dispatch, workspaceRoot, 80000);
+  // What is left of this run, with room for a slow start; a wait run picks up the rest.
+  return finish(frame, dispatch, workspaceRoot, 60000);
 }
 
 /**

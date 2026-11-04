@@ -16,6 +16,10 @@ It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
 SDK. WebXR is the browser standard for VR and AR, so the app runs in the Quest
 browser with no install.
 
+Play it at <https://technickel-dev.github.io/chordless/>: open that address in
+the Quest browser and press Enter XR. Every push to `main` redeploys it through
+[the Pages workflow](.github/workflows/deploy-pages.yml).
+
 ## Run it
 
 Requires Node.js 20.19+ (or 22.12+, or 24+).

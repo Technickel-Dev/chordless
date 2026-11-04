@@ -1,5 +1,5 @@
 import { createSystem, Entity, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
-import { ACCENT } from '../guitar/guitar-model.js';
+import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { TrackedHand } from '../guitar/hands.js';
 import { AIR_STOP } from '../trumpet/playing.js';
 import { AirHorn } from './air-horn-component.js';
@@ -8,6 +8,16 @@ import { createHornPose, holdFrenchHorn, LIPS, toHorn } from './hold.js';
 import { Breath, fingeringName, handCover, noteName, PARTIALS, PartialSelector, soundingNote, ValveReader, WRITTEN_ABOVE } from './playing.js';
 import { HornSynth } from './synth.js';
 import { createHornModel, type HornModel } from './horn-model.js';
+
+/** The sign's pictograms for each step from picking it up to playing. */
+const SHOW_LEFT_HAND: readonly HudStep[] = [{ icon: 'hand', caption: 'LEFT HAND' }];
+const HOW_TO_HOLD: readonly HudStep[] = [
+  { icon: 'smile', caption: 'TO LIPS' },
+  { icon: 'pointer', caption: 'LEVERS LEFT' },
+];
+const HAND_IN_BELL: readonly HudStep[] = [{ icon: 'hand', caption: 'RIGHT IN BELL' }];
+const BLOW: readonly HudStep[] = [{ icon: 'wind', caption: 'PINCH RIGHT' }];
+const TILT: readonly HudStep[] = [{ icon: 'arrowUp', caption: 'TILT = PITCH', faint: true }];
 
 /** The HUD floats this far in front of, below and left of the head (m): clear of the bell on the right. */
 const HUD_FORWARD = 0.6;
@@ -232,22 +242,21 @@ export class AirHornSystem extends createSystem({
     hud.sprite.position.y -= HUD_BELOW;
     const [left, right] = this.hands;
     if (!left.tracked) {
-      hud.draw(['Show your left hand', 'The horn goes in it'], ACCENT.idle);
+      hud.draw({ steps: SHOW_LEFT_HAND }, ACCENT.idle);
       return;
     }
     if (!this.pose.atLips) {
-      hud.draw(['French horn', 'Hold it out to your lips', 'Left fingers on the levers'], ACCENT.idle);
+      hud.draw({ steps: HOW_TO_HOLD }, ACCENT.idle);
       return;
     }
     if (!right.tracked) {
-      hud.draw([this.writtenName, `Valves ${this.fingering}`, 'Show your right hand: pinch it to blow'], ACCENT.placing);
+      hud.draw({ headline: this.writtenName, valves: this.fingering, steps: HAND_IN_BELL }, ACCENT.placing);
       return;
     }
-    const partial = PARTIALS[this.partials.index].partial;
     if (this.breath.blowing) {
-      hud.draw([this.writtenName, `Valves ${this.fingering} · partial ${partial}`, 'Tilt it to change partial'], ACCENT.playing);
+      hud.draw({ headline: this.writtenName, valves: this.fingering, steps: TILT }, ACCENT.playing);
       return;
     }
-    hud.draw([this.writtenName, `Valves ${this.fingering} · partial ${partial}`, 'Pinch your right hand to blow'], ACCENT.placing);
+    hud.draw({ headline: this.writtenName, valves: this.fingering, steps: BLOW }, ACCENT.placing);
   }
 }

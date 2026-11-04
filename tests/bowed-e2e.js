@@ -203,6 +203,12 @@ export async function runBowedE2E({ page, frame, workspaceRoot }, I) {
 
   /** Points the right hand's ray at a panel button and pinches. */
   const aimAndPinch = async (id) => {
+    // The menu folds away once an instrument is chosen; open it to reach a control in it.
+    const folded = await frame.evaluate((n) => {
+      // UIKit hides an element (or its section) through isVisible, not Object3D.visible.
+      return window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(n)?.isVisible?.value === false;
+    }, id);
+    if (folded && id !== 'menu-open') await aimAndPinch('menu-open');
     await frame.evaluate(() => window.IWER_DEVICE.hands.right.setPin(null));
     const target = await frame.evaluate((n) => {
       const o = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(n);

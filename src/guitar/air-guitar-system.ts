@@ -18,10 +18,18 @@ import {
   stringSpan,
   stringY,
 } from './geometry.js';
-import { ACCENT, createGuitarModel, GuitarModel, placeString } from './guitar-model.js';
+import { ACCENT, createGuitarModel, GuitarModel, type HudStep, placeString } from './guitar-model.js';
 import { JOINT, TrackedHand } from './hands.js';
 import { PLUCK_ZONE, PluckDetector } from './pluck-detector.js';
 import { decaySeconds, GuitarSynth, midiToHz } from './synth.js';
+
+/** The sign's pictograms: until the first pluck, how to play; while moving it, the pinch to keep. */
+const SHOW_HANDS: readonly HudStep[] = [{ icon: 'hand', caption: 'SHOW HANDS' }];
+const HOW_TO_PLAY: readonly HudStep[] = [
+  { icon: 'hand', caption: 'FRET LEFT' },
+  { icon: 'arrowDown', caption: 'STRUM RIGHT' },
+];
+const KEEP_PINCHING: readonly HudStep[] = [{ icon: 'grab', caption: 'KEEP PINCHING' }];
 
 const UP = new Vector3(0, 1, 0);
 /**
@@ -502,11 +510,11 @@ export class AirGuitarSystem extends createSystem({
   private updateHud(placing: number, tone: string): void {
     const hud = this.model.hud;
     if (placing >= 0 && placing < 1) {
-      hud.draw(['Placing…', `Keep pinching: ${Math.round(placing * 100)}%`], ACCENT.placing);
+      hud.draw({ headline: `${Math.round(placing * 100)}%`, steps: KEEP_PINCHING }, ACCENT.placing);
       return;
     }
     if (!this.left.tracked && !this.right.tracked) {
-      hud.draw(['Show your hands', 'Put the controllers down to play'], ACCENT.idle);
+      hud.draw({ steps: SHOW_HANDS }, ACCENT.idle);
       return;
     }
 
@@ -521,13 +529,16 @@ export class AirGuitarSystem extends createSystem({
     if (this.entity.getValue(AirGuitar, 'chord') !== chord) {
       this.entity.setValue(AirGuitar, 'chord', chord);
     }
+    if ((this.entity.getValue(AirGuitar, 'plucks') ?? 0) === 0) {
+      hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
+      return;
+    }
     const volume = Math.round((this.entity.getValue(AirGuitar, 'volume') ?? 0.8) * 100);
     hud.draw(
-      [
-        chord,
-        this.shownFrets,
-        `${tone === GuitarToneMode.Drive ? 'OVERDRIVE' : 'CLEAN'} · ${volume}%`,
-      ],
+      {
+        headline: chord,
+        detail: `${this.shownFrets} · ${tone === GuitarToneMode.Drive ? 'DRIVE' : 'CLEAN'} ${volume}%`,
+      },
       playing ? ACCENT.playing : ACCENT.idle,
     );
   }

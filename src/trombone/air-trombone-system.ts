@@ -1,5 +1,5 @@
 import { createSystem, Entity, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
-import { ACCENT } from '../guitar/guitar-model.js';
+import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { TrackedHand } from '../guitar/hands.js';
 import { AIR_STOP } from '../trumpet/playing.js';
 import { AirTrombone } from './air-trombone-component.js';
@@ -7,6 +7,16 @@ import { createHornPose, holdTrombone, LIPS, toTrombone } from './hold.js';
 import { Breath, noteName, PARTIALS, PartialSelector, pitchOf, positionOf, SlideReader } from './playing.js';
 import { TromboneSynth } from './synth.js';
 import { createTromboneModel, type TromboneModel } from './trombone-model.js';
+
+/** The sign's pictograms for each step from picking it up to playing. */
+const SHOW_LEFT_HAND: readonly HudStep[] = [{ icon: 'hand', caption: 'LEFT HAND' }];
+const HOW_TO_HOLD: readonly HudStep[] = [
+  { icon: 'smile', caption: 'TO LIPS' },
+  { icon: 'moveHorizontal', caption: 'SLIDE RIGHT' },
+];
+const SLIDE: readonly HudStep[] = [{ icon: 'moveHorizontal', caption: 'SLIDE RIGHT' }];
+const BLOW: readonly HudStep[] = [{ icon: 'wind', caption: 'PINCH LEFT' }];
+const TILT: readonly HudStep[] = [{ icon: 'arrowUp', caption: 'TILT = PITCH', faint: true }];
 
 /** The HUD floats this far in front of, below and right of the head (m): clear of the bell on the left. */
 const HUD_FORWARD = 0.6;
@@ -223,24 +233,23 @@ export class AirTromboneSystem extends createSystem({
     hud.sprite.position.y -= HUD_BELOW;
     const [left, right] = this.hands;
     if (!left.tracked) {
-      hud.draw(['Show your left hand', 'The trombone goes in it'], ACCENT.idle);
+      hud.draw({ steps: SHOW_LEFT_HAND }, ACCENT.idle);
       return;
     }
     if (!this.pose.atLips) {
-      hud.draw(['Trombone', 'Hold it out to your lips', 'Right fingertips on the slide brace'], ACCENT.idle);
+      hud.draw({ steps: HOW_TO_HOLD }, ACCENT.idle);
       return;
     }
     const position = this.entity.getValue(AirTrombone, 'position') ?? 1;
-    const partial = PARTIALS[this.partials.index].partial;
-    const where = `Position ${position.toFixed(1)} · partial ${partial}`;
+    const sign = { headline: this.noteName, detail: `POSITION ${position.toFixed(1)}` };
     if (!right.tracked || !this.slide.holding) {
-      hud.draw([this.noteName, where, 'Right fingertips on the slide brace'], ACCENT.placing);
+      hud.draw({ ...sign, steps: SLIDE }, ACCENT.placing);
       return;
     }
     if (this.breath.blowing) {
-      hud.draw([this.noteName, where, 'Tilt it to change partial'], ACCENT.playing);
+      hud.draw({ ...sign, steps: TILT }, ACCENT.playing);
       return;
     }
-    hud.draw([this.noteName, where, 'Pinch your left hand to blow'], ACCENT.placing);
+    hud.draw({ ...sign, steps: BLOW }, ACCENT.placing);
   }
 }

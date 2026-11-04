@@ -388,6 +388,12 @@ export default async function run({ page, frame, workspaceRoot }) {
 
     await test('Panel buttons set overdrive, volume and reset the guitar', async () => {
       const aimAndPinch = async (id) => {
+        // The menu folds away once an instrument is chosen; open it to reach a control in it.
+        const folded = await frame.evaluate((n) => {
+          // UIKit hides an element (or its section) through isVisible, not Object3D.visible.
+          return window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(n)?.isVisible?.value === false;
+        }, id);
+        if (folded && id !== 'menu-open') await aimAndPinch('menu-open');
         const target = await frame.evaluate((n) => {
           const o = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(n);
           if (!o) return null;

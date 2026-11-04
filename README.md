@@ -1,7 +1,7 @@
 # Chordless
 
 Air instruments for Meta Quest, played with your bare hands: a guitar, a
-violin, a cello, a pair of orchestral cymbals, a triangle, a piano, a drum kit and a trombone. On the guitar your left fingers fret real strings at real fret
+violin, a cello, a pair of orchestral cymbals, a triangle, a piano, a drum kit, a trombone and a French horn. On the guitar your left fingers fret real strings at real fret
 positions on a full-size steel-string guitar, and your right index fingertip
 plucks: sweep across the strings to strum, flick one string to pick a single
 note. On the violin and cello your left fingers stop the strings anywhere on
@@ -10,7 +10,8 @@ in each hand: clash them together. The triangle hangs from your left hand
 and the beater is in your right. The piano stands in front of you and
 you play its keys with all ten fingertips. The drum kit stands in front of you
 with a stick in each fist. The trombone is held to your lips in your left
-hand, and your right hand works the slide. The sound is synthesized in the
+hand, and your right hand works the slide. The French horn is in your left
+hand too, its fingers on the valves, with your right hand in the bell. The sound is synthesized in the
 browser, so there are no audio files.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
@@ -194,6 +195,18 @@ semitone lower, and the pitch follows the slide all the way, so it is in
 tune only where you put it, and blowing while you move it glides. Let go
 and the slide stays where it is. Pinch your left thumb and index finger to
 blow: closing the pinch tongues the note, closing it further plays louder.
+
+### The French horn
+
+A single B-flat horn, held in the left hand as hornists hold it: bring the
+hand out to about 27 cm in front of your mouth and the mouthpiece meets your
+lips. The left index, middle and ring fingers rest on the three valves'
+levers; bend a finger to press its lever down. Tilt the horn to choose the
+partial, as on the trumpet and trombone (its open notes are the trombone's,
+Bb2 to Bb4). Your right hand goes in the bell, which opens back beside your
+right hip: pinch it to blow, and the deeper it goes into the bell the darker
+and more covered the tone. The HUD shows the note as horn parts are written,
+in F, a fifth above where it sounds.
 
 ## How it works
 
@@ -411,6 +424,8 @@ npm run play:piano
 npm run play:drums
 npm run play:trombone-cut
 npm run check:trombone
+npm run play:horn-cut
+npm run check:horn
 ```
 
 - `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
@@ -446,7 +461,8 @@ npm run check:trombone
   `tests/play-long.mjs`; so do `npm run play:trumpet`, which plays the
   guitar's line on the trumpet with the fanfare at the trumpets' own pitch,
   `npm run play:trombone` (the trumpet's part an octave lower; `play:trombone-cut`
-  for the two-minute cut) and `npm run play:cello`. `tests/violin-performer.js`
+  for the two-minute cut), `npm run play:horn` (the same notes on the French
+  horn; `play:horn-cut`) and `npm run play:cello`. `tests/violin-performer.js`
   marks up the part as a violinist would: every note's string, hand
   position and finger chosen for the whole piece at once (the quiet theme in
   first position, the tutti mostly in second), fingers that stay down until
@@ -599,7 +615,8 @@ the whole finale too, the fanfare at the trumpets' pitch, the second tune at
 the oboe's and from bar 300 the first violins' part as written, with an
 added closing E major double stop; for trumpet the guitar's line at its
 sounding pitch, the fanfare at the trumpets' own, closing on a held E5; for trombone the
-trumpet's part an octave lower, closing on a held E4; and for cello an
+trumpet's part an octave lower, closing on a held E4, and the French horn the same notes;
+and for cello an
 octave below the guitar arrangement with the same double stop two octaves
 below the violin's. The cymbal part (bars 260–276) and the triangle part
 (bars 252–276) are not from the score: they are arranged here.

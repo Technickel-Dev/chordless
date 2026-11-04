@@ -422,6 +422,16 @@ export const WILLIAM_TELL_TROMBONE_CUT = {
 };
 
 /**
+ * The horn's part: the trombone's notes (E2-Bb4 sounding, written in F a
+ * fifth higher, B2-F5, the middle and low of the horn's range), on a single
+ * B-flat horn.
+ */
+export const WILLIAM_TELL_HORN = { ...WILLIAM_TELL_TROMBONE, title: 'William Tell Overture: finale, bars 226-453 (horn)' };
+
+/** The horn's finale with bars 316-390 cut, as WILLIAM_TELL_CUT has it for the guitar. */
+export const WILLIAM_TELL_HORN_CUT = { ...WILLIAM_TELL_TROMBONE_CUT, title: 'William Tell Overture: finale, bars 226-453, cut 316-390 (horn)' };
+
+/**
  * A triangle part for the same passage, also arranged here (not
  * transcribed): tacet through the first quiet theme, a light ting on each
  * downbeat of the second, then in the tutti the gallop rhythm itself in

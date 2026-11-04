@@ -31,6 +31,8 @@
     "play:piano": "iwsdk browser run tests/piano-william-tell.mjs --timeout 110000",
     "play:drums": "iwsdk browser run tests/drums-william-tell.mjs --timeout 110000",
     "play:trumpet": "node tests/play-long.mjs tests/trumpet-william-tell.mjs",
+    "play:trombone": "node tests/play-long.mjs tests/trombone-william-tell.mjs",
+    "play:trombone-cut": "node tests/play-long.mjs tests/trombone-william-tell.mjs WILLIAM_TELL_TROMBONE_CUT",
     "render:audio": "iwsdk browser run tests/render-audio.mjs --timeout 110000",
     "render:violin": "iwsdk browser run tests/render-violin.mjs --timeout 110000",
     "render:cello": "iwsdk browser run tests/render-cello.mjs --timeout 110000",
@@ -46,6 +48,7 @@
     "check:piano": "iwsdk browser run tests/piano-check.mjs --timeout 110000",
     "check:drums": "iwsdk browser run tests/drums-check.mjs --timeout 110000",
     "check:trumpet": "iwsdk browser run tests/trumpet-check.mjs --timeout 110000",
+    "check:trombone": "iwsdk browser run tests/trombone-check.mjs --timeout 110000",
     "watch:trumpet": "iwsdk browser run tests/trumpet-watch.mjs --timeout 110000"
   },
   "dependencies": {

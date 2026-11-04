@@ -323,13 +323,17 @@ export const WILLIAM_TELL_VIOLIN = {
   ].sort((a, b) => a.beat - b.beat),
 };
 
+/** A part's events with bars 316-390 cut (see CUT), the later ones moved up to bar 316. */
+const cutFinale = (events) =>
+  events
+    .filter((e) => e.beat < (CUT[0] - 244) * 2 || e.beat >= (CUT[1] + 1 - 244) * 2)
+    .map((e) => (e.beat >= (CUT[1] + 1 - 244) * 2 ? { ...e, beat: e.beat - CUT_BEATS } : e));
+
 /** The violin's finale with bars 316-390 cut, as WILLIAM_TELL_CUT has it for the guitar. */
 export const WILLIAM_TELL_VIOLIN_CUT = {
   ...WILLIAM_TELL_VIOLIN,
   title: 'William Tell Overture: finale, bars 226-453, cut 316-390 (violin)',
-  events: WILLIAM_TELL_VIOLIN.events
-    .filter((e) => e.beat < (CUT[0] - 244) * 2 || e.beat >= (CUT[1] + 1 - 244) * 2)
-    .map((e) => (e.beat >= (CUT[1] + 1 - 244) * 2 ? { ...e, beat: e.beat - CUT_BEATS } : e)),
+  events: cutFinale(WILLIAM_TELL_VIOLIN.events),
 };
 
 /** A note name such as 'C#4' an octave lower. */
@@ -397,6 +401,24 @@ export const WILLIAM_TELL_TRUMPET = {
     ...finaleLine.map((n) => ({ beat: n.beat, note: nameOf(intoTrumpet(n.midi)), dynamic: n.dynamic })),
     { beat: (452 - 244) * 2 + 1, note: 'E5', dynamic: 'ff', hold: 2 },
   ].sort((a, b) => a.beat - b.beat),
+};
+
+/**
+ * The trombone's part: the trumpet's an octave lower (E2-Bb4, the fanfare
+ * at the pitch of the guitar's), all in the tenor trombone's seven
+ * positions on partials 2 to 8, closing on a held E4.
+ */
+export const WILLIAM_TELL_TROMBONE = {
+  title: 'William Tell Overture: finale, bars 226-453 (trombone)',
+  tempo: 152,
+  events: WILLIAM_TELL_TRUMPET.events.map((e) => ({ ...e, note: octaveDown(e.note) })),
+};
+
+/** The trombone's finale with bars 316-390 cut, as WILLIAM_TELL_CUT has it for the guitar. */
+export const WILLIAM_TELL_TROMBONE_CUT = {
+  ...WILLIAM_TELL_TROMBONE,
+  title: 'William Tell Overture: finale, bars 226-453, cut 316-390 (trombone)',
+  events: cutFinale(WILLIAM_TELL_TROMBONE.events),
 };
 
 /**

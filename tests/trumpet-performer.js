@@ -106,7 +106,7 @@ const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a
 const norm = (a) => scale(a, 1 / Math.hypot(...a));
 
 /** Joint frame for a bone along `forward`: WebXR joints look down -Z with +Y out of the back of the hand. */
-function frame(position, forward, back) {
+export function frame(position, forward, back) {
   const z = norm(scale(forward, -1));
   let y = sub(back, scale(z, dot(back, z)));
   if (Math.hypot(...y) < 1e-6) y = v(0, 1, 0);
@@ -121,7 +121,7 @@ const NAMES_OF = ['metacarpal', 'phalanx-proximal', 'phalanx-intermediate', 'pha
  * as a relaxed finger is: `c` radians at the knuckle, the middle and end
  * joints a little more.
  */
-function fingerChain(hand, finger, c, right) {
+export function fingerChain(hand, finger, c, right) {
   const k = hand.knuckles[finger];
   const L = BONES[finger];
   const dir = (a) => add(scale(hand.forward, Math.cos(a)), scale(hand.palm, Math.sin(a)));
@@ -204,7 +204,7 @@ function raisedPinky(hand) {
 }
 
 /** A thumb from beside the wrist to `tip`, bowed out toward `bulge`. */
-function thumbChain(hand, tip, bulge) {
+export function thumbChain(hand, tip, bulge) {
   const base = add(add(hand.wrist, scale(hand.forward, 0.022)), add(scale(hand.lateral, 0.022), scale(hand.palm, 0.012)));
   const pts = [base, add(lerp(base, tip, 0.4), scale(bulge, 0.012)), add(lerp(base, tip, 0.75), scale(bulge, 0.006)), tip];
   const joints = {};

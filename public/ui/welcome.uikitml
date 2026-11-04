@@ -3,8 +3,8 @@
   RectangleGoggles and LogIn are bundled Lucide icon components. The :dark
   styles apply because iwsdk.config.json prefers the dark color scheme.
   PanelSystem wires the instrument, tone, volume and reset ids below to the
-  AirGuitar, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums and
-  AirTrumpet components, and scene-prev / scene-next to the level list in
+  AirGuitar, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums,
+  AirTrumpet and AirTrombone components, and scene-prev / scene-next to the level list in
   src/scene-list.ts.
 -->
 <style>
@@ -109,6 +109,7 @@
     <div class="body">Piano: it stands in front of you. Press the keys with any fingertip; faster is louder.</div>
     <div class="body">Drums: a stick in each fist. Bring the tips down on the heads and cymbals; hit the snare's rim for a rimshot, the hi-hat's edge to open it, the ride's bell for its ping. The round pad by your right knee is the kick.</div>
     <div class="body">Trumpet: right fingers press the valves; hold it out to your lips and tilt the bell up for higher notes. Pinch your left hand to blow; cup it over the bell to mute.</div>
+    <div class="body">Trombone: hold it to your lips in your left hand and tilt it up for higher notes; pinch that hand to blow. Right fingertips on the slide brace move the slide.</div>
   </div>
   <div class="row">
     <Button id="instrument-guitar" variant="primary">
@@ -134,6 +135,9 @@
     </Button>
     <Button id="instrument-trumpet" variant="secondary">
       <ButtonLabel>Trumpet</ButtonLabel>
+    </Button>
+    <Button id="instrument-trombone" variant="secondary">
+      <ButtonLabel>Trombone</ButtonLabel>
     </Button>
   </div>
   <div class="row">

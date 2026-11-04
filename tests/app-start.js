@@ -34,7 +34,8 @@ export async function reloadApp({ page, frame }, root) {
     await wait(30);
   }
   // A real click lets the browser start audio if it is still suspended.
-  const box = await (await frame.frameElement()).boundingBox();
+  // The app is in the managed window's runtime frame, or is the page itself.
+  const box = frame.parentFrame() ? await (await frame.frameElement()).boundingBox() : { x: 0, y: 0, height: page.viewportSize()?.height ?? 600 };
   await page.mouse.click(box.x + 12, box.y + box.height / 2);
 }
 
@@ -56,4 +57,9 @@ export async function startApp(ctx, { root, view, modules = [] }) {
     () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
   );
   await loading;
+}
+
+/** A screenshot of the app: its frame in the managed window, or the whole page when the app is the page itself. */
+export async function screenshotApp({ page, frame }, options) {
+  return frame.parentFrame() ? (await frame.frameElement()).screenshot(options) : page.screenshot(options);
 }

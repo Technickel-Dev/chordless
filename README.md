@@ -1,7 +1,7 @@
 # Chordless
 
 Air instruments for Meta Quest, played with your bare hands: a guitar, a
-violin, a cello, a pair of orchestral cymbals, a triangle, a piano and a drum kit. On the guitar your left fingers fret real strings at real fret
+violin, a cello, a pair of orchestral cymbals, a triangle, a piano, a drum kit and a trombone. On the guitar your left fingers fret real strings at real fret
 positions on a full-size steel-string guitar, and your right index fingertip
 plucks: sweep across the strings to strum, flick one string to pick a single
 note. On the violin and cello your left fingers stop the strings anywhere on
@@ -9,7 +9,8 @@ a fretless fingerboard and your right hand draws a bow. The cymbals are one
 in each hand: clash them together. The triangle hangs from your left hand
 and the beater is in your right. The piano stands in front of you and
 you play its keys with all ten fingertips. The drum kit stands in front of you
-with a stick in each fist. The sound is synthesized in the
+with a stick in each fist. The trombone is held to your lips in your left
+hand, and your right hand works the slide. The sound is synthesized in the
 browser, so there are no audio files.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
@@ -178,6 +179,21 @@ the pedal's beater swings. A stick that comes down on a head stops on it
 instead of passing through. The kit is set out where you stand when you
 choose it, with the snare 72 cm below your eyes (the stands go from 65 cm
 to 1.1 m); **Reset position** moves it to you again.
+
+### The trombone
+
+A B-flat tenor trombone, held in the left hand: bring the hand out to about
+16 cm in front of your mouth and the mouthpiece meets your lips, the horn
+pointing from them through your hand, its bell on your left. Tilt it to
+choose the partial (the natural note the lips would pick): held level it
+plays partial 4, Bb3 in first position, and each 12 degrees up or down is
+the next partial, from 2 (Bb2) to 8 (Bb4); the seventh is skipped, as on
+the trumpet. Put your right thumb and index fingertips on the slide's
+brace and move the slide: each position, 1 (closed) to 7 (57 cm out), is a
+semitone lower, and the pitch follows the slide all the way, so it is in
+tune only where you put it, and blowing while you move it glides. Let go
+and the slide stays where it is. Pinch your left thumb and index finger to
+blow: closing the pinch tongues the note, closing it further plays louder.
 
 ## How it works
 
@@ -393,6 +409,8 @@ npm run play:cymbals
 npm run play:triangle
 npm run play:piano
 npm run play:drums
+npm run play:trombone-cut
+npm run check:trombone
 ```
 
 - `tests/air-guitar.e2e.mjs` checks seven chord shapes (C, G, D, Am, Em, E and
@@ -427,7 +445,8 @@ npm run play:drums
   guitar's, it outlasts one browser run and goes through
   `tests/play-long.mjs`; so do `npm run play:trumpet`, which plays the
   guitar's line on the trumpet with the fanfare at the trumpets' own pitch,
-  and `npm run play:cello`. `tests/violin-performer.js`
+  `npm run play:trombone` (the trumpet's part an octave lower; `play:trombone-cut`
+  for the two-minute cut) and `npm run play:cello`. `tests/violin-performer.js`
   marks up the part as a violinist would: every note's string, hand
   position and finger chosen for the whole piece at once (the quiet theme in
   first position, the tutti mostly in second), fingers that stay down until
@@ -579,7 +598,8 @@ taken, and the closing E major chord strummed on the last cadence; for violin
 the whole finale too, the fanfare at the trumpets' pitch, the second tune at
 the oboe's and from bar 300 the first violins' part as written, with an
 added closing E major double stop; for trumpet the guitar's line at its
-sounding pitch, the fanfare at the trumpets' own, closing on a held E5; and for cello an
+sounding pitch, the fanfare at the trumpets' own, closing on a held E5; for trombone the
+trumpet's part an octave lower, closing on a held E4; and for cello an
 octave below the guitar arrangement with the same double stop two octaves
 below the violin's. The cymbal part (bars 260–276) and the triangle part
 (bars 252–276) are not from the score: they are arranged here.

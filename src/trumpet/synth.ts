@@ -54,7 +54,7 @@ export const SPECTRA = [
 ] as const;
 
 /** One of SPECTRA as harmonic amplitudes (index n is harmonic n). */
-export function trumpetSpectrum(spec: (typeof SPECTRA)[number], count = HARMONICS): Float32Array {
+export function trumpetSpectrum(spec: { peak: number; rise: number; fall: number }, count = HARMONICS): Float32Array {
   const amps = new Float32Array(count + 1);
   for (let n = 1; n <= count; n++) {
     const dB = n <= spec.peak ? -spec.rise * (spec.peak - n) : -spec.fall * (n - spec.peak) * (1 + (n - spec.peak) / 40);
@@ -77,6 +77,43 @@ export function spectrumWeights(amplitude: number, offset = 0, out: number[] = [
 }
 
 /**
+ * What makes a brass instrument sound like itself here: its spectra (see
+ * SPECTRA) and how many harmonics they reach, the mouthpiece cup's
+ * resonance, where the brilliance of loud playing sits, how low the bell
+ * radiates, how far above the note the tone reaches (`toneLow` softly to
+ * `toneLow + toneHigh` loudly, as multiples of the pitch), the vibrato on
+ * held notes, how flat a tongued note starts, and the breath noise's band.
+ */
+export interface BrassVoice {
+  harmonics: number;
+  spectra: readonly { peak: number; rise: number; fall: number }[];
+  cupHz: number;
+  cupGain: number;
+  brillianceHz: number;
+  bellHz: number;
+  toneLow: number;
+  toneHigh: number;
+  vibratoCents: number;
+  scoopCents: number;
+  breathHz: number;
+}
+
+/** The trumpet's voice. */
+export const TRUMPET_VOICE: BrassVoice = {
+  harmonics: HARMONICS,
+  spectra: SPECTRA,
+  cupHz: 1250,
+  cupGain: 4,
+  brillianceHz: 2700,
+  bellHz: 190,
+  toneLow: 6,
+  toneHigh: 14,
+  vibratoCents: VIBRATO_CENTS,
+  scoopCents: SCOOP_CENTS,
+  breathHz: 1700,
+};
+
+/**
  * A trumpet, as one voice that runs all the time; the system sets its
  * pitch, loudness and mute every frame. Three phase-locked oscillators
  * carry the soft, moderate and loud spectra (SPECTRA), blended by how hard
@@ -87,7 +124,7 @@ export function spectrumWeights(amplitude: number, offset = 0, out: number[] = [
  * the plunger as a resonant lowpass, then a room. Breath noise, a puff at
  * each tongued attack, slow wander in pitch, loudness and tone, and a
  * little delayed vibrato on held notes keep it from sounding like an
- * oscillator.
+ * oscillator. Another BrassVoice makes it another horn (see TromboneSynth).
  */
 export class TrumpetSynth {
   readonly ctx: BaseAudioContext;
@@ -111,7 +148,10 @@ export class TrumpetSynth {
    * Plays through a live AudioContext by default; pass an
    * OfflineAudioContext to render to a buffer instead (for listening tests).
    */
-  constructor(context?: BaseAudioContext) {
+  constructor(
+    context?: BaseAudioContext,
+    private readonly voice: BrassVoice = TRUMPET_VOICE,
+  ) {
     this.ctx = context ?? new AudioContext({ latencyHint: 'interactive' });
     const ctx = this.ctx;
     this.master = ctx.createGain();
@@ -141,8 +181,8 @@ export class TrumpetSynth {
     // The filtered noise is about 0.05 rms: scale it to a few cents.
     wanderDepth.gain.value = WANDER_CENTS * 20;
     slowNoise(0.41, 12, 0).connect(wanderDepth);
-    for (const spec of SPECTRA) {
-      const amps = trumpetSpectrum(spec);
+    for (const spec of voice.spectra) {
+      const amps = trumpetSpectrum(spec, voice.harmonics);
       // Each spectrum at the same loudness, so blending them changes only the tone.
       let power = 0;
       for (const a of amps) power += (a * a) / 2;
@@ -178,17 +218,17 @@ export class TrumpetSynth {
     // The mouthpiece cup's resonance, the trumpet's "ah".
     const cup = ctx.createBiquadFilter();
     cup.type = 'peaking';
-    cup.frequency.value = 1250;
+    cup.frequency.value = voice.cupHz;
     cup.Q.value = 1;
-    cup.gain.value = 4;
+    cup.gain.value = voice.cupGain;
     this.brilliance = ctx.createBiquadFilter();
     this.brilliance.type = 'peaking';
-    this.brilliance.frequency.value = 2700;
+    this.brilliance.frequency.value = voice.brillianceHz;
     this.brilliance.Q.value = 1.3;
     this.brilliance.gain.value = 0;
     const bell = ctx.createBiquadFilter();
     bell.type = 'highpass';
-    bell.frequency.value = 190;
+    bell.frequency.value = voice.bellHz;
     bell.Q.value = 0.6;
     this.level = ctx.createGain();
     this.level.gain.value = 0;
@@ -207,7 +247,7 @@ export class TrumpetSynth {
     hiss.loop = true;
     const breathBand = ctx.createBiquadFilter();
     breathBand.type = 'bandpass';
-    breathBand.frequency.value = 1700;
+    breathBand.frequency.value = voice.breathHz;
     breathBand.Q.value = 0.7;
     hiss.connect(breathBand);
     this.breath = ctx.createGain();
@@ -272,7 +312,7 @@ export class TrumpetSynth {
       // The lips speak a little flat and settle; the low harmonics come first; the tongue's release puffs air.
       for (const osc of this.oscs) {
         osc.frequency.cancelScheduledValues(t);
-        osc.frequency.setValueAtTime(hz * 2 ** (SCOOP_CENTS / 1200), t);
+        osc.frequency.setValueAtTime(hz * 2 ** (this.voice.scoopCents / 1200), t);
         osc.frequency.setTargetAtTime(hz, t, SCOOP_TAU);
       }
       const start = spectrumWeights(amp, ATTACK_DARK, this.attackWeights);
@@ -286,7 +326,7 @@ export class TrumpetSynth {
       this.chiff.gain.setTargetAtTime(0, t, 0.018);
       this.vibrato.gain.cancelScheduledValues(t);
       this.vibrato.gain.setValueAtTime(0, t);
-      this.vibrato.gain.setTargetAtTime(VIBRATO_CENTS, t + VIBRATO_DELAY, 0.35);
+      this.vibrato.gain.setTargetAtTime(this.voice.vibratoCents, t + VIBRATO_DELAY, 0.35);
       this.level.gain.cancelScheduledValues(t);
       this.level.gain.setTargetAtTime(amp * 0.42, t, 0.014);
     } else {
@@ -298,7 +338,7 @@ export class TrumpetSynth {
     this.hz = hz;
     this.breath.gain.setTargetAtTime(amp * 0.008, t, 0.03);
     // High notes keep fewer harmonics in the band the bell radiates well.
-    this.tone.frequency.setTargetAtTime(Math.min(12000, hz * (6 + 14 * amp)), t, 0.04);
+    this.tone.frequency.setTargetAtTime(Math.min(12000, hz * (this.voice.toneLow + this.voice.toneHigh * amp)), t, 0.04);
     this.brilliance.gain.setTargetAtTime(5 * amp ** 2, t, 0.04);
 
     const mute = Math.min(1, Math.max(0, sound.mute));

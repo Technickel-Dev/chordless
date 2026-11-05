@@ -241,7 +241,68 @@ async function bowed(ctx, { button, component, root, gripX, debris, screenshot }
   });
 }
 
+/**
+ * Swings an instrument played in the hand down into the floor until it is
+ * wrecked and comes loose, and checks it and its pieces land.
+ */
+async function handHeld(ctx, { button, component, root, device, side, debris, screenshot }) {
+  const { frame, dispatch, wait, press, extent, moveHand, smashState, test, expect, lookAndShoot } = ctx;
+  await press(button);
+  await wait(600);
+  const hand = { x: side * 0.25, y: 1.3, z: -0.45 };
+  await dispatch('set_hand_pose', { device, poseId: 'default' });
+  await moveHand(device, { ...hand });
+  await wait(400);
+  await test('Swung gently down to the floor, it only knocks', async () => {
+    const drop = (await extent(root)).min - FLOOR + 0.05;
+    await moveHand(device, { ...hand, y: hand.y - drop }, drop / 0.8);
+    await moveHand(device, { ...hand }, 0.4);
+    const s = await smashState(component);
+    expect(s.hold === 'worn' && s.health === 1, JSON.stringify(s));
+    return 'still in hand, undamaged';
+  });
+  await test('Smashed into the floor it breaks up, and the pieces land', async () => {
+    let s = await smashState(component);
+    for (let i = 0; i < 8 && s.condition !== 'wrecked'; i++) {
+      await moveHand(device, { ...hand }, 0.35);
+      // Down to the floor: a horn held below the hand only reaches it with the wrist there.
+      const drop = Math.max((await extent(root)).min - FLOOR + 0.1, hand.y - FLOOR);
+      await moveHand(device, { ...hand, y: hand.y - drop }, drop / 8);
+      await wait(200);
+      s = await smashState(component);
+    }
+    expect(s.condition === 'wrecked' && s.hold === 'thrown', `after ${s.impacts} hits: ${JSON.stringify(s)}`);
+    expect(s.piecesOff >= 2, `${s.piecesOff} pieces off`);
+    await moveHand(device, { ...hand }, 0.3);
+    await wait(2500);
+    const floor = await offFloor(frame, debris);
+    expect(floor.off.length === 0, `pieces not on the floor: ${JSON.stringify(floor.off)}`);
+    const body = await extent(root);
+    expect(body.min > FLOOR - 0.012 && body.min < FLOOR + 0.05, `lowest point ${body.min.toFixed(3)} m`);
+    return `${s.impacts} hits (last ${s.lastImpact.toFixed(1)} m/s), ${s.piecesOff} pieces off; it lies on the floor`;
+  });
+  await lookAndShoot(root, screenshot);
+  await test('Reset on the panel puts it back together, in the hand', async () => {
+    await press('reset-guitar');
+    await dispatch('set_hand_pose', { device, poseId: 'default' });
+    await moveHand(device, { ...hand });
+    await wait(400);
+    const s = await smashState(component);
+    const at = await extent(root);
+    expect(s.hold === 'worn' && s.piecesOff === 0 && s.health === 1, JSON.stringify(s));
+    expect(at.min > 0.5, `lowest point ${at.min.toFixed(2)} m: not back in the hand`);
+    return 'whole, back in the hand';
+  });
+}
+
 const SCENARIOS = {
+  trumpet: (ctx) =>
+    handHeld(ctx, { button: 'instrument-trumpet', component: 'AirTrumpet', root: 'AirTrumpet', device: 'hand-right', side: 1, debris: 'AirTrumpetDebris', screenshot: 'smash-trumpet' }),
+  trombone: (ctx) =>
+    handHeld(ctx, { button: 'instrument-trombone', component: 'AirTrombone', root: 'AirTrombone', device: 'hand-left', side: -1, debris: 'AirTromboneDebris', screenshot: 'smash-trombone' }),
+  horn: (ctx) =>
+    handHeld(ctx, { button: 'instrument-horn', component: 'AirHorn', root: 'AirHorn', device: 'hand-left', side: -1, debris: 'AirHornDebris', screenshot: 'smash-horn' }),
+
   violin: (ctx) =>
     bowed(ctx, { button: 'instrument-violin', component: 'AirViolin', root: 'AirViolin', gripX: 0.17, debris: 'AirViolinDebris', screenshot: 'smash-violin' }),
   cello: (ctx) =>
@@ -309,13 +370,14 @@ const SCENARIOS = {
     });
     await test('Opening the hand mid-swing throws it across the room', async () => {
       await moveHand('hand-right', { x: from.x, y: from.y + 0.3, z: from.z + 0.1 }, 0.3);
+      // Let go mid-swing.
       await dispatch('animate_to', {
         device: 'hand-right',
-        position: { x: from.x + 0.2, y: from.y + 0.6, z: from.z - 0.5 },
+        position: { x: from.x + 0.3, y: from.y + 0.7, z: from.z - 0.8 },
         anchor: 'wrist',
-        duration: 0.15,
+        duration: 0.3,
       });
-      await wait(120);
+      await wait(150);
       await dispatch('set_hand_pose', { device: 'hand-right', poseId: 'open' });
       await wait(3000);
       const at = await where('SnareLoose');

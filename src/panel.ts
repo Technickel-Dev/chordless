@@ -17,6 +17,7 @@ import { AirTrombone } from './trombone/air-trombone-component.js';
 import { AirTrumpet } from './trumpet/air-trumpet-component.js';
 import { AirViolin } from './violin/air-violin-component.js';
 import { SCENES, sceneFromQuery, sceneUrl } from './scene-list.js';
+import { Smashable } from './smash/smashable-component.js';
 
 /** The instruments, by the panel button that takes each one out. */
 type Instrument = 'guitar' | 'violin' | 'cello' | 'cymbals' | 'triangle' | 'piano' | 'drums' | 'trumpet' | 'trombone' | 'horn';
@@ -33,6 +34,7 @@ export class PanelSystem extends createSystem({
   trumpets: { required: [AirTrumpet] },
   trombones: { required: [AirTrombone] },
   horns: { required: [AirHorn] },
+  smashables: { required: [Smashable] },
 }) {
   private readonly buttons = new Map<Instrument, ReturnType<UIKitMLAsset['getElementById']>>();
   private showing: Instrument | null = null;
@@ -212,6 +214,8 @@ export class PanelSystem extends createSystem({
           forEachBowed((e, c) => e.setValue(c, 'resetPlacement', true));
           for (const e of this.queries.pianos.entities) e.setValue(AirPiano, 'resetPlacement', true);
           for (const e of this.queries.drums.entities) e.setValue(AirDrums, 'resetPlacement', true);
+          // And everything smashed is put back together.
+          for (const e of this.queries.smashables.entities) e.setValue(Smashable, 'repair', true);
         },
       ],
     ];

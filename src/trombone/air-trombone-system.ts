@@ -1,8 +1,10 @@
-import { createSystem, Entity, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
+import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { ACCENT } from '../guitar/guitar-model.js';
 import { TrackedHand } from '../guitar/hands.js';
 import { AIR_STOP } from '../trumpet/playing.js';
 import { AirTrombone } from './air-trombone-component.js';
+import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
+import { Smashable, SmashHold } from '../smash/smashable-component.js';
 import { createHornPose, holdTrombone, LIPS, toTrombone } from './hold.js';
 import { Breath, noteName, PARTIALS, PartialSelector, pitchOf, positionOf, SlideReader } from './playing.js';
 import { TromboneSynth } from './synth.js';
@@ -34,6 +36,13 @@ export class AirTromboneSystem extends createSystem({
   private model!: TromboneModel;
   private entity!: Entity;
   private synth!: TromboneSynth;
+  private smash!: PropSmasher;
+  private debris!: Group;
+  private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
+  /** Smashed out of the hand: it lies where it fell, silent. */
+  private silenced = false;
+  /** Which smashable part is the outer slide, or -1. */
+  private slidePart = -1;
   private readonly hands = [new TrackedHand(), new TrackedHand()] as const;
   readonly pose = createHornPose();
   readonly slide = new SlideReader();
@@ -64,6 +73,32 @@ export class AirTromboneSystem extends createSystem({
     this.model = createTromboneModel();
     this.entity = this.world.createTransformEntity(this.model.trombone, { persistent: true });
     this.entity.addComponent(AirTrombone);
+    this.entity.addComponent(Smashable);
+    this.debris = new Group();
+    this.debris.name = 'AirTromboneDebris';
+    this.debris.visible = false;
+    this.world.createTransformEntity(this.debris, { persistent: true });
+    const root = this.model.trombone;
+    // Swung into the floor it dents and sheds these, in this order, as it takes damage.
+    const breaks: [string, number][] = [
+        ['TromboneBumper', 0.8],
+        ['TromboneSlide', 0.5],
+        ['TromboneBell', 0.3],
+    ];
+    const parts: PropPart[] = [];
+    for (const [part, breakAt] of breaks) {
+      const object = root.getObjectByName(part);
+      if (object) parts.push({ name: `LooseTrombone${part}`, objects: [object], breakAt });
+    }
+    this.slidePart = parts.findIndex((part) => part.objects[0] === this.model.slide);
+    this.smash = new PropSmasher(root, this.debris, {
+      mass: 1.2,
+      wear: 0.1,
+      parts,
+      sound: (speed, _part, broke) => {
+        if (speed > 0.4) this.synth.knock(Math.min(1, speed / 9), broke, 2);
+      },
+    });
     this.world.createTransformEntity(this.model.hud.sprite, { persistent: true });
     this.setVisible(false);
 
@@ -91,7 +126,12 @@ export class AirTromboneSystem extends createSystem({
     }
     this.show(true);
     const dt = Math.min(delta, 0.1);
-    if (e.getValue(AirTrombone, 'resetPlacement')) e.setValue(AirTrombone, 'resetPlacement', false);
+    if (e.getValue(AirTrombone, 'resetPlacement')) {
+      this.smash.repair();
+      e.setValue(AirTrombone, 'resetPlacement', false);
+    }
+    this.grips[0] = this.player.gripSpaces.left;
+    this.grips[1] = this.player.gripSpaces.right;
     this.synth.setVolume(e.getValue(AirTrombone, 'volume') ?? 0.8);
 
     const adapters = this.input.xr.visualAdapters.hand;
@@ -101,6 +141,20 @@ export class AirTromboneSystem extends createSystem({
     if (e.getValue(AirTrombone, 'leftHand') !== left.tracked) e.setValue(AirTrombone, 'leftHand', left.tracked);
     if (e.getValue(AirTrombone, 'rightHand') !== right.tracked) e.setValue(AirTrombone, 'rightHand', right.tracked);
     this.readHead();
+    if (this.smash.hold !== SmashHold.Worn) {
+      // Smashed out of the hand, it lies where it fell and does not play.
+      this.model.trombone.visible = true;
+      if (!this.silenced) {
+        this.silenced = true;
+        this.synth.stopAll();
+        this.breath.reset();
+      }
+      this.smash.update(dt, this.hands, this.grips, e);
+      this.publish();
+      this.updateHud();
+      return;
+    }
+    this.silenced = false;
 
     const trombone = this.model.trombone;
     trombone.visible = left.tracked;
@@ -134,8 +188,11 @@ export class AirTromboneSystem extends createSystem({
     } else {
       this.slide.reset();
     }
-    this.model.slide.position.z = -this.slide.slide;
+    // Once the slide has been knocked off it is not the hand's to move.
+    if (this.slidePart < 0 || this.smash.isAttached(this.slidePart)) this.model.slide.position.z = -this.slide.slide;
     trombone.updateMatrixWorld(true);
+    // Swung into the floor, it takes damage (and once wrecked comes loose).
+    this.smash.update(dt, this.hands, this.grips, e);
 
     const breath = this.breath;
     breath.update(left.pinchDistance(), pose.atLips);
@@ -155,6 +212,9 @@ export class AirTromboneSystem extends createSystem({
     if (this.shown === visible) return;
     this.shown = visible;
     this.setVisible(visible);
+    this.debris.visible = visible;
+    // Put away, it comes back out whole.
+    if (!visible) this.smash.repair();
     if (!visible) {
       this.synth.stopAll();
       this.breath.reset();

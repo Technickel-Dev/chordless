@@ -1,7 +1,9 @@
-import { createSystem, Entity, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
+import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { ACCENT } from '../guitar/guitar-model.js';
 import { TrackedHand } from '../guitar/hands.js';
 import { AirTrumpet } from './air-trumpet-component.js';
+import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
+import { Smashable, SmashHold } from '../smash/smashable-component.js';
 import { BELL, TRUMPET } from './geometry.js';
 import { createHornPose, holdHorn, LIPS, toTrumpet } from './hold.js';
 import {
@@ -45,6 +47,11 @@ export class AirTrumpetSystem extends createSystem({
   private model!: TrumpetModel;
   private entity!: Entity;
   private synth!: TrumpetSynth;
+  private smash!: PropSmasher;
+  private debris!: Group;
+  private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
+  /** Smashed out of the hand: it lies where it fell, silent. */
+  private silenced = false;
   private readonly hands = [new TrackedHand(), new TrackedHand()] as const;
   readonly pose = createHornPose();
   readonly valves = new ValveReader();
@@ -76,6 +83,33 @@ export class AirTrumpetSystem extends createSystem({
     this.model = createTrumpetModel();
     this.entity = this.world.createTransformEntity(this.model.trumpet, { persistent: true });
     this.entity.addComponent(AirTrumpet);
+    this.entity.addComponent(Smashable);
+    this.debris = new Group();
+    this.debris.name = 'AirTrumpetDebris';
+    this.debris.visible = false;
+    this.world.createTransformEntity(this.debris, { persistent: true });
+    const root = this.model.trumpet;
+    // Swung into the floor it dents and sheds these, in this order, as it takes damage.
+    const breaks: [string, number][] = [
+        ['Mouthpiece', 0.85],
+        ['WaterKey', 0.7],
+        ['FingerHook', 0.55],
+        ['Bell', 0.35],
+        ['Valves', 0.15],
+    ];
+    const parts: PropPart[] = [];
+    for (const [part, breakAt] of breaks) {
+      const object = root.getObjectByName(part);
+      if (object) parts.push({ name: `LooseTrumpet${part}`, objects: [object], breakAt });
+    }
+    this.smash = new PropSmasher(root, this.debris, {
+      mass: 1.1,
+      wear: 0.1,
+      parts,
+      sound: (speed, _part, broke) => {
+        if (speed > 0.4) this.synth.knock(Math.min(1, speed / 9), broke, 2);
+      },
+    });
     this.world.createTransformEntity(this.model.hud.sprite, { persistent: true });
     this.setVisible(false);
 
@@ -103,7 +137,12 @@ export class AirTrumpetSystem extends createSystem({
     }
     this.show(true);
     const dt = Math.min(delta, 0.1);
-    if (e.getValue(AirTrumpet, 'resetPlacement')) e.setValue(AirTrumpet, 'resetPlacement', false);
+    if (e.getValue(AirTrumpet, 'resetPlacement')) {
+      this.smash.repair();
+      e.setValue(AirTrumpet, 'resetPlacement', false);
+    }
+    this.grips[0] = this.player.gripSpaces.left;
+    this.grips[1] = this.player.gripSpaces.right;
     this.synth.setVolume(e.getValue(AirTrumpet, 'volume') ?? 0.8);
 
     const adapters = this.input.xr.visualAdapters.hand;
@@ -113,6 +152,20 @@ export class AirTrumpetSystem extends createSystem({
     if (e.getValue(AirTrumpet, 'leftHand') !== left.tracked) e.setValue(AirTrumpet, 'leftHand', left.tracked);
     if (e.getValue(AirTrumpet, 'rightHand') !== right.tracked) e.setValue(AirTrumpet, 'rightHand', right.tracked);
     this.readHead();
+    if (this.smash.hold !== SmashHold.Worn) {
+      // Smashed out of the hand, it lies where it fell and does not play.
+      this.model.trumpet.visible = true;
+      if (!this.silenced) {
+        this.silenced = true;
+        this.synth.stopAll();
+        this.breath.reset();
+      }
+      this.smash.update(dt, this.hands, this.grips, e);
+      this.publish();
+      this.updateHud();
+      return;
+    }
+    this.silenced = false;
 
     const trumpet = this.model.trumpet;
     trumpet.visible = right.tracked;
@@ -137,6 +190,8 @@ export class AirTrumpetSystem extends createSystem({
     trumpet.quaternion.setFromRotationMatrix(this.basis);
     trumpet.position.fromArray(pose.origin);
     trumpet.updateMatrixWorld(true);
+    // Swung into the floor, it takes damage (and once wrecked comes loose).
+    this.smash.update(dt, this.hands, this.grips, e);
 
     this.valves.update(right.positions);
     for (let i = 0; i < 3; i++) this.model.pistons[i].position.y = -this.valves.depth[i] * TRUMPET.travel;
@@ -171,6 +226,9 @@ export class AirTrumpetSystem extends createSystem({
     if (this.shown === visible) return;
     this.shown = visible;
     this.setVisible(visible);
+    this.debris.visible = visible;
+    // Put away, it comes back out whole.
+    if (!visible) this.smash.repair();
     if (!visible) {
       this.synth.stopAll();
       this.breath.reset();

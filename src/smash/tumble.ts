@@ -38,7 +38,7 @@ export class RigidBody {
   readonly v = new Float64Array(3);
   /** Angular velocity, world space, radians per second. */
   readonly w = new Float64Array(3);
-  readonly invMass: number;
+  invMass: number;
   /** Inverse principal moments of inertia, in the body's frame. */
   readonly invInertia = new Float64Array(3);
   /** Contact points (xyz) relative to the centre of mass, body frame. */
@@ -90,6 +90,25 @@ export class RigidBody {
     this.w[0] = wx;
     this.w[1] = wy;
     this.w[2] = wz;
+  }
+
+  /**
+   * A hand pushing the body at world point (px, py, pz): makes that point
+   * move along unit direction d at least `speed`, as an unstoppable hand would.
+   */
+  push(px: number, py: number, pz: number, dx: number, dy: number, dz: number, speed: number): void {
+    const { p, v, w, r } = this;
+    r[0] = px - p[0];
+    r[1] = py - p[1];
+    r[2] = pz - p[2];
+    const along =
+      (v[0] + w[1] * r[2] - w[2] * r[1]) * dx +
+      (v[1] + w[2] * r[0] - w[0] * r[2]) * dy +
+      (v[2] + w[0] * r[1] - w[1] * r[0]) * dz;
+    if (along >= speed) return;
+    const j = (speed - along) / this.effectiveMass(dx, dy, dz);
+    this.applyImpulse(j * dx, j * dy, j * dz);
+    this.wake();
   }
 
   step(dt: number): void {

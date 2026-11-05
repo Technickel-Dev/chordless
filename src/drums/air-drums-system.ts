@@ -1,13 +1,16 @@
-import { createSystem, Entity, Group, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
+import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { dynamicMark } from '../cymbals/air-cymbals-system.js';
 import { ACCENT } from '../guitar/guitar-model.js';
 import { JOINT_COUNT, TrackedHand } from '../guitar/hands.js';
-import { BEATER_REST } from '../scene-assets/drum-kit.scene-asset.js';
+import { BEATER_REST, PIECE_NAMES } from '../scene-assets/drum-kit.scene-asset.js';
 import { AirDrums } from './air-drums-component.js';
 import { NOMINAL_SNARE, PIECES, RIG_TRAVEL } from './geometry.js';
 import { createKitModel, type KitModel } from './kit-model.js';
 import { createStickPose, restOn, type StickPose, stickPose, StrokeDetector, type Stroke } from './strokes.js';
 import { DrumSynth } from './synth.js';
+import { PropSmasher } from '../smash/prop-smash.js';
+import { Smashable } from '../smash/smashable-component.js';
+import type { Articulation } from './strokes.js';
 
 /** The top of the stage the player stands on (m): the kit's feet rest on it. */
 const STAGE_TOP = 0.035;
@@ -22,6 +25,18 @@ const SWAY = { stiffness: 90, damping: 3.2, kick: 1.4 };
 /** How fast the kick's beater falls back from the head (time constant, s). */
 const BEATER_TAU = 0.07;
 
+/** The sound each piece makes when it hits the floor, in PIECES order. */
+const FLOOR_SOUND: Record<string, Articulation> = {
+  snare: 'rimshot',
+  hihat: 'hihatOpen',
+  kick: 'kick',
+  tom1: 'tom1',
+  tom2: 'tom2',
+  floorTom: 'floorTom',
+  crash: 'crash',
+  ride: 'ride',
+};
+
 /** How a stroke reads on the HUD, with its zone where it has one. */
 const ZONE_NAMES: Partial<Record<Stroke['articulation'], string>> = {
   rimshot: 'rimshot',
@@ -35,7 +50,8 @@ const ZONE_NAMES: Partial<Record<Stroke['articulation'], string>> = {
  * a cymbal or the kick pad, as loud as the tip was moving; the snare's
  * rim, the hi-hat's edge and the ride's bell each sound their own way.
  * The kit is placed in front of the player, at their height, when it is
- * taken out or reset.
+ * taken out or reset. A fist held on a drum or cymbal pulls it off its
+ * stand to throw (see ../smash/prop-smash.ts); it sounds where it lands.
  */
 export class AirDrumsSystem extends createSystem({
   items: { required: [AirDrums] },
@@ -47,6 +63,9 @@ export class AirDrumsSystem extends createSystem({
   private entity!: Entity;
   private synth!: DrumSynth;
   private detector!: StrokeDetector;
+  private smash!: PropSmasher;
+  private debris!: Group;
+  private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
   private readonly hands = [new TrackedHand(), new TrackedHand()] as const;
   /** Each hand's joints in kit space. */
   private readonly joints = [new Float32Array(JOINT_COUNT * 3), new Float32Array(JOINT_COUNT * 3)] as const;
@@ -73,7 +92,38 @@ export class AirDrumsSystem extends createSystem({
     this.detector = new StrokeDetector(NOMINAL_SNARE);
     this.entity = this.world.createTransformEntity(this.model.root, { persistent: true });
     this.entity.addComponent(AirDrums);
+    this.entity.addComponent(Smashable);
     this.model.root.visible = false;
+    this.debris = new Group();
+    this.debris.name = 'AirDrumsDebris';
+    this.debris.visible = false;
+    this.world.createTransformEntity(this.debris, { persistent: true });
+    const root = this.model.root;
+    const bassDrum = root.getObjectByName('BassDrum')!;
+    const hihatBottom = root.getObjectByName(`${PIECE_NAMES.hihat}Bottom`);
+    this.smash = new PropSmasher(root, this.debris, {
+      mass: 30,
+      wear: 0.08,
+      grabSeconds: 0.6,
+      ignore: [...this.model.sticks],
+      parts: [
+        ...PIECES.map((piece, i) => ({
+          name: `${PIECE_NAMES[piece.id]}Loose`,
+          objects: piece.id === 'hihat' && hihatBottom ? [this.model.pieces[i], hihatBottom] : [this.model.pieces[i]],
+          breakAt: 0,
+          grabbable: true,
+        })),
+        { name: 'BassDrumLoose', objects: [bassDrum], breakAt: 0, grabbable: true },
+      ],
+      sound: (speed, part, broke) => {
+        const loudness = Math.min(1, speed / 7);
+        if (loudness < 0.08) return;
+        const piece = PIECES[part];
+        const articulation = piece ? FLOOR_SOUND[piece.id] : 'kick';
+        this.synth.play({ articulation, loudness, piece: piece?.id ?? 'kick', pan: piece?.pan ?? 0 });
+        this.synth.knock(loudness * 0.6, broke);
+      },
+    });
 
     const unlock = () => this.synth.resume();
     window.addEventListener('pointerdown', unlock);
@@ -98,7 +148,8 @@ export class AirDrumsSystem extends createSystem({
       return;
     }
     const dt = Math.min(delta, 0.1);
-    if (!this.shown || e.getValue(AirDrums, 'resetPlacement')) {
+    if (e.getValue(AirDrums, 'resetPlacement')) this.smash.repair();
+    if (!this.shown || this.smash.takeRepaired() || e.getValue(AirDrums, 'resetPlacement')) {
       this.place();
       e.setValue(AirDrums, 'resetPlacement', false);
     }
@@ -128,12 +179,16 @@ export class AirDrumsSystem extends createSystem({
       }
       const pose = stickPose(joints, this.poses[i]);
       const stroke = this.detector.update(i, pose.tip, dt);
-      if (stroke != null) this.strike(stroke, now);
+      // A piece that has been pulled off its stand is not there to strike.
+      if (stroke != null && this.smash.isAttached(PIECES.indexOf(stroke.piece))) this.strike(stroke, now);
       // A stick that came down on a surface stops on it, rather than passing through.
       const resting = this.detector.restingOn(i);
       if (resting != null) restOn(pose, resting);
       this.placeStick(stick, pose);
     }
+    this.grips[0] = grips.left;
+    this.grips[1] = grips.right;
+    this.smash.update(dt, this.hands, this.grips, e);
     this.animate(dt);
     this.updateHud();
   }
@@ -183,7 +238,10 @@ export class AirDrumsSystem extends createSystem({
     if (this.shown === visible) return;
     this.shown = visible;
     this.model.root.visible = visible;
+    this.debris.visible = visible;
     if (!visible) {
+      // Put away, it comes back out whole.
+      this.smash.repair();
       this.synth.stopAll();
       this.detector.reset(0);
       this.detector.reset(1);
@@ -210,6 +268,8 @@ export class AirDrumsSystem extends createSystem({
     this.detector.reset(1);
     this.model.hud.sprite.position.set(HUD_AT.x, snare + HUD_AT.rise, HUD_AT.z);
     this.entity.setValue(AirDrums, 'snareHeight', Math.round(snare * 1000) / 1000);
+    // The rig moved: measure the kit again for smashing.
+    this.smash.refit();
   }
 
   /** Puts a stick where its pose says (kit space). */

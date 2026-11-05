@@ -13,7 +13,7 @@ import {
   seededRandom,
   SMASH,
 } from '../../src/guitar/smash.js';
-import { GRAVITY, RigidBody } from '../../src/guitar/tumble.js';
+import { GRAVITY, RigidBody } from '../../src/smash/tumble.js';
 
 /** Corners of a box centred on its centre of mass. */
 function boxPoints(x: number, y: number, z: number): Float32Array {

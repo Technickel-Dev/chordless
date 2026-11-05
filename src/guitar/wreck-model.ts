@@ -18,7 +18,7 @@ import {
   scatterSeeds,
   seededRandom,
 } from './smash.js';
-import { RigidBody } from './tumble.js';
+import { RigidBody } from '../smash/tumble.js';
 
 /** Where the neck snaps: between the 5th and 6th frets, clear of the inlays. */
 export const BREAK_X = (fretX(5) + fretX(6)) / 2;

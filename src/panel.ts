@@ -205,7 +205,10 @@ export class PanelSystem extends createSystem({
       [
         'reset-guitar',
         () => {
-          forEachGuitar((e) => e.setValue(AirGuitar, 'resetPlacement', true));
+          forEachGuitar((e) => {
+            e.setValue(AirGuitar, 'resetPlacement', true);
+            e.setValue(AirGuitar, 'repair', true);
+          });
           forEachBowed((e, c) => e.setValue(c, 'resetPlacement', true));
           for (const e of this.queries.pianos.entities) e.setValue(AirPiano, 'resetPlacement', true);
           for (const e of this.queries.drums.entities) e.setValue(AirDrums, 'resetPlacement', true);

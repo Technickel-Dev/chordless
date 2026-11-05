@@ -20,6 +20,7 @@
     "test:triangle": "iwsdk browser run tests/triangle.e2e.mjs --timeout 110000",
     "test:piano": "iwsdk browser run tests/piano.e2e.mjs --timeout 110000",
     "test:drums": "iwsdk browser run tests/drums.e2e.mjs --timeout 110000",
+    "test:smash": "iwsdk browser run tests/guitar-smash.e2e.mjs --timeout 110000",
     "test:unit": "vitest run",
     "play:william-tell": "node tests/play-long.mjs tests/william-tell.mjs",
     "play:william-tell-cut": "node tests/play-long.mjs tests/william-tell.mjs WILLIAM_TELL_CUT",

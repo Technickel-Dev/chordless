@@ -1,12 +1,14 @@
 import {
   createSystem,
   Entity,
+  Group,
   Matrix4,
+  Object3D,
   Quaternion,
   Vector3,
   VisibilityState,
 } from '@iwsdk/core';
-import { AirGuitar, GuitarToneMode } from './air-guitar-component.js';
+import { AirGuitar, GuitarCondition, GuitarHold, GuitarToneMode } from './air-guitar-component.js';
 import { midiName, recognizeChord } from './chords.js';
 import { FretReader, PRESS } from './fretting.js';
 import {
@@ -21,6 +23,8 @@ import {
 import { ACCENT, createGuitarModel, GuitarModel, placeString } from './guitar-model.js';
 import { JOINT, TrackedHand } from './hands.js';
 import { PLUCK_ZONE, PluckDetector } from './pluck-detector.js';
+import { intactStrings } from './smash.js';
+import { GuitarSmasher } from './smashing.js';
 import { decaySeconds, GuitarSynth, midiToHz } from './synth.js';
 
 const UP = new Vector3(0, 1, 0);
@@ -86,6 +90,8 @@ const AUDIBLE = 0.01;
  * strings at real fret positions; the right index fingertip plucks or
  * strums whatever strings it crosses. Pinch both hands for a second to move
  * the guitar: the body goes to the right pinch, the neck toward the left.
+ * A fist round the neck picks it up to smash (see smashing.ts); the same
+ * two-handed pinch puts it back on, and a wrecked one comes back new.
  */
 export class AirGuitarSystem extends createSystem({
   guitars: { required: [AirGuitar] },
@@ -93,9 +99,14 @@ export class AirGuitarSystem extends createSystem({
   private model!: GuitarModel;
   private entity!: Entity;
   private synth!: GuitarSynth;
+  private smash!: GuitarSmasher;
+  private debris!: Group;
+  private syncedVersion = -1;
 
   private readonly left = new TrackedHand();
   private readonly right = new TrackedHand();
+  private readonly hands: readonly [TrackedHand, TrackedHand] = [this.left, this.right];
+  private readonly grips: [Object3D, Object3D] = [new Object3D(), new Object3D()];
   private readonly fretReader = new FretReader();
   private readonly plucker = new PluckDetector();
 
@@ -139,6 +150,11 @@ export class AirGuitarSystem extends createSystem({
     this.entity = this.world.createTransformEntity(this.model.root, { persistent: true });
     this.entity.addComponent(AirGuitar);
     this.placement = loadPlacement();
+    // Pieces knocked off the guitar live here, in world space.
+    this.debris = new Group();
+    this.debris.name = 'AirGuitarDebris';
+    this.world.createTransformEntity(this.debris, { persistent: true });
+    this.smash = new GuitarSmasher(this.model, this.synth, this.debris, this.amp, this.soundingMidi);
 
     const unlock = () => this.synth.resume();
     window.addEventListener('pointerdown', unlock);
@@ -152,6 +168,7 @@ export class AirGuitarSystem extends createSystem({
         if (immersive) this.synth.resume();
         else this.synth.chokeAll();
         this.model.root.visible = immersive;
+        this.debris.visible = immersive;
         this.placed = false;
       }),
       () => this.synth.dispose(),
@@ -166,10 +183,20 @@ export class AirGuitarSystem extends createSystem({
     const active = e.getValue(AirGuitar, 'active') ?? true;
     if (active !== this.model.root.visible) {
       this.model.root.visible = active;
-      if (!active) this.synth.chokeAll();
+      this.debris.visible = active;
+      if (!active) {
+        this.synth.chokeAll();
+        this.smash.wear();
+      }
       this.placed = false;
     }
     if (!active) return;
+    if (e.getValue(AirGuitar, 'repair')) {
+      this.smash.repair();
+      e.setValue(AirGuitar, 'repair', false);
+      this.placed = false;
+      this.model.root.userData.posed = false;
+    }
 
     const hands = this.input.xr.visualAdapters.hand;
     this.left.update(hands.left, this.player.gripSpaces.left);
@@ -192,15 +219,26 @@ export class AirGuitarSystem extends createSystem({
     }
     // The hold is wall-clock time, so a slow frame cannot stretch it.
     const placing = this.updatePlaceGesture(delta);
-    this.followTorso(dt);
-    this.poseGuitar(dt);
+    const smash = this.smash;
+    if (smash.hold === GuitarHold.Worn) {
+      this.followTorso(dt);
+      this.poseGuitar(dt);
+    }
+    this.grips[0] = this.player.gripSpaces.left;
+    this.grips[1] = this.player.gripSpaces.right;
+    smash.update(dt, this.hands, this.grips, e.getValue(AirGuitar, 'smashable') ?? true);
+    this.syncSmash();
 
     const tone = e.getValue(AirGuitar, 'tone') ?? GuitarToneMode.Clean;
     this.synth.setTone(tone === GuitarToneMode.Drive ? 'drive' : 'clean');
     this.synth.setVolume(e.getValue(AirGuitar, 'volume') ?? 0.8);
 
-    this.updateFretting(dt);
-    this.updatePicking(dt);
+    if (smash.hold === GuitarHold.Worn) {
+      this.updateFretting(dt);
+      this.updatePicking(dt);
+    } else {
+      this.hideHandMarks();
+    }
     this.animateStrings(dt, time);
     this.updateHud(placing, tone);
   }
@@ -308,6 +346,8 @@ export class AirGuitarSystem extends createSystem({
     if (this.placeLatched) return -1;
     this.placeHold += dt;
     if (this.placeHold < PLACE_HOLD_SECONDS) return this.placeHold / PLACE_HOLD_SECONDS;
+    // Picked up, thrown or wrecked: this puts it back on (a wrecked one new).
+    this.smash.wear();
 
     this.torso.set(this.headPos.x, 0, this.headPos.z);
     this.torsoYaw = this.headYaw();
@@ -451,6 +491,8 @@ export class AirGuitarSystem extends createSystem({
     for (let i = 0; i < count; i++) {
       const event = this.plucker.events[i];
       const s = event.string;
+      // A snapped string has nothing left to pluck.
+      if (!this.smash.damage.strings[s]) continue;
       const midi = OPEN_MIDI[s] + this.fretReader.frets[s];
       this.synth.pluck(s, midi, event.velocity, this.synth.now + event.delay, false);
       this.soundingMidi[s] = midi;
@@ -499,10 +541,55 @@ export class AirGuitarSystem extends createSystem({
     }
   }
 
+  /** Copies the smash state to the AirGuitar component when it changes. */
+  private syncSmash(): void {
+    const smash = this.smash;
+    if (smash.version === this.syncedVersion) return;
+    this.syncedVersion = smash.version;
+    const d = smash.damage;
+    const e = this.entity;
+    e.setValue(AirGuitar, 'hold', smash.hold);
+    e.setValue(
+      AirGuitar,
+      'condition',
+      d.wrecked ? GuitarCondition.Wrecked : d.health < 1 ? GuitarCondition.Damaged : GuitarCondition.Intact,
+    );
+    e.setValue(AirGuitar, 'health', d.health);
+    e.setValue(AirGuitar, 'strings', intactStrings(d));
+    e.setValue(AirGuitar, 'neckBroken', d.neckBroken);
+    e.setValue(AirGuitar, 'impacts', smash.impacts);
+    e.setValue(AirGuitar, 'lastImpact', smash.lastImpact);
+  }
+
+  /** Fingertip marks only make sense while the guitar is worn and played. */
+  private hideHandMarks(): void {
+    for (const shadow of this.model.fingerShadows) shadow.visible = false;
+    for (const dot of this.model.pressDots) dot.visible = false;
+    this.model.pickShadow.visible = false;
+  }
+
+  private stringsNote(): string {
+    const left = intactStrings(this.smash.damage);
+    return left < STRING_COUNT ? ` · ${left} strings` : '';
+  }
+
+  private drawSmashHud(): void {
+    const smash = this.smash;
+    const d = smash.damage;
+    this.model.hud.draw(
+      smashHudLines(smash.hold, d.wrecked, d.health, intactStrings(d), smash.impacts),
+      ACCENT.smash,
+    );
+  }
+
   private updateHud(placing: number, tone: string): void {
     const hud = this.model.hud;
     if (placing >= 0 && placing < 1) {
       hud.draw(['Placing…', `Keep pinching: ${Math.round(placing * 100)}%`], ACCENT.placing);
+      return;
+    }
+    if (this.smash.hold !== GuitarHold.Worn) {
+      this.drawSmashHud();
       return;
     }
     if (!this.left.tracked && !this.right.tracked) {
@@ -526,11 +613,20 @@ export class AirGuitarSystem extends createSystem({
       [
         chord,
         this.shownFrets,
-        `${tone === GuitarToneMode.Drive ? 'OVERDRIVE' : 'CLEAN'} · ${volume}%`,
+        `${tone === GuitarToneMode.Drive ? 'OVERDRIVE' : 'CLEAN'} · ${volume}%${this.stringsNote()}`,
       ],
       playing ? ACCENT.playing : ACCENT.idle,
     );
   }
+}
+
+/** How much is left of the guitar, and what to do next. */
+function smashHudLines(hold: string, wrecked: boolean, health: number, strings: number, hits: number): string[] {
+  if (wrecked) return ['WRECKED', `${hits} hits`, 'Pinch both hands for a new guitar'];
+  const state = `${Math.round(health * 100)}% · ${strings} string${strings === 1 ? '' : 's'}`;
+  return hold === GuitarHold.Held
+    ? ['SMASH IT', state, 'Open your hand to throw it']
+    : ['Thrown', state, 'Fist round the neck to pick it up'];
 }
 
 function wrapAngle(a: number): number {

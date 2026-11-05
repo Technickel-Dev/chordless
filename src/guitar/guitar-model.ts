@@ -39,6 +39,59 @@ export interface GuitarModel {
   pickShadow: Mesh;
   pickShadowMaterial: MeshBasicMaterial;
   hud: LabelSprite;
+  // The parts that come apart when it is smashed (see wreck-model.ts).
+  /** Everything of the body: sides, top, rosette, bridge. Hidden once it shatters. */
+  body: Group;
+  /** The body's outline in the top face's plane, as x, y pairs. */
+  outline: number[];
+  /** The whole neck and fretboard, hidden once the neck snaps. */
+  neck: Mesh;
+  board: Mesh;
+  head: Group;
+  nut: Mesh;
+  frets: Mesh[];
+  inlays: Mesh[];
+  strings: Mesh[];
+  materials: { top: MeshStandardMaterial; side: MeshStandardMaterial; neck: MeshStandardMaterial; board: MeshStandardMaterial };
+}
+
+/** Where the neck runs from, over the body. */
+export const NECK_START = 0.17;
+
+/** A slab of the tapered neck outline between x0 and x1. */
+export function neckShape(x0: number, x1: number): Shape {
+  const w = (x: number) =>
+    (GUITAR.neckWidthBody +
+      ((GUITAR.neckWidthNut - GUITAR.neckWidthBody) * (x - GUITAR.boardEndX)) /
+        (GUITAR.nutX - GUITAR.boardEndX)) /
+    2;
+  const s = new Shape();
+  s.moveTo(x0, w(x0));
+  s.lineTo(x1, w(x1));
+  s.lineTo(x1, -w(x1));
+  s.lineTo(x0, -w(x0));
+  s.closePath();
+  return s;
+}
+
+/** The neck's rounded back between x0 and x1. */
+export function neckGeometry(x0: number, x1: number): ExtrudeGeometry {
+  const neck = new ExtrudeGeometry(neckShape(x0, x1), {
+    depth: 0.03,
+    bevelEnabled: true,
+    bevelThickness: 0.006,
+    bevelSize: 0.004,
+    bevelSegments: 3,
+  });
+  neck.translate(0, 0, -0.022);
+  return neck;
+}
+
+/** The fretboard between x0 and x1. */
+export function boardGeometry(x0: number, x1: number): ExtrudeGeometry {
+  const board = new ExtrudeGeometry(neckShape(x0, x1), { depth: 0.006, bevelEnabled: false });
+  board.translate(0, 0, GUITAR.boardTopZ - 0.006);
+  return board;
 }
 
 export function createGuitarModel(): GuitarModel {
@@ -62,91 +115,75 @@ export function createGuitarModel(): GuitarModel {
       Math.sqrt(Math.max(0, lower.r ** 2 - (x - lower.c) ** 2)),
       Math.sqrt(Math.max(0, upper.r ** 2 - (x - upper.c) ** 2)),
     );
-  const outline = new Shape();
+  const outlinePoints: number[] = [];
   const xMin = lower.c - lower.r;
   const xMax = upper.c + upper.r;
   const steps = 64;
   for (let i = 0; i <= steps; i++) {
     const x = xMin + ((xMax - xMin) * i) / steps;
-    if (i === 0) outline.moveTo(x, halfWidth(x));
-    else outline.lineTo(x, halfWidth(x));
+    outlinePoints.push(x, halfWidth(x));
   }
   for (let i = steps; i >= 0; i--) {
     const x = xMin + ((xMax - xMin) * i) / steps;
-    outline.lineTo(x, -halfWidth(x));
+    outlinePoints.push(x, -halfWidth(x));
   }
+  const outline = new Shape();
+  outline.moveTo(outlinePoints[0], outlinePoints[1]);
+  for (let i = 2; i < outlinePoints.length; i += 2) outline.lineTo(outlinePoints[i], outlinePoints[i + 1]);
+
+  const body = new Group();
+  body.name = 'Body';
+  root.add(body);
   const depth = 0.09;
   const sides = new ExtrudeGeometry(outline, { depth, bevelEnabled: false, curveSegments: 4 });
   sides.translate(0, 0, -depth - 0.003);
-  root.add(new Mesh(sides, sideMat));
+  body.add(named(new Mesh(sides, sideMat), 'Sides'));
   const top = new ExtrudeGeometry(outline, { depth: 0.003, bevelEnabled: false, curveSegments: 4 });
   top.translate(0, 0, -0.003);
-  root.add(new Mesh(top, topMat));
+  body.add(named(new Mesh(top, topMat), 'Top'));
 
-  const rosette = new Mesh(new RingGeometry(0.045, 0.054, 48), darkMat);
+  const rosette = named(new Mesh(new RingGeometry(0.045, 0.054, 48), darkMat), 'Rosette');
   rosette.position.z = 0.0004;
-  root.add(rosette);
-  const soundHole = new Mesh(new CircleGeometry(0.043, 48), darkMat);
+  body.add(rosette);
+  const soundHole = named(new Mesh(new CircleGeometry(0.043, 48), darkMat), 'SoundHole');
   soundHole.position.z = 0.0003;
-  root.add(soundHole);
+  body.add(soundHole);
 
-  const bridge = new Mesh(new BoxGeometry(0.03, 0.15, 0.008), darkMat);
+  const bridge = named(new Mesh(new BoxGeometry(0.03, 0.15, 0.008), darkMat), 'Bridge');
   bridge.position.set(GUITAR.bridgeX - 0.008, 0, 0.004);
-  root.add(bridge);
-  const saddle = new Mesh(new BoxGeometry(0.003, 0.075, 0.016), boneMat);
+  body.add(bridge);
+  const saddle = named(new Mesh(new BoxGeometry(0.003, 0.075, 0.016), boneMat), 'Saddle');
   saddle.position.set(GUITAR.bridgeX, 0, 0.008);
-  root.add(saddle);
+  body.add(saddle);
 
   // Neck and fretboard: tapered slabs from over the body to the nut.
-  const neckStart = 0.17;
-  const taper = (x0: number, x1: number) => {
-    const w = (x: number) =>
-      (GUITAR.neckWidthBody +
-        ((GUITAR.neckWidthNut - GUITAR.neckWidthBody) * (x - GUITAR.boardEndX)) /
-          (GUITAR.nutX - GUITAR.boardEndX)) /
-      2;
-    const s = new Shape();
-    s.moveTo(x0, w(x0));
-    s.lineTo(x1, w(x1));
-    s.lineTo(x1, -w(x1));
-    s.lineTo(x0, -w(x0));
-    s.closePath();
-    return s;
-  };
-  const neck = new ExtrudeGeometry(taper(neckStart, GUITAR.nutX + 0.004), {
-    depth: 0.03,
-    bevelEnabled: true,
-    bevelThickness: 0.006,
-    bevelSize: 0.004,
-    bevelSegments: 3,
-  });
-  neck.translate(0, 0, -0.022);
-  root.add(new Mesh(neck, neckMat));
-  const board = new ExtrudeGeometry(taper(GUITAR.boardEndX, GUITAR.nutX), {
-    depth: 0.006,
-    bevelEnabled: false,
-  });
-  board.translate(0, 0, GUITAR.boardTopZ - 0.006);
-  root.add(new Mesh(board, boardMat));
+  const neck = named(new Mesh(neckGeometry(NECK_START, GUITAR.nutX + 0.004), neckMat), 'Neck');
+  root.add(neck);
+  const board = named(new Mesh(boardGeometry(GUITAR.boardEndX, GUITAR.nutX), boardMat), 'Fretboard');
+  root.add(board);
 
-  const nut = new Mesh(new BoxGeometry(0.005, GUITAR.neckWidthNut, 0.008), boneMat);
+  const nut = named(new Mesh(new BoxGeometry(0.005, GUITAR.neckWidthNut, 0.008), boneMat), 'Nut');
   nut.position.set(GUITAR.nutX + 0.0025, 0, GUITAR.boardTopZ + 0.003);
   root.add(nut);
 
   const fretGeo = new BoxGeometry(0.0022, 1, 0.0016);
+  const frets: Mesh[] = [];
   for (let n = 1; n <= GUITAR.fretCount; n++) {
     const x = fretX(n);
-    const fret = new Mesh(fretGeo, metalMat);
+    const fret = named(new Mesh(fretGeo, metalMat), `Fret${n}`);
     fret.scale.y = stringSpan(x) + 0.012;
     fret.position.set(x, 0, GUITAR.boardTopZ + 0.0008);
     root.add(fret);
+    frets.push(fret);
   }
 
   const inlayGeo = new CircleGeometry(0.0042, 20);
+  const inlays: Mesh[] = [];
   const addInlay = (n: number, y: number) => {
-    const dot = new Mesh(inlayGeo, boneMat);
+    const dot = named(new Mesh(inlayGeo, boneMat), `Inlay${n}`);
     dot.position.set((fretX(n) + fretX(n - 1)) / 2, y, GUITAR.boardTopZ + 0.0003);
     root.add(dot);
+    inlays.push(dot);
   };
   for (const n of INLAY_FRETS) addInlay(n, 0);
   addInlay(12, 0.011);
@@ -154,6 +191,7 @@ export function createGuitarModel(): GuitarModel {
 
   // Headstock, tilted back like a real one, with tuners.
   const head = new Group();
+  head.name = 'Headstock';
   head.position.set(GUITAR.nutX + 0.005, 0, 0.002);
   head.rotation.y = (13 * Math.PI) / 180;
   const plate = new Mesh(new BoxGeometry(0.19, 0.08, 0.016), neckMat);
@@ -179,6 +217,7 @@ export function createGuitarModel(): GuitarModel {
   const vibrations: Mesh[] = [];
   const vibrationMaterials: MeshBasicMaterial[] = [];
   const pressDots: Mesh[] = [];
+  const strings: Mesh[] = [];
   const dotGeo = new CylinderGeometry(0.0045, 0.0045, 0.003, 16);
   const dotMat = new MeshBasicMaterial({ color: 0x3dff8f });
   for (let s = 0; s < STRING_COUNT; s++) {
@@ -191,9 +230,11 @@ export function createGuitarModel(): GuitarModel {
         metalness: 0.85,
       }),
     );
+    string.name = `String${s}`;
     const radius = 0.0012 - s * 0.0001;
     placeString(string, s, GUITAR.nutX, radius);
     root.add(string);
+    strings.push(string);
 
     const mat = new MeshBasicMaterial({
       color: 0xffe9a8,
@@ -258,7 +299,22 @@ export function createGuitarModel(): GuitarModel {
     pickShadow,
     pickShadowMaterial,
     hud,
+    body,
+    outline: outlinePoints,
+    neck,
+    board,
+    head,
+    nut,
+    frets,
+    inlays,
+    strings,
+    materials: { top: topMat, side: sideMat, neck: neckMat, board: boardMat },
   };
+}
+
+function named<T extends Mesh>(mesh: T, name: string): T {
+  mesh.name = name;
+  return mesh;
 }
 
 const start = new Vector3();
@@ -282,7 +338,7 @@ export function placeString(mesh: Mesh, s: number, stopX: number, radius?: numbe
 }
 
 /** HUD border colours for the guitar's states. */
-export const ACCENT = { idle: '#8a8f99', playing: '#ffb000', placing: '#3dff8f' };
+export const ACCENT = { idle: '#8a8f99', playing: '#ffb000', placing: '#3dff8f', smash: '#ff4a3d' };
 
 /** A camera-facing text sprite backed by a canvas, redrawn only on change. */
 export class LabelSprite {

@@ -26,6 +26,8 @@ export class GuitarSynth {
   private readonly master: GainNode;
   private readonly buffers = new Map<string, AudioBuffer>();
   private readonly voices: (Voice | null)[];
+  /** White noise for knocks and cracks when the guitar hits something. */
+  private readonly noise: AudioBuffer;
 
   /**
    * Plays through a live AudioContext by default; pass an
@@ -127,6 +129,10 @@ export class GuitarSynth {
     this.master.connect(limiter);
     wet.connect(limiter);
     limiter.connect(ctx.destination);
+
+    this.noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.6), ctx.sampleRate);
+    const samples = this.noise.getChannelData(0);
+    for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
 
     this.setTone('clean');
   }
@@ -237,6 +243,34 @@ export class GuitarSynth {
 
   chokeAll(): void {
     for (let s = 0; s < this.voices.length; s++) this.choke(s);
+  }
+
+  /**
+   * The guitar hitting something: a burst of noise through the body, a dull
+   * knock for a blow the wood survives and a longer, brighter crack for one
+   * that splinters it. `intensity` runs 0 to 1.
+   */
+  knock(intensity: number, crack: boolean, when = this.ctx.currentTime): void {
+    if (this.ctx instanceof AudioContext && this.ctx.state !== 'running') return;
+    const level = Math.min(1, Math.max(0, intensity));
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.noise;
+    source.playbackRate.value = crack ? 1 : 0.5 + 0.3 * level;
+    const band = this.ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = crack ? 1800 + 1500 * level : 140 + 260 * level;
+    band.Q.value = crack ? 0.7 : 1.4;
+    const gain = this.ctx.createGain();
+    const length = crack ? 0.45 : 0.12;
+    gain.gain.setValueAtTime((crack ? 1.6 : 2.4) * level + 0.001, when);
+    gain.gain.exponentialRampToValueAtTime(0.001, when + length);
+    source.connect(band).connect(gain).connect(this.input);
+    source.start(when);
+    source.stop(when + length + 0.02);
+    source.onended = () => {
+      band.disconnect();
+      gain.disconnect();
+    };
   }
 
   private getBuffer(midi: number, muted: boolean): AudioBuffer {

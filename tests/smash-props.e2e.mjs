@@ -141,7 +141,73 @@ export default async function run({ page, frame, workspaceRoot }) {
   return summary;
 }
 
+/** A point in an object's own space, in world space. */
+const toWorld = (frame, name, [x, y, z]) =>
+  frame.evaluate(
+    ([n, p]) => {
+      const o = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(n);
+      o.updateMatrixWorld(true);
+      const e = o.matrixWorld.elements;
+      return {
+        x: e[0] * p[0] + e[4] * p[1] + e[8] * p[2] + e[12],
+        y: e[1] * p[0] + e[5] * p[1] + e[9] * p[2] + e[13],
+        z: e[2] * p[0] + e[6] * p[1] + e[10] * p[2] + e[14],
+      };
+    },
+    [name, [x, y, z]],
+  );
+/** How far the named object's up axis leans from vertical, in degrees. */
+const lean = (frame, name) =>
+  frame.evaluate((n) => {
+    const o = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(n);
+    o.updateMatrixWorld(true);
+    const e = o.matrixWorld.elements;
+    const len = Math.hypot(e[4], e[5], e[6]);
+    return (Math.acos(Math.min(1, e[5] / len)) * 180) / Math.PI;
+  }, name);
+
 const SCENARIOS = {
+  async piano({ frame, dispatch, wait, press, moveHand, smashState, test, expect, lookAndShoot }) {
+    await press('instrument-piano');
+    await wait(800);
+    await test('The piano starts standing, whole', async () => {
+      const s = await smashState('AirPiano');
+      const tilt = await lean(frame, 'AirPiano');
+      expect(s.hold === 'worn' && s.piecesOff === 0 && tilt < 1, `${JSON.stringify(s)}, lean ${tilt}`);
+      return 'worn, upright';
+    });
+    await test('A hand resting on the case does not move it', async () => {
+      await dispatch('set_hand_pose', { device: 'hand-right', poseId: 'flat' });
+      await moveHand('hand-right', await toWorld(frame, 'AirPiano', [0.1, 0.1, -0.25]));
+      await wait(600);
+      const s = await smashState('AirPiano');
+      expect(s.hold === 'worn', `hold ${s.hold}`);
+      return 'still in place';
+    });
+    await test('Shoving the top of the case topples it, shaking parts loose', async () => {
+      await moveHand('hand-right', await toWorld(frame, 'AirPiano', [0.1, 0.1, -0.08]));
+      await wait(300);
+      await moveHand('hand-right', await toWorld(frame, 'AirPiano', [0.1, 0.12, -0.6]), 0.3);
+      await moveHand('hand-right', { x: 0.4, y: 1.2, z: 0.3 });
+      await wait(3500);
+      const s = await smashState('AirPiano');
+      const tilt = await lean(frame, 'AirPiano');
+      expect(s.hold === 'thrown', `hold ${s.hold}`);
+      expect(tilt > 60, `leans only ${tilt.toFixed(0)} degrees`);
+      expect(s.impacts >= 1 && s.health < 1 && s.piecesOff > 0, JSON.stringify(s));
+      return `over at ${tilt.toFixed(0)} degrees: hit at ${s.lastImpact.toFixed(1)} m/s, health ${(s.health * 100).toFixed(0)}%, ${s.piecesOff} pieces off`;
+    });
+    await lookAndShoot('AirPiano', 'smash-piano');
+    await test('Reset on the panel stands it back up, whole', async () => {
+      await press('reset-guitar');
+      await wait(300);
+      const s = await smashState('AirPiano');
+      const tilt = await lean(frame, 'AirPiano');
+      expect(s.hold === 'worn' && s.piecesOff === 0 && s.health === 1 && tilt < 1, `${JSON.stringify(s)}, lean ${tilt}`);
+      return 'upright and whole';
+    });
+  },
+
   async drums({ dispatch, wait, press, where, extent, moveHand, smashState, test, expect, lookAndShoot }) {
     await press('instrument-drums');
     await wait(500);

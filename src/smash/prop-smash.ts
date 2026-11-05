@@ -15,7 +15,7 @@
 import { Box3, Entity, Group, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from '@iwsdk/core';
 import { JOINT, TrackedHand } from '../guitar/hands.js';
 import { Smashable, SmashCondition, SmashHold } from './smashable-component.js';
-import { RigidBody } from './tumble.js';
+import { RigidBody, STAGE_FLOOR } from './tumble.js';
 
 export type SmashHoldValue = (typeof SmashHold)[keyof typeof SmashHold];
 
@@ -69,6 +69,8 @@ const IMPACT_COOLDOWN = 0.08;
 const TELEPORT_SPEED = 25;
 /** A hand moving into the push box slower than this is resting on it. */
 const PUSH_MIN_SPEED = 0.15;
+/** A hand "moving" faster than this jumped (tracking was lost and found), so it does not push. */
+const PUSH_MAX_SPEED = 4;
 const RETURN_SECONDS = 1;
 const PINCH_DISTANCE = 0.018;
 const CLATTER_INTERVAL = 0.03;
@@ -187,7 +189,7 @@ export class PropSmasher {
         centre: new Vector3(),
         corners: new Float32Array(24),
         pivot,
-        body: new RigidBody(new Float32Array(24), 1, [1, 1, 1]),
+        body: onStage(new RigidBody(new Float32Array(24), 1, [1, 1, 1])),
         homes,
         attached: true,
         cooldown: 0,
@@ -198,7 +200,7 @@ export class PropSmasher {
     this.pointPart = new Int16Array(capacity);
     this.prevY = new Float32Array(capacity);
     this.armed = new Uint8Array(capacity);
-    this.body = new RigidBody(new Float32Array(capacity * 3), config.mass, [1, 1, 1]);
+    this.body = onStage(new RigidBody(new Float32Array(capacity * 3), config.mass, [1, 1, 1]));
     this.refit();
   }
 
@@ -345,7 +347,7 @@ export class PropSmasher {
     this.body.pointCount = n;
     this.root.updateMatrixWorld(true);
     for (let i = 0; i < n; i++) {
-      const y = this.tmp.fromArray(this.pointLocal, i * 3).applyMatrix4(this.root.matrixWorld).y;
+      const y = this.tmp.fromArray(this.pointLocal, i * 3).applyMatrix4(this.root.matrixWorld).y - STAGE_FLOOR;
       this.prevY[i] = y;
       this.armed[i] = y > REARM_HEIGHT ? 1 : 0;
     }
@@ -373,16 +375,17 @@ export class PropSmasher {
     this.lowest = 0;
     for (let i = 0; i < this.pointCount; i++) {
       const p = this.tmp.fromArray(this.pointLocal, i * 3).applyMatrix4(matrix);
-      const down = (this.prevY[i] - p.y) / dt;
-      if (this.armed[i] && p.y < 0 && down > fastest && down < TELEPORT_SPEED) {
+      const y = p.y - STAGE_FLOOR;
+      const down = (this.prevY[i] - y) / dt;
+      if (this.armed[i] && y < 0 && down > fastest && down < TELEPORT_SPEED) {
         fastest = down;
         struck = i;
-        this.hit.set(p.x, 0, p.z);
+        this.hit.set(p.x, STAGE_FLOOR, p.z);
       }
-      if (p.y < 0) this.armed[i] = 0;
-      else if (p.y > REARM_HEIGHT) this.armed[i] = 1;
-      this.prevY[i] = p.y;
-      this.lowest = Math.min(this.lowest, p.y);
+      if (y < 0) this.armed[i] = 0;
+      else if (y > REARM_HEIGHT) this.armed[i] = 1;
+      this.prevY[i] = y;
+      this.lowest = Math.min(this.lowest, y);
     }
     this.lastScan = fastest;
     return struck;
@@ -509,7 +512,7 @@ export class PropSmasher {
     if (body.impactPoint < 0 || body.impactSpeed < 0.3 || this.cooldown > 0) return;
     this.cooldown = IMPACT_COOLDOWN;
     this.hit.fromArray(this.pointLocal, body.impactPoint * 3).applyMatrix4(root.matrixWorld);
-    this.hit.y = 0;
+    this.hit.y = STAGE_FLOOR;
     this.strike(body.impactSpeed, this.pointPart[body.impactPoint]);
   }
 
@@ -686,7 +689,7 @@ export class PropSmasher {
       }
       const n = this.tmp.set(0, 0, 0).setComponent(axis, sign).transformDirection(this.root.matrixWorld);
       const speed = -this.vel.dot(n);
-      if (speed < PUSH_MIN_SPEED) continue;
+      if (speed < PUSH_MIN_SPEED || this.vel.length() > PUSH_MAX_SPEED) continue;
       if (this.hold === SmashHold.Worn) this.loosen(this.vel.set(0, 0, 0), this.spin.set(0, 0, 0));
       if (this.hold !== SmashHold.Thrown) continue;
       this.body.push(palm.x, palm.y, palm.z, -n.x, -n.y, -n.z, speed);
@@ -785,6 +788,11 @@ function cornersInto(box: Box3, out: Float32Array): void {
         out[i++] = y;
         out[i++] = z;
       }
+}
+
+function onStage(body: RigidBody): RigidBody {
+  body.floor = STAGE_FLOOR;
+  return body;
 }
 
 function volume(box: Box3): number {

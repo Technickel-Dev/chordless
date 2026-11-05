@@ -7,6 +7,8 @@
  */
 
 export const GRAVITY = 9.81;
+/** The top of the stage the player stands on, which the instrument systems set things down on (m). */
+export const STAGE_FLOOR = 0.035;
 /** Fast throws are split into substeps this long so points cannot tunnel. */
 const MAX_STEP = 1 / 240;
 /**
@@ -45,6 +47,8 @@ export class RigidBody {
   readonly points: Float32Array;
   /** How many of `points` take part; a guitar that loses its neck uses fewer. */
   pointCount: number;
+  /** Height of the floor it lands on. */
+  floor = 0;
   restitution = 0.25;
   friction = 0.6;
   asleep = false;
@@ -152,7 +156,7 @@ export class RigidBody {
     let cz = 0;
     for (let i = 0; i < this.pointCount; i++) {
       rotate(q, points[i * 3], points[i * 3 + 1], points[i * 3 + 2], r);
-      if (p[1] + r[1] >= CONTACT_MARGIN) continue;
+      if (p[1] + r[1] - this.floor >= CONTACT_MARGIN) continue;
       touching++;
       cx += r[0];
       cy += r[1];
@@ -210,7 +214,7 @@ export class RigidBody {
     let lowest = 0;
     for (let i = 0; i < this.pointCount; i++) {
       rotate(q, points[i * 3], points[i * 3 + 1], points[i * 3 + 2], r);
-      lowest = Math.min(lowest, p[1] + r[1]);
+      lowest = Math.min(lowest, p[1] + r[1] - this.floor);
     }
     if (lowest < 0) p[1] -= lowest * 0.8;
   }

@@ -14,6 +14,7 @@
  */
 
 import { makeRoomImpulse, midiToHz } from '../guitar/synth.js';
+import { makeNoise, playKnock } from '../smash/knock.js';
 import { PIANO } from './geometry.js';
 
 /** The keys that are rendered: every third, so no key is more than a semitone from one. */
@@ -233,6 +234,8 @@ export class PianoSynth {
   private readonly buffers: (AudioBuffer[] | null)[] = ROOTS.map(() => null);
   private readonly voices: (Voice | null)[] = Array(PIANO.highest - PIANO.lowest + 1).fill(null);
   private readonly dry: GainNode;
+  /** White noise for the case knocking on the floor. */
+  private readonly noise: AudioBuffer;
   private count = 0;
 
   /**
@@ -271,6 +274,7 @@ export class PianoSynth {
     air.connect(limiter);
     wet.connect(limiter);
     limiter.connect(ctx.destination);
+    this.noise = makeNoise(ctx);
 
   }
 
@@ -295,6 +299,11 @@ export class PianoSynth {
   }
 
   /** Strikes a key, `velocity` 0.1 to 1, at `at` (audio clock). */
+  /** The case hitting the floor: a deep knock, or a splintering crack. */
+  knock(intensity: number, crack: boolean): void {
+    playKnock(this.ctx, this.dry, this.noise, intensity, crack, 0.6);
+  }
+
   noteOn(midi: number, velocity: number, at = this.ctx.currentTime): void {
     let { root, rate } = sampleFor(midi);
     if (this.buffers[root] == null) {

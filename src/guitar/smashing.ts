@@ -21,6 +21,7 @@ import {
   SMASH,
 } from './smash.js';
 import { GuitarSynth } from './synth.js';
+import { STAGE_FLOOR } from '../smash/tumble.js';
 import {
   BREAK_X,
   createGuitarWreck,
@@ -117,6 +118,8 @@ export class GuitarSmasher {
     private readonly soundingMidi: Int16Array,
   ) {
     this.wreck = createGuitarWreck(model);
+    for (const piece of [this.wreck.upper, this.wreck.lower, ...this.wreck.shards]) piece.body.floor = STAGE_FLOOR;
+    this.wreck.guitar.floor = STAGE_FLOOR;
     const count = this.wreck.points.length / 3;
     this.prevY = new Float32Array(count);
     this.armed = new Uint8Array(count);
@@ -214,7 +217,7 @@ export class GuitarSmasher {
     if (object !== this.model.root) return;
     const points = this.wreck.points;
     for (let i = 0; i < this.prevY.length; i++) {
-      const y = this.tmp.fromArray(points, i * 3).applyMatrix4(object.matrixWorld).y;
+      const y = this.tmp.fromArray(points, i * 3).applyMatrix4(object.matrixWorld).y - STAGE_FLOOR;
       this.prevY[i] = y;
       this.armed[i] = y > REARM_HEIGHT ? 1 : 0;
     }
@@ -260,16 +263,17 @@ export class GuitarSmasher {
     let struck = -1;
     for (let i = 0; i < count; i++) {
       const p = this.tmp.fromArray(points, i * 3).applyMatrix4(this.desired);
-      const down = dt > 0 ? (this.prevY[i] - p.y) / dt : 0;
-      if (this.armed[i] && p.y < 0 && down > fastest) {
+      const y = p.y - STAGE_FLOOR;
+      const down = dt > 0 ? (this.prevY[i] - y) / dt : 0;
+      if (this.armed[i] && y < 0 && down > fastest) {
         fastest = down;
         struck = i;
-        this.hit.set(p.x, 0, p.z);
+        this.hit.set(p.x, STAGE_FLOOR, p.z);
       }
-      if (p.y < 0) this.armed[i] = 0;
-      else if (p.y > REARM_HEIGHT) this.armed[i] = 1;
-      this.prevY[i] = p.y;
-      lowest = Math.min(lowest, p.y);
+      if (y < 0) this.armed[i] = 0;
+      else if (y > REARM_HEIGHT) this.armed[i] = 1;
+      this.prevY[i] = y;
+      lowest = Math.min(lowest, y);
     }
     const root = this.model.root;
     root.position.y -= lowest;
@@ -370,7 +374,7 @@ export class GuitarSmasher {
     if (body.impactPoint < 0 || body.impactSpeed < 0.3 || this.cooldown > 0) return;
     this.cooldown = IMPACT_COOLDOWN;
     this.hit.fromArray(this.wreck.points, body.impactPoint * 3).applyMatrix4(root.matrixWorld);
-    this.hit.y = 0;
+    this.hit.y = STAGE_FLOOR;
     this.strike(body.impactSpeed, this.wreck.regions[body.impactPoint] as Region);
   }
 

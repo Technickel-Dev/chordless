@@ -1,4 +1,4 @@
-import { createSystem, Entity, Group, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
+import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { dynamicMark } from '../cymbals/air-cymbals-system.js';
 import { ACCENT } from '../guitar/guitar-model.js';
 import { TrackedHand } from '../guitar/hands.js';
@@ -15,6 +15,8 @@ import {
   trianglePose,
 } from './strike.js';
 import { TriangleSynth } from './synth.js';
+import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
+import { Smashable, SmashHold } from '../smash/smashable-component.js';
 import { createTriangleModel, type TriangleModel } from './triangle-model.js';
 
 /** The HUD floats this far in front of, below and left of the head (m), as the cymbals' does. */
@@ -42,6 +44,10 @@ export class AirTriangleSystem extends createSystem({
   private synth!: TriangleSynth;
   private readonly left = new TrackedHand();
   private readonly right = new TrackedHand();
+  private readonly hands: TrackedHand[] = [];
+  private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
+  private smash!: PropSmasher;
+  private debris!: Group;
   private readonly pose = createTrianglePose();
   private readonly beater = createBeaterPose();
   private readonly strike = new StrikeDetector();
@@ -68,7 +74,27 @@ export class AirTriangleSystem extends createSystem({
     this.model = createTriangleModel();
     this.entity = this.world.createTransformEntity(this.model.triangle, { persistent: true });
     this.entity.addComponent(AirTriangle);
+    this.entity.addComponent(Smashable);
     this.world.createTransformEntity(this.model.beater, { persistent: true });
+    this.debris = new Group();
+    this.debris.name = 'AirTriangleDebris';
+    this.debris.visible = false;
+    this.world.createTransformEntity(this.debris, { persistent: true });
+    this.hands.push(this.left, this.right);
+    const parts: PropPart[] = [];
+    for (const [name, breakAt] of [['Loop', 0.8], ['Clip', 0.5]] as const) {
+      const object = this.model.triangle.getObjectByName(name);
+      if (object) parts.push({ name: `LooseTriangle${name}`, objects: [object], breakAt });
+    }
+    this.smash = new PropSmasher(this.model.triangle, this.debris, {
+      mass: 0.3,
+      wear: 0.12,
+      parts,
+      // The bar hitting the floor rings, as loud as the blow.
+      sound: (speed) => {
+        if (speed > 0.6) this.synth.strike({ loudness: Math.min(1, speed / 8), position: 0.5, across: 0 });
+      },
+    });
     this.world.createTransformEntity(this.model.hud.sprite, { persistent: true });
     this.setVisible(false);
 
@@ -108,9 +134,11 @@ export class AirTriangleSystem extends createSystem({
     this.readHead();
 
     const { triangle, beater } = this.model;
-    triangle.visible = left.tracked;
+    // Smashed out of the hand, it lies where it fell and is not played.
+    const inHand = this.smash.hold === SmashHold.Worn;
+    triangle.visible = left.tracked || !inHand;
     beater.visible = right.tracked;
-    if (left.tracked) {
+    if (left.tracked && inHand) {
       const p = trianglePose(left.positions, this.head, this.pose);
       this.place(triangle, p.origin, this.x.fromArray(p.x), this.y.fromArray(p.y), this.z.fromArray(p.z));
     }
@@ -125,9 +153,13 @@ export class AirTriangleSystem extends createSystem({
       this.place(beater, b.grip, this.x, this.y, this.z);
     }
 
+    this.grips[0] = this.player.gripSpaces.left;
+    this.grips[1] = this.player.gripSpaces.right;
+    this.smash.update(dt, this.hands, this.grips, e);
+
     const strike = this.strike;
     const now = this.synth.ctx.currentTime;
-    if (left.tracked && right.tracked) {
+    if (left.tracked && right.tracked && inHand) {
       toTriangle(this.pose, this.beater.butt, this.butt);
       toTriangle(this.pose, this.beater.tip, this.tip);
       strike.update(this.butt, this.tip, dt);
@@ -144,7 +176,7 @@ export class AirTriangleSystem extends createSystem({
 
     // The holding hand's free fingers on the bar, or the beater resting on it, damp it.
     let fingers = false;
-    if (left.tracked) {
+    if (left.tracked && inHand) {
       for (let i = 0; i < DAMPING_JOINTS.length; i++) {
         const j = DAMPING_JOINTS[i] * 3;
         this.joint[0] = left.positions[j];
@@ -181,7 +213,10 @@ export class AirTriangleSystem extends createSystem({
     if (this.shown === visible) return;
     this.shown = visible;
     this.setVisible(visible);
+    this.debris.visible = visible;
     if (!visible) {
+      // Put away, it comes back out whole.
+      this.smash.repair();
       this.synth.stopAll();
       this.strike.reset();
     }

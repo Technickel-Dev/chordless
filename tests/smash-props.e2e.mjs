@@ -296,6 +296,10 @@ async function handHeld(ctx, { button, component, root, device, side, debris, sc
 }
 
 const SCENARIOS = {
+  cymbals: (ctx) =>
+    handHeld(ctx, { button: 'instrument-cymbals', component: 'AirCymbals', root: 'AirCymbalLeft', device: 'hand-left', side: -1, debris: 'AirCymbalsDebris', screenshot: 'smash-cymbals' }),
+  triangle: (ctx) =>
+    handHeld(ctx, { button: 'instrument-triangle', component: 'AirTriangle', root: 'AirTriangle', device: 'hand-left', side: -1, debris: 'AirTriangleDebris', screenshot: 'smash-triangle' }),
   trumpet: (ctx) =>
     handHeld(ctx, { button: 'instrument-trumpet', component: 'AirTrumpet', root: 'AirTrumpet', device: 'hand-right', side: 1, debris: 'AirTrumpetDebris', screenshot: 'smash-trumpet' }),
   trombone: (ctx) =>

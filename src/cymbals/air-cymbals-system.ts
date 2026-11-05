@@ -1,10 +1,12 @@
-import { createSystem, Entity, Group, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
+import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { ACCENT } from '../guitar/guitar-model.js';
 import { TrackedHand } from '../guitar/hands.js';
 import { AirCymbals } from './air-cymbals-component.js';
 import { CHEST, ClashDetector, createCymbalPose, cymbalPose, type CymbalPose, touchesSphere } from './clash.js';
 import { createCymbalsModel, type CymbalsModel } from './cymbals-model.js';
 import { CymbalSynth } from './synth.js';
+import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
+import { Smashable, SmashHold } from '../smash/smashable-component.js';
 
 /** The HUD floats this far in front of, below and left of the head (m): up and aside from where the plates meet. */
 const HUD_FORWARD = 0.6;
@@ -25,7 +27,9 @@ export function dynamicMark(loudness: number): string {
  * A pair of orchestral clash cymbals, one in each hand, held by the strap.
  * Bringing the plates together clashes them, as loud as they were closing;
  * they ring until held together, laid together gently or pressed against
- * the chest.
+ * the chest. Swung down onto the floor a plate crashes, loses its pad and
+ * strap, and once wrecked drops from the hand to roll on its rim (see
+ * ../smash/prop-smash.ts).
  */
 export class AirCymbalsSystem extends createSystem({
   items: { required: [AirCymbals] },
@@ -36,6 +40,11 @@ export class AirCymbalsSystem extends createSystem({
   private model!: CymbalsModel;
   private entity!: Entity;
   private synth!: CymbalSynth;
+  /** Each plate is smashed on its own, left then right, each on its own entity. */
+  private readonly smash: PropSmasher[] = [];
+  private readonly entities: Entity[] = [];
+  private debris!: Group;
+  private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
   private readonly hands = [new TrackedHand(), new TrackedHand()] as const;
   private readonly poses: [CymbalPose, CymbalPose] = [createCymbalPose(), createCymbalPose()];
   private readonly clash = new ClashDetector();
@@ -58,7 +67,31 @@ export class AirCymbalsSystem extends createSystem({
     const [left, right] = this.model.cymbals;
     this.entity = this.world.createTransformEntity(left, { persistent: true });
     this.entity.addComponent(AirCymbals);
-    this.world.createTransformEntity(right, { persistent: true });
+    const rightEntity = this.world.createTransformEntity(right, { persistent: true });
+    this.debris = new Group();
+    this.debris.name = 'AirCymbalsDebris';
+    this.debris.visible = false;
+    this.world.createTransformEntity(this.debris, { persistent: true });
+    this.entities.push(this.entity, rightEntity);
+    this.model.cymbals.forEach((cymbal, i) => {
+      this.entities[i].addComponent(Smashable);
+      const parts: PropPart[] = [];
+      for (const [name, breakAt] of [['Pad', 0.75], ['Strap', 0.45]] as const) {
+        const object = cymbal.getObjectByName(name);
+        if (object) parts.push({ name: `LooseCymbal${i}${name}`, objects: [object], breakAt });
+      }
+      this.smash.push(
+        new PropSmasher(cymbal, this.debris, {
+          mass: 1.4,
+          wear: 0.1,
+          parts,
+          // A plate hitting the floor crashes, as loud as the blow.
+          sound: (speed) => {
+            if (speed > 0.6) this.synth.clash({ loudness: Math.min(1, speed / 8), flush: false });
+          },
+        }),
+      );
+    });
     this.world.createTransformEntity(this.model.hud.sprite, { persistent: true });
     this.setVisible(false);
 
@@ -95,15 +128,25 @@ export class AirCymbalsSystem extends createSystem({
     right.update(adapters.right, this.player.gripSpaces.right);
     if (e.getValue(AirCymbals, 'leftHand') !== left.tracked) e.setValue(AirCymbals, 'leftHand', left.tracked);
     if (e.getValue(AirCymbals, 'rightHand') !== right.tracked) e.setValue(AirCymbals, 'rightHand', right.tracked);
+    this.grips[0] = this.player.gripSpaces.left;
+    this.grips[1] = this.player.gripSpaces.right;
+    let inHands = true;
     for (let i = 0; i < 2; i++) {
       const cymbal = this.model.cymbals[i];
-      cymbal.visible = this.hands[i].tracked;
-      if (cymbal.visible) this.place(cymbal, cymbalPose(this.hands[i].positions, this.poses[i]));
+      if (this.smash[i].hold === SmashHold.Worn) {
+        cymbal.visible = this.hands[i].tracked;
+        if (cymbal.visible) this.place(cymbal, cymbalPose(this.hands[i].positions, this.poses[i]));
+      } else {
+        // Smashed out of the hand, it lies where it fell.
+        cymbal.visible = true;
+        inHands = false;
+      }
+      this.smash[i].update(dt, this.hands, this.grips, this.entities[i]);
     }
 
     const clash = this.clash;
     const now = this.synth.ctx.currentTime;
-    if (left.tracked && right.tracked) clash.update(this.poses[0], this.poses[1], dt);
+    if (left.tracked && right.tracked && inHands) clash.update(this.poses[0], this.poses[1], dt);
     else clash.reset();
     if (clash.clashed) {
       this.synth.clash({ loudness: clash.loudness, flush: clash.flush }, now);
@@ -149,7 +192,10 @@ export class AirCymbalsSystem extends createSystem({
     if (this.shown === visible) return;
     this.shown = visible;
     this.setVisible(visible);
+    this.debris.visible = visible;
     if (!visible) {
+      // Put away, they come back out whole.
+      for (const smash of this.smash) smash.repair();
       this.synth.stopAll();
       this.clash.reset();
     }

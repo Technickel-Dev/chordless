@@ -166,7 +166,87 @@ const lean = (frame, name) =>
     return (Math.acos(Math.min(1, e[5] / len)) * 180) / Math.PI;
   }, name);
 
+/** The stage top, where things land. */
+const FLOOR = 0.035;
+
+/** Each loose piece under `debris` that is sunk into the floor or not lying on it. */
+const offFloor = (frame, debris) =>
+  frame.evaluate(
+    ([n, floor]) => {
+      const root = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(n);
+      root.updateMatrixWorld(true);
+      const out = [];
+      for (const piece of root.children) {
+        let min = Infinity;
+        piece.traverseVisible((o) => {
+          if (!o.isMesh) return;
+          const pos = o.geometry.attributes.position;
+          const e = o.matrixWorld.elements;
+          for (let k = 0; k < pos.count; k++) min = Math.min(min, e[1] * pos.getX(k) + e[5] * pos.getY(k) + e[9] * pos.getZ(k) + e[13]);
+        });
+        if (min !== Infinity && (min < floor - 0.012 || min > floor + 0.05)) out.push({ name: piece.name, min });
+      }
+      return { count: root.children.length, off: out };
+    },
+    [debris, FLOOR],
+  );
+
+/**
+ * Picks up a bowed instrument by the neck with a left fist, smashes it into
+ * the floor until it is wrecked, and checks the pieces land.
+ */
+async function bowed(ctx, { button, component, root, gripX, debris, screenshot }) {
+  const { frame, dispatch, wait, press, extent, moveHand, smashState, test, expect, lookAndShoot } = ctx;
+  await press(button);
+  await wait(600);
+  const hand = {};
+  const move = async (to, duration = 0) => {
+    Object.assign(hand, to);
+    await moveHand('hand-left', { ...hand }, duration);
+  };
+  await test('A left fist round the neck picks it up', async () => {
+    await dispatch('set_hand_pose', { device: 'hand-left', poseId: 'fist' });
+    await move(await toWorld(frame, root, [gripX, 0, -0.01]));
+    await wait(800);
+    const s = await smashState(component);
+    expect(s.hold === 'held', `hold ${s.hold}`);
+    return 'held';
+  });
+  await test('Swinging it into the floor wrecks it, and the pieces land', async () => {
+    let s = await smashState(component);
+    for (let i = 0; i < 8 && s.condition !== 'wrecked'; i++) {
+      await move({ y: hand.y + 0.35 }, 0.35);
+      const drop = (await extent(root)).min - FLOOR + 0.08;
+      await move({ y: hand.y - drop }, drop / 8);
+      await wait(250);
+      s = await smashState(component);
+    }
+    expect(s.condition === 'wrecked' && s.hold === 'thrown', `after ${s.impacts} hits: ${JSON.stringify(s)}`);
+    expect(s.piecesOff >= 4, `${s.piecesOff} pieces off`);
+    await wait(2500);
+    const floor = await offFloor(frame, debris);
+    expect(floor.off.length === 0, `pieces not on the floor: ${JSON.stringify(floor.off)}`);
+    const body = await extent(root);
+    expect(body.min > FLOOR - 0.012 && body.min < FLOOR + 0.05, `body lowest point ${body.min.toFixed(3)} m`);
+    return `${s.impacts} hits (last ${s.lastImpact.toFixed(1)} m/s), ${s.piecesOff} pieces off, ${floor.count} on the floor`;
+  });
+  await dispatch('set_hand_pose', { device: 'hand-left', poseId: 'open' });
+  await lookAndShoot(root, screenshot);
+  await test('Reset on the panel puts it back together, on the player', async () => {
+    await press('reset-guitar');
+    await wait(300);
+    const s = await smashState(component);
+    expect(s.hold === 'worn' && s.piecesOff === 0 && s.health === 1, JSON.stringify(s));
+    return 'whole and worn';
+  });
+}
+
 const SCENARIOS = {
+  violin: (ctx) =>
+    bowed(ctx, { button: 'instrument-violin', component: 'AirViolin', root: 'AirViolin', gripX: 0.17, debris: 'AirViolinDebris', screenshot: 'smash-violin' }),
+  cello: (ctx) =>
+    bowed(ctx, { button: 'instrument-cello', component: 'AirCello', root: 'AirCello', gripX: 0.45, debris: 'AirCelloDebris', screenshot: 'smash-cello' }),
+
   async piano({ frame, dispatch, wait, press, moveHand, smashState, test, expect, lookAndShoot }) {
     await press('instrument-piano');
     await wait(800);

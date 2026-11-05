@@ -27,6 +27,8 @@ export interface PropPart {
   breakAt: number;
   /** A fist can pull it off and throw it on its own. */
   grabbable?: boolean;
+  /** It snaps and is gone (strings) rather than flying off. */
+  vanish?: boolean;
 }
 
 export interface PropSmashConfig {
@@ -36,10 +38,14 @@ export interface PropSmashConfig {
   wear: number;
   /** Slower hits only knock. */
   tap?: number;
+  /** Grip of the whole instrument on the floor: rubber feet grip hard, so a shove tips it rather than sliding it. */
+  friction?: number;
   /** A fist on the instrument picks the whole of it up. */
   grabWhole?: boolean;
   /** How long a fist must stay to pick something up. */
   grabSeconds?: number;
+  /** Which hands (0 left, 1 right) can grab; both by default. */
+  grabHands?: readonly number[];
   /** Hands push the instrument inside this box, in its own space: min xyz, then max xyz. */
   pushBox?: readonly [number, number, number, number, number, number];
   parts: PropPart[];
@@ -201,6 +207,7 @@ export class PropSmasher {
     this.prevY = new Float32Array(capacity);
     this.armed = new Uint8Array(capacity);
     this.body = onStage(new RigidBody(new Float32Array(capacity * 3), config.mass, [1, 1, 1]));
+    this.body.friction = config.friction ?? this.body.friction;
     this.refit();
   }
 
@@ -292,6 +299,7 @@ export class PropSmasher {
         home.object.scale.copy(home.scale);
       }
       part.pivot.removeFromParent();
+      if (part.spec.vanish) for (const o of part.spec.objects) o.visible = true;
       part.attached = true;
     }
     this.loose.length = 0;
@@ -398,7 +406,8 @@ export class PropSmasher {
     for (let i = 0; i < hands.length && i < 2; i++) {
       const hand = hands[i];
       let target = NOTHING;
-      if (hand.tracked && this.isFist(hand)) {
+      const allowed = this.config.grabHands == null || this.config.grabHands.includes(i);
+      if (allowed && hand.tracked && this.isFist(hand)) {
         const local = this.tmp2.copy(this.palm).applyMatrix4(this.inverse);
         for (const part of this.parts) {
           if (part.attached && part.spec.grabbable && near(part.box, local)) {
@@ -406,7 +415,7 @@ export class PropSmasher {
             break;
           }
         }
-        if (target === NOTHING && this.config.grabWhole && this.health > 0 && this.hold !== SmashHold.Held && near(this.coreBox, local)) {
+        if (target === NOTHING && this.config.grabWhole && this.health > 0 && this.hold !== SmashHold.Held && near(this.wholeBox, local)) {
           target = WHOLE;
         }
       }
@@ -533,7 +542,8 @@ export class PropSmasher {
     const centre = this.world.copy(this.centre).applyMatrix4(this.root.matrixWorld);
     for (const p of this.parts) {
       if (!p.attached || (p.spec.breakAt < this.health && this.health > 0)) continue;
-      this.launch(p, this.vel, this.spin, speed, centre);
+      if (p.spec.vanish) this.vanish(p);
+      else this.launch(p, this.vel, this.spin, speed, centre);
       broke = true;
     }
     this.config.sound(speed, part, broke);
@@ -554,6 +564,15 @@ export class PropSmasher {
       v.set(0, 0, 0);
       w.set(0, 0, 0);
     }
+  }
+
+  /** A part that snaps and is gone. */
+  private vanish(part: Part): void {
+    for (const o of part.spec.objects) o.visible = false;
+    part.attached = false;
+    this.piecesOff++;
+    this.version++;
+    this.rebuildPoints();
   }
 
   /** Takes a part off the instrument into world space, where it simulates on its own. */
@@ -766,9 +785,14 @@ export class PropSmasher {
 const meshBox = new Box3();
 const meshMatrix = new Matrix4();
 
-/** Grows `box` by every mesh under `object` (skipping `skip`), in the space `toRoot` maps into. */
-function boxOf(object: Object3D, box: Box3, toRoot: Matrix4, skip: Set<Object3D> | null): void {
-  if (skip?.has(object)) return;
+/**
+ * Grows `box` by every mesh under `object` (skipping `skip`), in the space
+ * `toRoot` maps into. Hidden helpers under it (a glow, a fingertip shadow)
+ * can be parked anywhere, so they do not count; `object` itself counts
+ * hidden or not, since a put-away instrument is still measured.
+ */
+function boxOf(object: Object3D, box: Box3, toRoot: Matrix4, skip: Set<Object3D> | null, top = true): void {
+  if (skip?.has(object) || (!top && !object.visible)) return;
   const mesh = object as Mesh;
   if (mesh.isMesh) {
     const g = mesh.geometry;
@@ -776,7 +800,7 @@ function boxOf(object: Object3D, box: Box3, toRoot: Matrix4, skip: Set<Object3D>
     meshBox.copy(g.boundingBox!).applyMatrix4(meshMatrix.multiplyMatrices(toRoot, mesh.matrixWorld));
     box.union(meshBox);
   }
-  for (const child of object.children) boxOf(child, box, toRoot, skip);
+  for (const child of object.children) boxOf(child, box, toRoot, skip, false);
 }
 
 function cornersInto(box: Box3, out: Float32Array): void {

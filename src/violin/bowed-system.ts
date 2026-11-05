@@ -1,4 +1,4 @@
-import { createSystem, Entity, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
+import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { midiName } from '../guitar/chords.js';
 import { PRESS } from '../guitar/fretting.js';
 import { ACCENT } from '../guitar/guitar-model.js';
@@ -10,6 +10,8 @@ import type { BowedGeometry } from './geometry.js';
 import { StopReader } from './stopping.js';
 import { BowedSynth, type BowedVoice } from './synth.js';
 import { placeString, ViolinModel } from './violin-model.js';
+import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
+import { Smashable, SmashHold } from '../smash/smashable-component.js';
 
 const UP = new Vector3(0, 1, 0);
 /** The torso turns with the head only past this yaw, so glancing along the neck is free. */
@@ -60,13 +62,29 @@ const PAD_FRACTION = 0.5;
 const SAMPLE_SPACING = 0.006;
 /** A held note grows vibrato after this long (snap intonation only; in free, the finger makes its own). */
 const VIBRATO_DELAY = 0.35;
+/**
+ * What comes off a bowed instrument as it is smashed, and at what health:
+ * the strings and bridge first, then the chin rest, the tailpiece and endpin, the
+ * scroll, and finally the neck.
+ */
+const BREAKS: [string, number][] = [
+  ['Strings', 0.85],
+  ['Bridge', 0.85],
+  ['ChinRest', 0.65],
+  ['Tailpiece', 0.5],
+  ['Endpin', 0.5],
+  ['Head', 0.35],
+  ['Neck', 0.15],
+];
 
 /**
  * A hand-played bowed instrument. It is held where its placement says and
  * follows the player; left fingertips stop real strings anywhere along the
  * fingerboard (no frets), and the right hand holds a bow, drawn across the
  * strings near the bridge. Tilting the bow chooses the string; bow speed
- * sets the loudness.
+ * sets the loudness. A left fist round it takes it off the player to swing
+ * into the floor, which knocks its fittings, scroll and neck off (see
+ * ../smash/prop-smash.ts); opening the hand throws it.
  */
 export function createBowedSystem(config: BowedConfig) {
   const AirViolin = config.component;
@@ -85,6 +103,11 @@ export function createBowedSystem(config: BowedConfig) {
     private model!: ViolinModel;
     private entity!: Entity;
     private synth!: BowedSynth;
+    private smash!: PropSmasher;
+    private debris!: Group;
+    private readonly hands: TrackedHand[] = [];
+    private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
+    private playing = true;
 
     private readonly left = new TrackedHand();
     private readonly right = new TrackedHand();
@@ -123,9 +146,33 @@ export function createBowedSystem(config: BowedConfig) {
       this.model = config.createModel();
       this.entity = this.world.createTransformEntity(this.model.root, { persistent: true });
       this.entity.addComponent(AirViolin);
+      this.entity.addComponent(Smashable);
       this.world.createTransformEntity(this.model.bow, { persistent: true });
       this.model.root.visible = false;
       this.model.bow.visible = false;
+      this.debris = new Group();
+      this.debris.name = `Air${config.title}Debris`;
+      this.debris.visible = false;
+      this.world.createTransformEntity(this.debris, { persistent: true });
+      this.hands.push(this.left, this.right);
+      const root = this.model.root;
+      const parts: PropPart[] = [];
+      for (const [name, breakAt] of BREAKS) {
+        const object = root.getObjectByName(name);
+        if (object) parts.push({ name: `Loose${config.title}${name}`, objects: [object], breakAt, vanish: name === 'Strings' });
+      }
+      const cello = config.instrument === 'cello';
+      this.smash = new PropSmasher(root, this.debris, {
+        mass: cello ? 3 : 0.5,
+        wear: cello ? 0.1 : 0.14,
+        grabWhole: true,
+        // The bow hand curls round the frog, close to the strings: only the left hand grabs.
+        grabHands: [0],
+        parts,
+        sound: (speed, _part, broke) => {
+          if (speed > 0.4) this.synth.knock(Math.min(1, speed / 9), broke, cello ? 0.75 : 1.3);
+        },
+      });
 
       const unlock = () => this.synth.resume();
       window.addEventListener('pointerdown', unlock);
@@ -160,19 +207,38 @@ export function createBowedSystem(config: BowedConfig) {
       if (e.getValue(AirViolin, 'rightHand') !== this.right.tracked) e.setValue(AirViolin, 'rightHand', this.right.tracked);
 
       this.readHead();
-      if (!this.placed || e.getValue(AirViolin, 'resetPlacement')) {
+      if (e.getValue(AirViolin, 'resetPlacement')) this.smash.repair();
+      if (!this.placed || this.smash.takeRepaired() || e.getValue(AirViolin, 'resetPlacement')) {
         e.setValue(AirViolin, 'resetPlacement', false);
         this.torsoYaw = this.headYaw();
         this.placed = true;
         this.model.root.userData.posed = false;
       }
-      this.followTorso(dt);
-      this.poseViolin(dt);
+      const worn = this.smash.hold === SmashHold.Worn;
+      if (worn) {
+        this.followTorso(dt);
+        this.poseViolin(dt);
+      }
       this.synth.setVolume(e.getValue(AirViolin, 'volume') ?? 0.8);
+      this.grips[0] = this.player.gripSpaces.left;
+      this.grips[1] = this.player.gripSpaces.right;
+      this.smash.update(dt, this.hands, this.grips, e);
 
-      this.updateStops(dt);
-      this.updateBow(dt);
-      this.updateSound(dt);
+      // Taken off the player, it is not being played.
+      const playing = this.smash.hold === SmashHold.Worn;
+      if (playing !== this.playing) {
+        this.playing = playing;
+        if (!playing) {
+          this.synth.stopAll();
+          this.amp.fill(0);
+          this.bow.reset();
+        }
+      }
+      if (playing) {
+        this.updateStops(dt);
+        this.updateBow(dt);
+        this.updateSound(dt);
+      }
       this.updateHud();
     }
 
@@ -182,7 +248,10 @@ export function createBowedSystem(config: BowedConfig) {
       this.shown = visible;
       this.model.root.visible = visible;
       this.model.bow.visible = visible;
+      this.debris.visible = visible;
       if (!visible) {
+        // Put away, it comes back out whole.
+        this.smash.repair();
         this.synth.stopAll();
         this.amp.fill(0);
         this.bow.reset();

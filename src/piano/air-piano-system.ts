@@ -87,6 +87,7 @@ export class AirPianoSystem extends createSystem({
     this.smash = new PropSmasher(this.model.root, this.debris, {
       mass: 120,
       wear: 0.13,
+      friction: 1.2,
       pushBox: PUSH_BOX,
       parts: this.breakableParts(),
       sound: (speed, part, broke) => this.crash(speed, part, broke),

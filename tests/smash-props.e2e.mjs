@@ -199,6 +199,46 @@ const offFloor = (frame, debris) =>
   );
 
 /**
+ * Turns the holding hand through very different orientations and checks the
+ * held object (`name`) turns with it in the world while keeping its place in
+ * the grip, as something really gripped would.
+ */
+async function turnsWithHand({ frame, dispatch, wait }, name, device, at) {
+  const side = device === 'hand-left' ? 'left' : 'right';
+  const inGrip = () =>
+    frame.evaluate(
+      ([n, s]) => {
+        const world = window.FRAMEWORK_MCP_RUNTIME.world;
+        const object = world.scene.getObjectByName(n);
+        const grip = world.player.gripSpaces[s];
+        object.updateMatrixWorld(true);
+        grip.updateWorldMatrix(true, false);
+        const relative = grip.matrixWorld.clone().invert().multiply(object.matrixWorld);
+        const q = object.quaternion.clone().setFromRotationMatrix(relative);
+        const w = object.getWorldQuaternion(object.quaternion.clone());
+        const e = relative.elements;
+        return { q: [q.x, q.y, q.z, q.w], world: [w.x, w.y, w.z, w.w], at: [e[12], e[13], e[14]] };
+      },
+      [name, side],
+    );
+  const angle = (a, b) => (2 * Math.acos(Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]))) * 180) / Math.PI;
+  const seen = [];
+  for (const orientation of [{ fingers: 'forward', palm: 'down' }, { fingers: 'up', palm: side === 'left' ? 'right' : 'left' }, { fingers: 'forward', palm: 'up' }]) {
+    await dispatch('set_transform', { device, position: at, anchor: 'wrist', orientation });
+    await wait(300);
+    seen.push(await inGrip());
+  }
+  const turned = Math.max(angle(seen[0].world, seen[1].world), angle(seen[0].world, seen[2].world));
+  if (!(turned > 60)) throw new Error(`it only turned ${turned.toFixed(0)} degrees`);
+  for (let i = 1; i < seen.length; i++) {
+    const slip = angle(seen[0].q, seen[i].q);
+    const drift = Math.hypot(...seen[i].at.map((v, k) => v - seen[0].at[k]));
+    if (!(slip < 2 && drift < 0.01)) throw new Error(`turned ${slip.toFixed(1)} degrees and moved ${(drift * 100).toFixed(1)} cm in the hand`);
+  }
+  return `turned up to ${turned.toFixed(0)} degrees with the hand; stayed put in the grip`;
+}
+
+/**
  * Picks up a bowed instrument by the neck with a left fist, smashes it into
  * the floor until it is wrecked, and checks the pieces land.
  */
@@ -218,6 +258,11 @@ async function bowed(ctx, { button, component, root, gripX, debris, screenshot }
     const s = await smashState(component);
     expect(s.hold === 'held', `hold ${s.hold}`);
     return 'held';
+  });
+  await test('Held, it turns with the hand as if gripped', async () => {
+    const result = await turnsWithHand(ctx, root, 'hand-left', { x: -0.3, y: 1.4, z: -0.35 });
+    await move({ ...hand }, 0.3);
+    return result;
   });
   await test('Swinging it into the floor wrecks it, and the pieces land', async () => {
     let s = await smashState(component);
@@ -370,7 +415,7 @@ const SCENARIOS = {
     });
   },
 
-  async drums({ dispatch, wait, press, where, extent, moveHand, smashState, test, expect, lookAndShoot }) {
+  async drums({ frame, dispatch, wait, press, where, extent, moveHand, smashState, test, expect, lookAndShoot }) {
     await press('instrument-drums');
     await wait(500);
     await test('The kit starts whole', async () => {
@@ -389,6 +434,8 @@ const SCENARIOS = {
       expect(s.piecesOff === 1 && loose != null, JSON.stringify(s));
       return `snare in hand at ${loose.y.toFixed(2)} m`;
     });
+    await test('Held, the snare turns with the hand as if gripped', async () =>
+      turnsWithHand({ frame, dispatch, wait }, 'SnareLoose', 'hand-right', { x: from.x, y: from.y + 0.45, z: from.z + 0.1 }));
     await test('Opening the hand mid-swing throws it across the room', async () => {
       await moveHand('hand-right', { x: from.x, y: from.y + 0.3, z: from.z + 0.1 }, 0.3);
       // Let go mid-swing.

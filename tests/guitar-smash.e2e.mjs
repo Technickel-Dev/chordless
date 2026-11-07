@@ -15,6 +15,9 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { startApp } from './app-start.js';
 
+/** The stage top, where things land. */
+const FLOOR = 0.035;
+
 export default async function run({ page, frame, workspaceRoot }) {
   const outDir = path.join(workspaceRoot, 'test-results');
   await mkdir(outDir, { recursive: true });
@@ -288,6 +291,117 @@ export default async function run({ page, frame, workspaceRoot }) {
       expect(low > -0.02 && low < 0.1, `lowest point ${low.toFixed(3)} m`);
       expect(g.impacts >= 1, 'landing counted as a hit');
       return `landed (lowest point ${low.toFixed(3)} m), ${g.impacts} hits, health ${(g.health * 100).toFixed(0)}%`;
+    });
+
+    /** The guitar's pose in the right hand's grip space: rotation (xyzw) and offset. */
+    const inGrip = () =>
+      frame.evaluate(() => {
+        const world = window.FRAMEWORK_MCP_RUNTIME.world;
+        const root = world.scene.getObjectByName('AirGuitar');
+        const grip = world.player.gripSpaces.right;
+        root.updateMatrixWorld(true);
+        grip.updateWorldMatrix(true, false);
+        const relative = grip.matrixWorld.clone().invert().multiply(root.matrixWorld);
+        const q = root.quaternion.clone().setFromRotationMatrix(relative);
+        const e = relative.elements;
+        const world_q = root.getWorldQuaternion(root.quaternion.clone());
+        return { q: [q.x, q.y, q.z, q.w], at: [e[12], e[13], e[14]], world: [world_q.x, world_q.y, world_q.z, world_q.w] };
+      });
+    const angle = (a, b) => (2 * Math.acos(Math.min(1, Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]))) * 180) / Math.PI;
+
+    await test('A held guitar turns with the hand, as if gripped', async () => {
+      await pinchBoth();
+      const g = await grabNeck();
+      expect(g.hold === 'held', `hold ${g.hold}`);
+      const at = { x: 0.25, y: 1.3, z: -0.4 };
+      const poses = [
+        { fingers: 'forward', palm: 'down' },
+        { fingers: 'up', palm: 'left' },
+        { fingers: 'left', palm: 'back' },
+      ];
+      const seen = [];
+      for (const orientation of poses) {
+        await dispatch('set_transform', { device: 'hand-right', position: at, anchor: 'wrist', orientation });
+        await wait(300);
+        seen.push(await inGrip());
+      }
+      expect((await guitar()).hold === 'held', 'let go while turning');
+      // The guitar really turned in the world...
+      const turned = Math.max(angle(seen[0].world, seen[1].world), angle(seen[0].world, seen[2].world));
+      expect(turned > 60, `the guitar only turned ${turned.toFixed(0)} degrees`);
+      // ...but not at all in the hand.
+      for (let i = 1; i < seen.length; i++) {
+        const slip = angle(seen[0].q, seen[i].q);
+        const drift = Math.hypot(...seen[i].at.map((v, k) => v - seen[0].at[k]));
+        expect(slip < 2 && drift < 0.01, `turned ${slip.toFixed(1)} degrees and moved ${(drift * 100).toFixed(1)} cm in the hand`);
+      }
+      return `turned up to ${turned.toFixed(0)} degrees with the hand; stayed put in the grip`;
+    });
+
+    /**
+     * Of a few ways to turn the right wrist, the ones that bring the held guitar lowest and
+     * hold it highest, with how far below the wrist it reaches. Measured clear of the floor.
+     */
+    const lowestTurn = async () => {
+      const high = 1.6;
+      const turns = [
+        { fingers: [0, -0.7, -1], palm: 'left' },
+        { fingers: 'down', palm: 'left' },
+        { fingers: 'forward', palm: 'down' },
+        { fingers: 'forward', palm: 'left' },
+        { fingers: [0, -0.7, -1], palm: 'right' },
+        { fingers: 'up', palm: 'left' },
+        { fingers: 'up', palm: 'forward' },
+        { fingers: [0, 1, 0.4], palm: 'left' },
+        { fingers: 'back', palm: 'down' },
+      ];
+      let best = null;
+      let least = null;
+      for (const orientation of turns) {
+        await dispatch('set_transform', { device: 'hand-right', position: { x: 0.25, y: high, z: -0.4 }, anchor: 'wrist', orientation });
+        await wait(250);
+        const reach = high - (await lowest());
+        if (best == null || reach > best.reach) best = { orientation, reach };
+        if (least == null || reach < least.reach) least = { orientation, reach };
+      }
+      return { ...best, raised: least.orientation, raisedReach: least.reach };
+    };
+    const RAISED = { fingers: [0, 1, 0.4], palm: 'left' };
+
+    await test('A flick of the wrist alone, the hand not moving, smashes it into the floor', async () => {
+      const before = await guitar();
+      const best = await lowestTurn();
+      // The wrist held where the turned-over guitar reaches 25 cm into the floor.
+      const at = { x: 0.25, y: Math.max(0.35, FLOOR - 0.25 + best.reach), z: -0.5 };
+      await dispatch('set_transform', { device: 'hand-right', position: at, anchor: 'wrist', orientation: best.raised });
+      await wait(500);
+      const raised = await lowest();
+      expect(raised > FLOOR + 0.05, `raised, the guitar is already down at ${raised.toFixed(2)} m`);
+      await dispatch('animate_to', { device: 'hand-right', position: at, anchor: 'wrist', orientation: best.orientation, duration: 0.2 });
+      await wait(600);
+      const g = await guitar();
+      expect(g.impacts > before.impacts, 'turning the wrist over did not strike the floor');
+      expect(g.lastImpact > 2, `struck at only ${g.lastImpact.toFixed(1)} m/s`);
+      return `the hand still, its turn alone struck the floor at ${g.lastImpact.toFixed(1)} m/s`;
+    });
+
+    await test('Swinging it down in an arc, wrist turning over, lands a real hit', async () => {
+      const before = await guitar();
+      const best = await lowestTurn();
+      // Raised, wrist cocked back, then brought down turning over, aimed through the floor
+      // as a real smash is, so it meets the floor still heading down.
+      const top = { x: 0.25, y: 1.55, z: -0.25 };
+      const bottom = { x: 0.25, y: Math.max(0.35, FLOOR - 0.35 + best.reach), z: -0.55 };
+      await dispatch('set_transform', { device: 'hand-right', position: top, anchor: 'wrist', orientation: RAISED });
+      await wait(500);
+      const seconds = 0.25;
+      await dispatch('animate_to', { device: 'hand-right', position: bottom, anchor: 'wrist', orientation: best.orientation, duration: seconds });
+      await wait(seconds * 1000 + 400);
+      const g = await guitar();
+      const handSpeed = Math.hypot(top.y - bottom.y, top.z - bottom.z) / seconds;
+      expect(g.impacts > before.impacts, `no hit; lowest point at the bottom ${(await lowest()).toFixed(2)} m`);
+      expect(g.lastImpact > 3, `struck at only ${g.lastImpact.toFixed(1)} m/s`);
+      return `the hand moved at ${handSpeed.toFixed(1)} m/s; the guitar struck at ${g.lastImpact.toFixed(1)} m/s`;
     });
 
     await test('No console errors during the run', async () => {

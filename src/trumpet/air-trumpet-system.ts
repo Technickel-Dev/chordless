@@ -1,5 +1,5 @@
 import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
-import { ACCENT } from '../guitar/guitar-model.js';
+import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { TrackedHand } from '../guitar/hands.js';
 import { AirTrumpet } from './air-trumpet-component.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
@@ -20,6 +20,15 @@ import {
 } from './playing.js';
 import { TrumpetSynth } from './synth.js';
 import { createTrumpetModel, type TrumpetModel } from './trumpet-model.js';
+
+/** The sign's pictograms for each step from picking it up to playing. */
+const SHOW_RIGHT_HAND: readonly HudStep[] = [{ icon: 'hand', caption: 'RIGHT HAND' }];
+const HOW_TO_HOLD: readonly HudStep[] = [
+  { icon: 'smile', caption: 'TO LIPS' },
+  { icon: 'pointer', caption: 'VALVES' },
+];
+const BLOW: readonly HudStep[] = [{ icon: 'wind', caption: 'PINCH LEFT' }];
+const TILT: readonly HudStep[] = [{ icon: 'arrowUp', caption: 'TILT = PITCH', faint: true }];
 
 /** The HUD floats this far in front of, below and left of the head (m): clear of the horn on the right. */
 const HUD_FORWARD = 0.6;
@@ -299,23 +308,18 @@ export class AirTrumpetSystem extends createSystem({
     hud.sprite.position.y -= HUD_BELOW;
     const [left, right] = this.hands;
     if (!right.tracked) {
-      hud.draw(['Show your right hand', 'The trumpet goes in it'], ACCENT.idle);
+      hud.draw({ steps: SHOW_RIGHT_HAND }, ACCENT.idle);
       return;
     }
     if (!this.pose.atLips) {
-      hud.draw(['Trumpet', 'Hold it out to your lips', 'Fingers on the valves'], ACCENT.idle);
+      hud.draw({ steps: HOW_TO_HOLD }, ACCENT.idle);
       return;
     }
-    if (!left.tracked) {
-      hud.draw([this.writtenName, `Valves ${this.fingering}`, 'Show your left hand: pinch it to blow'], ACCENT.placing);
+    if (this.breath.blowing && left.tracked) {
+      const detail = this.mute > 0.3 ? 'MUTED' : undefined;
+      hud.draw({ headline: this.writtenName, valves: this.fingering, detail, steps: TILT }, ACCENT.playing);
       return;
     }
-    const partial = PARTIALS[this.partials.index].partial;
-    const muted = this.mute > 0.3 ? ' · plunger' : '';
-    if (this.breath.blowing) {
-      hud.draw([this.writtenName, `Valves ${this.fingering} · partial ${partial}${muted}`, 'Tilt the bell to change partial'], ACCENT.playing);
-      return;
-    }
-    hud.draw([this.writtenName, `Valves ${this.fingering} · partial ${partial}`, 'Pinch your left hand to blow'], ACCENT.placing);
+    hud.draw({ headline: this.writtenName, valves: this.fingering, steps: BLOW }, ACCENT.placing);
   }
 }

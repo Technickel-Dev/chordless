@@ -1,6 +1,6 @@
 import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { dynamicMark } from '../cymbals/air-cymbals-system.js';
-import { ACCENT } from '../guitar/guitar-model.js';
+import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { JOINT_COUNT, TrackedHand } from '../guitar/hands.js';
 import { BEATER_REST, PIECE_NAMES } from '../scene-assets/drum-kit.scene-asset.js';
 import { AirDrums } from './air-drums-component.js';
@@ -11,6 +11,14 @@ import { DrumSynth } from './synth.js';
 import { PropSmasher } from '../smash/prop-smash.js';
 import { Smashable } from '../smash/smashable-component.js';
 import type { Articulation } from './strokes.js';
+
+/** The sign's pictograms between hits. */
+const SHOW_FISTS: readonly HudStep[] = [{ icon: 'grab', caption: 'BOTH FISTS' }];
+const HOW_TO_PLAY: readonly HudStep[] = [
+  { icon: 'arrowDown', caption: 'HIT' },
+  { icon: 'footprints', caption: 'KICK PAD' },
+  { icon: 'gauge', caption: 'FAST = LOUD', faint: true },
+];
 
 /** The top of the stage the player stands on (m): the kit's feet rest on it. */
 const STAGE_TOP = 0.035;
@@ -301,7 +309,7 @@ export class AirDrumsSystem extends createSystem({
     const hud = this.model.hud;
     const [left, right] = this.hands;
     if (!left.tracked || !right.tracked) {
-      hud.draw(['Show both hands', 'A stick goes in each fist'], ACCENT.idle);
+      hud.draw({ steps: SHOW_FISTS }, ACCENT.idle);
       return;
     }
     const e = this.entity;
@@ -310,11 +318,11 @@ export class AirDrumsSystem extends createSystem({
     if (this.hits > 0 && sounding) {
       const volume = Math.round((e.getValue(AirDrums, 'volume') ?? 0.8) * 100);
       hud.draw(
-        [`${e.getValue(AirDrums, 'lastPiece')} ${dynamicMark(e.getValue(AirDrums, 'lastHit') ?? 0)}`, `${this.hits} strokes · ${volume}%`],
+        { headline: `${e.getValue(AirDrums, 'lastPiece')} ${dynamicMark(e.getValue(AirDrums, 'lastHit') ?? 0)}`, detail: `${volume}%` },
         ACCENT.playing,
       );
       return;
     }
-    hud.draw(['Drums', 'Bring the stick tips down on the heads', 'Faster is louder · the round pad is the kick'], ACCENT.idle);
+    hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
   }
 }

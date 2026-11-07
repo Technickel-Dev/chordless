@@ -1,6 +1,6 @@
 import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { dynamicMark } from '../cymbals/air-cymbals-system.js';
-import { ACCENT } from '../guitar/guitar-model.js';
+import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { JOINT, TrackedHand } from '../guitar/hands.js';
 import { fitPianoStand } from '../scene-assets/piano.scene-asset.js';
 import { AirPiano } from './air-piano-component.js';
@@ -11,6 +11,13 @@ import { PianoSynth } from './synth.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
 import { Smashable, SmashHold } from '../smash/smashable-component.js';
 import { seededRandom } from '../guitar/smash.js';
+
+/** The sign's pictograms while no key is down. */
+const SHOW_HANDS: readonly HudStep[] = [{ icon: 'hand', caption: 'SHOW HANDS' }];
+const HOW_TO_PLAY: readonly HudStep[] = [
+  { icon: 'pointer', caption: 'PRESS KEYS' },
+  { icon: 'gauge', caption: 'FAST = LOUD', faint: true },
+];
 
 /** Where the piano is set down when brought out, from the head (m). */
 const PLACEMENT = {
@@ -315,16 +322,16 @@ export class AirPianoSystem extends createSystem({
   private updateHud(handsTracked: boolean): void {
     const hud = this.model.hud;
     if (!handsTracked) {
-      hud.draw(['Show your hands', 'Play the keys with your fingertips'], ACCENT.idle);
+      hud.draw({ steps: SHOW_HANDS }, ACCENT.idle);
       return;
     }
     const e = this.entity;
     const chord = e.getValue(AirPiano, 'chord') ?? '';
     if (chord !== '') {
       const volume = Math.round((e.getValue(AirPiano, 'volume') ?? 0.8) * 100);
-      hud.draw([chord, `${dynamicMark(e.getValue(AirPiano, 'lastVelocity') ?? 0)} · ${volume}%`], ACCENT.playing);
+      hud.draw({ headline: chord, detail: `${dynamicMark(e.getValue(AirPiano, 'lastVelocity') ?? 0)} · ${volume}%` }, ACCENT.playing);
       return;
     }
-    hud.draw(['Piano', 'Press the keys with your fingertips', 'Faster is louder'], ACCENT.idle);
+    hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
   }
 }

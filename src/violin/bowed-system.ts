@@ -1,7 +1,7 @@
 import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { midiName } from '../guitar/chords.js';
 import { PRESS } from '../guitar/fretting.js';
-import { ACCENT } from '../guitar/guitar-model.js';
+import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { JOINT, JOINT_COUNT, TrackedHand } from '../guitar/hands.js';
 import { AirViolin, Intonation } from './air-violin-component.js';
 import type { BowSpec } from './bow.js';
@@ -12,6 +12,15 @@ import { BowedSynth, type BowedVoice } from './synth.js';
 import { placeString, ViolinModel } from './violin-model.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
 import { Smashable, SmashHold } from '../smash/smashable-component.js';
+
+/** The sign's pictograms until the bow first sounds. */
+const SHOW_HANDS: readonly HudStep[] = [{ icon: 'hand', caption: 'SHOW HANDS' }];
+const SHOW_BOW_HAND: readonly HudStep[] = [{ icon: 'hand', caption: 'BOW HAND' }];
+const HOW_TO_BOW: readonly HudStep[] = [
+  { icon: 'hand', caption: 'PRESS LEFT' },
+  { icon: 'moveHorizontal', caption: 'BOW RIGHT' },
+  { icon: 'rotateCw', caption: 'TILT = STRING', faint: true },
+];
 
 const UP = new Vector3(0, 1, 0);
 /** The torso turns with the head only past this yaw, so glancing along the neck is free. */
@@ -40,8 +49,6 @@ export interface Placement {
 export interface BowedConfig {
   /** 'violin', 'cello': how tests and tools find this system. */
   instrument: string;
-  /** The HUD's title while idle. */
-  title: string;
   component: typeof AirViolin;
   geometry: BowedGeometry;
   bow: BowSpec;
@@ -151,15 +158,16 @@ export function createBowedSystem(config: BowedConfig) {
       this.model.root.visible = false;
       this.model.bow.visible = false;
       this.debris = new Group();
-      this.debris.name = `Air${config.title}Debris`;
+      this.debris.name = `Air${config.instrument[0].toUpperCase()}${config.instrument.slice(1)}Debris`;
       this.debris.visible = false;
       this.world.createTransformEntity(this.debris, { persistent: true });
       this.hands.push(this.left, this.right);
       const root = this.model.root;
+      const title = config.instrument[0].toUpperCase() + config.instrument.slice(1);
       const parts: PropPart[] = [];
       for (const [name, breakAt] of BREAKS) {
         const object = root.getObjectByName(name);
-        if (object) parts.push({ name: `Loose${config.title}${name}`, objects: [object], breakAt, vanish: name === 'Strings' });
+        if (object) parts.push({ name: `Loose${title}${name}`, objects: [object], breakAt, vanish: name === 'Strings' });
       }
       const cello = config.instrument === 'cello';
       this.smash = new PropSmasher(root, this.debris, {
@@ -478,22 +486,20 @@ export function createBowedSystem(config: BowedConfig) {
     private updateHud(): void {
       const hud = this.model.hud;
       if (!this.left.tracked && !this.right.tracked) {
-        hud.draw(['Show your hands', 'Put the controllers down to play'], ACCENT.idle);
+        hud.draw({ steps: SHOW_HANDS }, ACCENT.idle);
         return;
       }
-      const playing = this.shownBowing !== '';
+      if (this.shownBowing === '') {
+        hud.draw({ steps: this.right.tracked ? HOW_TO_BOW : SHOW_BOW_HAND }, ACCENT.idle);
+        return;
+      }
       const volume = Math.round((this.entity.getValue(AirViolin, 'volume') ?? 0.8) * 100);
       hud.draw(
-        [
-          playing ? (this.entity.getValue(AirViolin, 'lastNote') ?? '') : config.title,
-          this.shownStops.replace(/ /g, ' · '),
-          playing
-            ? `${this.bow.velocity > 0 ? 'UP' : 'DOWN'} BOW · ${volume}%`
-            : this.right.tracked
-              ? 'Draw the bow across a string'
-              : 'Show your bow hand',
-        ],
-        playing ? ACCENT.playing : ACCENT.idle,
+        {
+          headline: this.entity.getValue(AirViolin, 'lastNote') ?? '',
+          detail: `${this.bow.velocity > 0 ? 'UP' : 'DOWN'} BOW · ${volume}%`,
+        },
+        ACCENT.playing,
       );
     }
   };

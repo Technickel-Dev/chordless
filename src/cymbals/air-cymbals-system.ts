@@ -1,5 +1,5 @@
 import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
-import { ACCENT } from '../guitar/guitar-model.js';
+import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { TrackedHand } from '../guitar/hands.js';
 import { AirCymbals } from './air-cymbals-component.js';
 import { CHEST, ClashDetector, createCymbalPose, cymbalPose, type CymbalPose, touchesSphere } from './clash.js';
@@ -7,6 +7,14 @@ import { createCymbalsModel, type CymbalsModel } from './cymbals-model.js';
 import { CymbalSynth } from './synth.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
 import { Smashable, SmashHold } from '../smash/smashable-component.js';
+
+/** The sign's pictograms: how to play between clashes, how to stop while ringing. */
+const SHOW_HANDS: readonly HudStep[] = [{ icon: 'hand', caption: 'BOTH HANDS' }];
+const HOW_TO_PLAY: readonly HudStep[] = [
+  { icon: 'arrowLeftRight', caption: 'CLASH' },
+  { icon: 'gauge', caption: 'FAST = LOUD', faint: true },
+];
+const HOW_TO_STOP: readonly HudStep[] = [{ icon: 'volumeX', caption: 'PRESS TO STOP', faint: true }];
 
 /** The HUD floats this far in front of, below and left of the head (m): up and aside from where the plates meet. */
 const HUD_FORWARD = 0.6;
@@ -239,16 +247,19 @@ export class AirCymbalsSystem extends createSystem({
     hud.sprite.position.y -= HUD_BELOW;
     const [left, right] = this.hands;
     if (!left.tracked || !right.tracked) {
-      hud.draw(['Show both hands', 'A cymbal goes in each hand'], ACCENT.idle);
+      hud.draw({ steps: SHOW_HANDS }, ACCENT.idle);
       return;
     }
     const e = this.entity;
     const count = e.getValue(AirCymbals, 'clashes') ?? 0;
     if (ringing > 0.02 && count > 0) {
       const volume = Math.round((e.getValue(AirCymbals, 'volume') ?? 0.8) * 100);
-      hud.draw([`CRASH ${dynamicMark(e.getValue(AirCymbals, 'lastClash') ?? 0)}`, `Ringing · ${volume}%`, 'Press them together or to your chest to stop'], ACCENT.playing);
+      hud.draw(
+        { headline: `CRASH ${dynamicMark(e.getValue(AirCymbals, 'lastClash') ?? 0)}`, detail: `${volume}%`, steps: HOW_TO_STOP },
+        ACCENT.playing,
+      );
       return;
     }
-    hud.draw(['Cymbals', 'Clash them together', 'Faster is louder'], ACCENT.idle);
+    hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
   }
 }

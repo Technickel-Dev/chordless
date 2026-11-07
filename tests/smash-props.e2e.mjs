@@ -41,6 +41,12 @@ export default async function run({ page, frame, workspaceRoot }) {
   const smashState = async (component) => (await values(component, ['Smashable'])).Smashable;
   /** A panel button, aimed at with the right hand's ray and pinched. */
   const press = async (id) => {
+    // The menu folds away once an instrument is chosen; open it to reach a control in it.
+    const folded = await frame.evaluate(
+      (n) => window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(n)?.isVisible?.value === false,
+      id,
+    );
+    if (folded && id !== 'menu-open') await press('menu-open');
     await frame.evaluate(() => {
       window.IWER_DEVICE.hands.left.setPin(null);
       window.IWER_DEVICE.hands.right.setPin(null);

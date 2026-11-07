@@ -1,6 +1,6 @@
 import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { dynamicMark } from '../cymbals/air-cymbals-system.js';
-import { ACCENT } from '../guitar/guitar-model.js';
+import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { TrackedHand } from '../guitar/hands.js';
 import { AirTriangle } from './air-triangle-component.js';
 import { SIDE_NAMES } from './geometry.js';
@@ -18,6 +18,17 @@ import { TriangleSynth } from './synth.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
 import { Smashable, SmashHold } from '../smash/smashable-component.js';
 import { createTriangleModel, type TriangleModel } from './triangle-model.js';
+
+/** The sign's pictograms: how to hold it, how to play, how to stop it ringing. */
+const HOW_TO_HOLD: readonly HudStep[] = [
+  { icon: 'grab', caption: 'CLIP LEFT' },
+  { icon: 'hammer', caption: 'BEATER RIGHT' },
+];
+const HOW_TO_PLAY: readonly HudStep[] = [
+  { icon: 'hammer', caption: 'STRIKE' },
+  { icon: 'gauge', caption: 'FAST = LOUD', faint: true },
+];
+const HOW_TO_STOP: readonly HudStep[] = [{ icon: 'volumeX', caption: 'TOUCH TO STOP', faint: true }];
 
 /** The HUD floats this far in front of, below and left of the head (m), as the cymbals' does. */
 const HUD_FORWARD = 0.6;
@@ -256,15 +267,22 @@ export class AirTriangleSystem extends createSystem({
     hud.sprite.position.z -= this.fwd.x * HUD_LEFT;
     hud.sprite.position.y -= HUD_BELOW;
     if (!this.left.tracked || !this.right.tracked) {
-      hud.draw(['Show both hands', 'Pinch the clip left, beater right'], ACCENT.idle);
+      hud.draw({ steps: HOW_TO_HOLD }, ACCENT.idle);
       return;
     }
     const e = this.entity;
     if (ringing > 0.02 && (e.getValue(AirTriangle, 'strikes') ?? 0) > 0) {
       const volume = Math.round((e.getValue(AirTriangle, 'volume') ?? 0.8) * 100);
-      hud.draw([`DING ${dynamicMark(e.getValue(AirTriangle, 'lastStrike') ?? 0)}`, `${e.getValue(AirTriangle, 'lastSide')} · ${volume}%`, 'Touch it or rest the beater on it to stop'], ACCENT.playing);
+      hud.draw(
+        {
+          headline: `DING ${dynamicMark(e.getValue(AirTriangle, 'lastStrike') ?? 0)}`,
+          detail: `${e.getValue(AirTriangle, 'lastSide')} · ${volume}%`,
+          steps: HOW_TO_STOP,
+        },
+        ACCENT.playing,
+      );
       return;
     }
-    hud.draw(['Triangle', 'Strike the bar with the beater', 'Faster is louder'], ACCENT.idle);
+    hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
   }
 }

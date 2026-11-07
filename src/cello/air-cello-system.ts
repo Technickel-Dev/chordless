@@ -15,7 +15,6 @@ const DEG = Math.PI / 180;
  */
 export const AirCelloSystem = createBowedSystem({
   instrument: 'cello',
-  title: 'Cello',
   component: AirCello,
   geometry: CELLO_GEOMETRY,
   bow: CELLO_BOW,

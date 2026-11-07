@@ -1,0 +1,290 @@
+# Edit plan for "Chordless: The Conductor of AI": the machine half of video/script.md.
+#
+# Every shot ID here matches one in script.md. An agent driving the DaVinci
+# Resolve MCP builds the timeline from this file, top to bottom:
+#
+#   1. create the project and the timeline (`timeline`), and import every file
+#      under `media` into the media pool;
+#   2. resolve every time (see "Time" below), then place `act1`, `performance`
+#      and `act3` clips on their tracks;
+#   3. place the music `stems`, then `vo` and `sfx`, then `supers` and `credits`;
+#   4. add the `markers`, check the end against `timeline.max_end`, render.
+#
+# If the MCP can't place a clip at a record position, generate an OpenTimelineIO
+# (.otio) file from this plan and import it instead (Resolve: File > Import >
+# Timeline). That's also the fastest way to rebuild after a change here.
+#
+# Time. Three kinds of address, all resolved to timeline seconds:
+#   at: 12.0                 timeline seconds (act 1 only)
+#   bar: 260  (or 243.75)    a score bar of the finale; a fraction is that far
+#                            through the bar (243.75 = its last eighth note)
+#                            t = performance.start + song_seconds(bar)
+#   end: 3.5                 seconds after performance.end (act 3)
+# song_seconds(bar) is the time from the arrangement's first note to that bar's
+# downbeat, read from tests/songs/william-tell.js (beats * 60 / tempo; today
+# bar 244 is beat 0 and a bar is 2 beats at 152 bpm, so a bar is 0.789474 s).
+# performance.end is the closing chord plus `performance.tail`.
+#
+# Take sync. Every Chordless take plays the same arrangement, so a take's source
+# in-point for a clip starting at score position P is
+#   source_in = take.beat0 + song_seconds(P) - song_seconds(beat 0)
+# where `beat0` is the second in the take's file where the song's beat 0 falls.
+# Fill it in after recording: find the onset of the take's first note and
+# subtract that note's song_seconds offset from beat 0.
+#
+# Status. Bars 243-276 (the galop theme) are arranged and their bars are final.
+# Sections marked `bars: TBD` wait for the full arrangement; give each its first
+# and last bar, then lay its clips out with its `cut_every_bars` rule.
+
+timeline:
+  name: chordless-conductor-of-ai-v1
+  fps: 60
+  width: 1920
+  height: 1080
+  max_end: 175.0 # 2:55; the rules say under 3:00
+
+tracks:
+  video:
+    V1: app footage (takes and real captures)
+    V2: AI clips and conductor cutaways, over V1
+    V3-V11: the 3x3 grid before the coda, one tile per track
+    V12: full-screen shots over the grid (coda montage, final chord, cutoff)
+    V13: titles, captions and credits
+  audio:
+    A1: voiceover
+    A2: trumpet
+    A3: guitar
+    A4: cello
+    A5: violin
+    A6: piano
+    A7: triangle
+    A8: drums
+    A9: cymbals
+    A10: SFX and ambience
+    A11: real-capture audio (R-quest)
+
+media:
+  ai: # clips/<id>.mp4
+    [1-1, 1-2, 1-3, 1-4, 1-5, 1-6, 1-7, 1-9, c-1, c-2, c-3, c-4, c-grid, 3-1]
+  takes: # takes/<id>.mp4, audio in the same file
+    trumpet-pirate-ship: { beat0: null }
+    trumpet-mountaintop: { beat0: null }
+    guitar-cliffside: { beat0: null }
+    guitar-train-roof: { beat0: null }
+    cello-balloon-basket: { beat0: null }
+    cello-lantern-lake: { beat0: null }
+    violin-underwater: { beat0: null }
+    violin-northern-lights: { beat0: null }
+    piano-clock-tower: { beat0: null }
+    piano-jazz-club: { beat0: null }
+    piano-stage: { beat0: null }
+    triangle-fridge: { beat0: null }
+    drums-living-room: { beat0: null }
+    drums-neon-arcade: { beat0: null }
+    cymbals-library: { beat0: null }
+    cymbals-bowling-alley: { beat0: null }
+  montage: # takes/<id>.mp4, one bar each in the coda, in this order
+    [piano-space-station, drums-volcano-rim, drums-pinball, cello-bouncy-castle,
+     violin-snow-globe, guitar-lava-lamp, trumpet-giant-turtle, piano-upside-down-room,
+     guitar-stadium, trumpet-desert-canyon, violin-ice-cave, drums-record-player]
+  real: [R-quest, R-scene-flip] # takes/<id>.mp4
+  vo: [vo-1-2, vo-1-3, vo-1-4, vo-1-5, vo-1-6, vo-1-7, vo-1-8, vo-a, vo-b, vo-3-2, vo-3-3]
+  sfx: [sfx-tuning, sfx-baton-tap, sfx-applause, sfx-broom-knock] # audio/<id>.wav
+
+# ---------------------------------------------------------------- act 1
+act1:
+  - { id: 1-1, track: V2, at: 0.000, until: 3.000 }
+  - { id: 1-2, track: V2, at: 3.000, until: 9.000 }
+  - { id: 1-3, track: V2, at: 9.000, until: 12.000 }
+  - { id: 1-4, track: V2, at: 12.000, until: 15.000 }
+  - { id: 1-5, track: V2, at: 15.000, until: 18.000 }
+  - { id: 1-6, track: V2, at: 18.000, until: 21.000 }
+  - { id: 1-7, track: V2, at: 21.000, until: 25.000 }
+  - { id: guitar-cliffside, track: V1, at: 25.000, until: 27.000, in: 2.0, speed: 0.5, grade: "darken -1.5 stops", note: title card background }
+  - { id: 1-9, track: V2, at: 27.000, until: 30.000, note: the downbeat lands on the cut }
+
+# ---------------------------------------------------------- performance
+performance:
+  start: 30.000 # timeline second of the arrangement's first note
+  tempo: 152
+  tail: 2.5 # seconds from the closing chord to the end of the cutoff shot
+  budget: 125.0 # the music may run at most this long, or act 3 overflows max_end
+
+  sections:
+    - id: fanfare
+      bars: TBD
+      playing: [trumpet]
+      cut_every_bars: 4
+      clips:
+        - { id: c-1, track: V2, before_first_bar: 1.3 } # brass cue, ends on the first note
+        - { take: trumpet-pirate-ship, track: V1 }
+        - { take: trumpet-mountaintop, track: V1 }
+
+    - id: galop-quiet
+      bars: [243.75, 259.75] # from the pickup to the tutti's pickup
+      playing: [trumpet, guitar]
+      clips:
+        - { take: guitar-cliffside, track: V1, bar: 243.75, until_bar: 252 }
+        - { take: guitar-cliffside, track: V1, bar: 252, until_bar: 259.75, zoom: 1.6, note: punch in on the fretting hand }
+
+    - id: galop-loud
+      bars: [259.75, 276]
+      playing: [trumpet, guitar, cello]
+      clips:
+        - { take: cello-balloon-basket, track: V1, bar: 259.75, until_bar: 264 }
+        - { take: guitar-cliffside, track: V1, bar: 264, until_bar: 268 }
+        - { take: cello-balloon-basket, track: V1, bar: 268, until_bar: 272 }
+        - { take: trumpet-mountaintop, track: V1, bar: 272, until_bar: 276 }
+
+    - id: middle-quiet
+      bars: TBD
+      playing: [trumpet, guitar, cello, violin]
+      cut_every_bars: 8
+      clips:
+        - { id: c-2, track: V2, before_first_bar: 1.3 } # sweep to the violins
+        - { take: violin-underwater, track: V1 }
+        - { take: violin-northern-lights, track: V1 }
+
+    - id: middle-build
+      bars: TBD
+      playing: [trumpet, guitar, cello, violin, piano, triangle]
+      cut_every_bars: 4
+      clips:
+        - { take: piano-clock-tower, track: V1 }
+        - { take: triangle-fridge, track: V1 }
+        - { take: piano-jazz-club, track: V1 }
+        - { take: cello-lantern-lake, track: V1 }
+
+    - id: galop-returns
+      bars: TBD
+      playing: [trumpet, guitar, cello, violin, piano, triangle, drums]
+      cut_every_bars: 2
+      clips:
+        - { id: c-3, track: V2, before_first_bar: 1.2 } # point at camera
+        - { take: drums-living-room, track: V1, bars_long: 4, note: 4 bars so the caption can be read }
+        - { take: trumpet-pirate-ship, track: V1 }
+        - { take: drums-neon-arcade, track: V1 }
+        - { take: piano-jazz-club, track: V1 }
+        - { take: cello-balloon-basket, track: V1 }
+        - { take: violin-northern-lights, track: V1 }
+        - { take: guitar-train-roof, track: V1 }
+      # repeat the list from the second entry until the section ends
+
+    - id: pre-coda
+      bars: TBD
+      playing: [trumpet, guitar, cello, violin, piano, triangle, drums]
+      # The grid: each tile is its take scaled to 1/3 and moved by pan/tilt in
+      # pixels. The centre tile runs the whole section; the others enter one
+      # every 2 bars in this order. All tiles run until the final chord.
+      grid:
+        - { id: c-grid, track: V7, zoom: 0.333, pan: 0, tilt: 0, retime: "conducting on the beat at 152 bpm" }
+        - { take: trumpet-pirate-ship, track: V3, zoom: 0.333, pan: -640, tilt: 360 }
+        - { take: guitar-cliffside, track: V4, zoom: 0.333, pan: 0, tilt: 360 }
+        - { take: cello-balloon-basket, track: V5, zoom: 0.333, pan: 640, tilt: 360 }
+        - { take: violin-underwater, track: V6, zoom: 0.333, pan: -640, tilt: 0 }
+        - { take: piano-clock-tower, track: V8, zoom: 0.333, pan: 640, tilt: 0 }
+        - { take: triangle-fridge, track: V9, zoom: 0.333, pan: -640, tilt: -360 }
+        - { take: drums-neon-arcade, track: V10, zoom: 0.333, pan: 0, tilt: -360 }
+        - { take: cymbals-bowling-alley, track: V11, zoom: 0.333, pan: 640, tilt: -360, note: "arrives last, poised and silent" }
+
+    - id: coda
+      bars: TBD
+      playing: [trumpet, guitar, cello, violin, piano, triangle, drums, cymbals]
+      cut_every_bars: 1
+      # Full-screen shots on V12 over the grid. Bar 1 of each 4-bar phrase is
+      # left empty so the grid shows; the first bar of the coda is the cymbals.
+      clips:
+        - { take: cymbals-library, track: V12, bars_long: 1, note: the cymbals' first crash }
+        - { montage: true, track: V12, skip_phrase_downbeats: true }
+
+    - id: final-chord
+      bars: TBD # the closing chord
+      playing: all
+      clips:
+        - { take: piano-stage, track: V12, until: cymbal-choke, note: "the Theatre, full screen" }
+        - { id: c-4, track: V12, from: cymbal-choke, until_end: 0.0, note: fist cutoff }
+
+# ---------------------------------------------------------------- act 3
+act3:
+  - { id: 3-1, track: V2, end: 0.0, until_end: 3.0 }
+  - { id: R-quest, track: V1, end: 3.0, until_end: 9.0 }
+  - { id: R-scene-flip, track: V1, end: 9.0, until_end: 15.0 }
+  - { id: end-card, track: V13, end: 15.0, until_end: 20.0, kind: title, text: ["CHORDLESS", "Built with IWSDK, Meta's Immersive Web SDK, for Meta Quest", "<GitHub Pages URL>", "Meta VR Start Developer Competition 2026"] }
+
+# ---------------------------------------------------------------- audio
+# Music: each instrument's stem is its take's audio, one continuous clip from
+# the section it joins in to the end of the performance, starting 0.3 s early
+# to keep any pickup notes. Mute stems outside their `playing` sections rather
+# than cutting them, so a different layering is one change.
+stems:
+  levels_db: { default: 0, under_vo: -8 }
+  segments:
+    - { track: A2, take: trumpet-pirate-ship, from_section: fanfare }
+    - { track: A3, take: guitar-cliffside, from_section: galop-quiet }
+    - { track: A4, take: cello-balloon-basket, from_section: galop-loud }
+    - { track: A5, take: violin-underwater, from_section: middle-quiet }
+    - { track: A6, take: piano-clock-tower, from_section: middle-build }
+    - { track: A7, take: triangle-fridge, from_section: middle-build }
+    - { track: A8, take: drums-neon-arcade, from_section: galop-returns }
+    - { track: A9, take: cymbals-library, from_section: coda }
+  fade_out: { tracks: A2-A9, from_end: -1.0, to_end: 2.0 }
+
+vo: # A1
+  - { id: vo-1-2, at: 3.300 }
+  - { id: vo-1-3, at: 9.200 }
+  - { id: vo-1-4, at: 12.200 }
+  - { id: vo-1-5, at: 15.200 }
+  - { id: vo-1-6, at: 18.200 }
+  - { id: vo-1-7, at: 21.500 }
+  - { id: vo-1-8, at: 25.300 }
+  - { id: vo-a, section: galop-quiet, offset: 0.5, must_fit: true, duck_stems: true }
+  - { id: vo-b, section: middle-quiet, offset: 0.5, must_fit: true, duck_stems: true }
+  - { id: vo-3-2, end: 3.5 }
+  - { id: vo-3-3, end: 16.0 }
+
+sfx: # A10, plus the real capture's own audio on A11
+  - { id: sfx-tuning, at: 0.000, until: 4.000, fade_out: 1.5 }
+  - { id: sfx-baton-tap, at: 28.421 } # beats -4, -3, -2 before the first note at 30.0
+  - { id: sfx-baton-tap, at: 28.816 }
+  - { id: sfx-baton-tap, at: 29.211 }
+  - { id: sfx-applause, end: -0.5, until_end: 8.0, fade_out: 2.0 }
+  - { id: R-quest, track: A11, end: 3.0, until_end: 9.0, level_db: -14 }
+  - { id: sfx-broom-knock, end: 19.5, optional: true }
+
+# ------------------------------------------------------ captions and credits
+supers: # V13, lower third; line 2 italic
+  - { at: 25.000, until: 27.000, kind: title, text: ["CHORDLESS", "Air instruments for Meta Quest. Played with your bare hands."] }
+  - { section: fanfare, offset: 0.0, dur: 3.5, text: ["TRUMPET · Pirate Ship"] }
+  - { section: galop-quiet, offset: 0.0, dur: 3.5, text: ["GUITAR · Cliffside Sunset"] }
+  - { section: galop-loud, offset: 0.0, dur: 3.5, text: ["CELLO · Hot Air Balloon", "No extra seat required."] }
+  - { section: middle-quiet, offset: 0.0, dur: 3.5, text: ["VIOLIN · Underwater"] }
+  - { section: middle-build, offset: 0.0, bars_long: 4, text: ["PIANO · Clock Tower", "Zero movers. Zero stairs."] }
+  - { section: middle-build, offset_bars: 4, bars_long: 4, text: ["TRIANGLE · Inside a Fridge", "Very cool."] }
+  - { section: galop-returns, offset: 0.0, bars_long: 4, text: ["DRUMS · Grandma's Living Room", "2:13 a.m. Headphones in. Grandma's still asleep."] }
+  - { section: coda, offset: 0.0, bars_long: 1, text: ["CYMBALS · Endless Library", "Shhh."] }
+
+credits: # V13
+  - { id: music-credit, at: 30.000, until: 36.000, position: top-left, text: ["Gioachino Rossini · William Tell Overture, Finale (1829) · Public domain"] }
+  - { id: capture-credit, at: 30.000, until: 36.000, position: bottom, text: ["In-app capture. Every note is played and synthesized live in Chordless."] }
+  - { id: capture-bug, at: 30.000, until_end: 0.0, position: top-right, size: small, text: ["IN-APP CAPTURE"] }
+  - id: end-credits
+    end: 15.0
+    until_end: 20.0
+    position: under end card
+    size: small
+    text:
+      - "Music: Gioachino Rossini, William Tell Overture, Finale (1829). Public domain."
+      - "Arranged from the full score typeset by Max Wilkinson (2008), IMSLP #22579, CC BY 3.0."
+      - "All music is in-app capture: every note played and synthesized live by Chordless. No recordings used."
+      - "Performances recorded in IWSDK's XR emulator with scripted hands, and on Meta Quest."
+      - "Built with IWSDK (Meta's Immersive Web SDK) and WebXR. Conductor scenes are AI-generated; all gameplay is real."
+
+markers:
+  - { at: 0.0, name: "Act 1: the problem" }
+  - { at: 30.0, name: "Performance: first note" }
+  - { section: galop-loud, name: "Galop tutti" }
+  - { section: middle-quiet, name: "Violins in, VO-B" }
+  - { section: galop-returns, name: "Drums in" }
+  - { section: pre-coda, name: "Grid builds" }
+  - { section: coda, name: "Coda: cymbals" }
+  - { end: 0.0, name: "Act 3: the bow" }

@@ -180,7 +180,7 @@ export class Scars {
       );
       if (moved === 0) return;
       positions.needsUpdate = true;
-      dented.computeVertexNormals();
+      this.shade(dented, radius);
       dented.computeBoundingSphere();
       dented.boundingBox = null;
     });
@@ -233,6 +233,53 @@ export class Scars {
     // Stretched meshes (a string, a fret, a stand's leg) share a unit shape that would not dent true.
     const s = mesh.getWorldScale(this.tmp2);
     return Math.abs(s.x - 1) < 0.01 && Math.abs(s.y - 1) < 0.01 && Math.abs(s.z - 1) < 0.01;
+  }
+
+  /**
+   * Fixes the shading after a dent. A mesh whose triangles each have their
+   * own vertices would turn faceted all over if its normals were recomputed,
+   * so only the triangles round the dent are; they are meant to look crumpled.
+   */
+  private shade(g: BufferGeometry, radius: number): void {
+    if (g.index != null) {
+      g.computeVertexNormals();
+      return;
+    }
+    const p = g.attributes.position.array as Float32Array;
+    const n = g.attributes.normal;
+    if (n == null) {
+      g.computeVertexNormals();
+      return;
+    }
+    const normals = n.array as Float32Array;
+    const { x, y, z } = this.local;
+    const reach = (radius * 1.2) ** 2;
+    for (let i = 0; i + 8 < p.length; i += 9) {
+      let near = false;
+      for (let k = 0; k < 9 && !near; k += 3) {
+        near = (p[i + k] - x) ** 2 + (p[i + k + 1] - y) ** 2 + (p[i + k + 2] - z) ** 2 < reach;
+      }
+      if (!near) continue;
+      const ax = p[i + 3] - p[i];
+      const ay = p[i + 4] - p[i + 1];
+      const az = p[i + 5] - p[i + 2];
+      const bx = p[i + 6] - p[i];
+      const by = p[i + 7] - p[i + 1];
+      const bz = p[i + 8] - p[i + 2];
+      let nx = ay * bz - az * by;
+      let ny = az * bx - ax * bz;
+      let nz = ax * by - ay * bx;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      nx /= len;
+      ny /= len;
+      nz /= len;
+      for (let k = 0; k < 9; k += 3) {
+        normals[i + k] = nx;
+        normals[i + k + 1] = ny;
+        normals[i + k + 2] = nz;
+      }
+    }
+    n.needsUpdate = true;
   }
 
   /** The mesh's own copy of its geometry, as meshes can share one. */

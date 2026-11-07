@@ -83,8 +83,9 @@ export class AirCymbalsSystem extends createSystem({
       this.smash.push(
         new PropSmasher(cymbal, this.debris, {
           mass: 1.4,
-          wear: 0.05,
+          wear: 0.08,
           parts,
+          fractures: [{ sources: [cymbal.getObjectByName('Plate')!], pieces: 7, structural: true }],
           // A plate hitting the floor crashes, as loud as the blow.
           sound: (speed) => {
             if (speed > 0.6) this.synth.clash({ loudness: Math.min(1, speed / 8), flush: false });
@@ -173,7 +174,7 @@ export class AirCymbalsSystem extends createSystem({
 
     const ringing = this.synth.ringing(now);
     for (let i = 0; i < 2; i++) {
-      this.model.glows[i].visible = ringing > 0.01 && this.model.cymbals[i].visible;
+      this.model.glows[i].visible = ringing > 0.01 && this.model.cymbals[i].visible && this.smash[i].hold === SmashHold.Worn;
       this.model.glowMaterials[i].opacity = Math.min(0.8, ringing * 0.9);
     }
     const shown = Math.round(ringing * 100) / 100;

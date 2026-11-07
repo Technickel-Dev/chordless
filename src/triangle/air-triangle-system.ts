@@ -90,6 +90,7 @@ export class AirTriangleSystem extends createSystem({
       mass: 0.3,
       wear: 0.06,
       parts,
+      fractures: [{ sources: [this.model.triangle.getObjectByName('Bar')!], pieces: 4, structural: true }],
       // The bar hitting the floor rings, as loud as the blow.
       sound: (speed) => {
         if (speed > 0.6) this.synth.strike({ loudness: Math.min(1, speed / 8), position: 0.5, across: 0 });
@@ -197,7 +198,7 @@ export class AirTriangleSystem extends createSystem({
     this.damped = damping;
 
     const ringing = this.synth.ringing(now);
-    this.model.glow.visible = ringing > 0.01 && triangle.visible;
+    this.model.glow.visible = ringing > 0.01 && triangle.visible && inHand;
     this.model.glowMaterial.opacity = Math.min(0.7, ringing * 0.8);
     const shown = Math.round(ringing * 100) / 100;
     if (shown !== this.shownRinging) {

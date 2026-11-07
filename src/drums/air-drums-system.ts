@@ -115,6 +115,15 @@ export class AirDrumsSystem extends createSystem({
         })),
         { name: 'BassDrumLoose', objects: [bassDrum], breakAt: 0, grabbable: true },
       ],
+      // Thrown, each drum and cymbal breaks up where it lands.
+      fractures: [
+        ...PIECES.flatMap((piece, i) =>
+          piece.kind === 'pad'
+            ? []
+            : [{ sources: piece.id === 'hihat' && hihatBottom ? [this.model.pieces[i], hihatBottom] : [this.model.pieces[i]], pieces: 6, owner: i }],
+        ),
+        { sources: [bassDrum], pieces: 8, owner: PIECES.length },
+      ],
       sound: (speed, part, broke) => {
         const loudness = Math.min(1, speed / 7);
         if (loudness < 0.08) return;

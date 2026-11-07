@@ -83,7 +83,6 @@ export class AirHornSystem extends createSystem({
     // Swung into the floor it dents and sheds these, in this order, as it takes damage.
     const breaks: [string, number][] = [
         ['HornMouthpiece', 0.8],
-        ['HornBell', 0.45],
         ['HornValves', 0.2],
     ];
     const parts: PropPart[] = [];
@@ -95,6 +94,11 @@ export class AirHornSystem extends createSystem({
       mass: 2.5,
       wear: 0.05,
       parts,
+      // The bell and coils tear apart around where it keeps landing.
+      fractures: [
+        { sources: [root.getObjectByName('HornBell')!], pieces: 7, structural: true },
+        { sources: [root.getObjectByName('HornCoils')!], pieces: 7, structural: true },
+      ],
       sound: (speed, _part, broke) => {
         if (speed > 0.4) this.synth.knock(Math.min(1, speed / 9), broke, 2);
       },

@@ -90,6 +90,12 @@ export class AirPianoSystem extends createSystem({
       friction: 1.2,
       pushBox: PUSH_BOX,
       parts: this.breakableParts(),
+      fractures: [
+        {
+          sources: ['Body', 'Keybed', 'KeySlip', 'KeyWell'].map((name) => this.model.root.getObjectByName(name)!),
+          pieces: 12,
+        },
+      ],
       sound: (speed, part, broke) => this.crash(speed, part, broke),
     });
 

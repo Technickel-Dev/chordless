@@ -82,8 +82,6 @@ export class AirTromboneSystem extends createSystem({
     // Swung into the floor it dents and sheds these, in this order, as it takes damage.
     const breaks: [string, number][] = [
         ['TromboneBumper', 0.8],
-        ['TromboneSlide', 0.5],
-        ['TromboneBell', 0.3],
     ];
     const parts: PropPart[] = [];
     for (const [part, breakAt] of breaks) {
@@ -93,8 +91,13 @@ export class AirTromboneSystem extends createSystem({
     this.slidePart = parts.findIndex((part) => part.objects[0] === this.model.slide);
     this.smash = new PropSmasher(root, this.debris, {
       mass: 1.2,
-      wear: 0.05,
+      wear: 0.028,
       parts,
+      // The bell and slide tear apart around where it keeps landing.
+      fractures: [
+        { sources: [root.getObjectByName('TromboneBell')!], pieces: 6, structural: true },
+        { sources: [root.getObjectByName('TromboneSlide')!], pieces: 6, structural: true },
+      ],
       sound: (speed, _part, broke) => {
         if (speed > 0.4) this.synth.knock(Math.min(1, speed / 9), broke, 2);
       },

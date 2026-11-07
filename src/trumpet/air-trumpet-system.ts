@@ -94,7 +94,6 @@ export class AirTrumpetSystem extends createSystem({
         ['Mouthpiece', 0.85],
         ['WaterKey', 0.7],
         ['FingerHook', 0.55],
-        ['Bell', 0.35],
         ['Valves', 0.15],
     ];
     const parts: PropPart[] = [];
@@ -106,6 +105,11 @@ export class AirTrumpetSystem extends createSystem({
       mass: 1.1,
       wear: 0.05,
       parts,
+      // The bell and tubing tear apart around where it keeps landing.
+      fractures: [
+        { sources: [root.getObjectByName('Bell')!], pieces: 6, structural: true },
+        { sources: [root.getObjectByName('Tubing')!], pieces: 6, structural: true },
+      ],
       sound: (speed, _part, broke) => {
         if (speed > 0.4) this.synth.knock(Math.min(1, speed / 9), broke, 2);
       },

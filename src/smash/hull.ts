@@ -98,7 +98,8 @@ const meshBoxPoint = new Vector3();
 export function hullOf(object: Object3D, hull: Hull, toRoot: Matrix4, skip: Set<Object3D> | null, top = true): void {
   if (skip?.has(object) || (!top && !object.visible) || object.userData.scar) return;
   const mesh = object as Mesh;
-  if (mesh.isMesh) {
+  // A glow round something is not part of its shape.
+  if (mesh.isMesh && !(mesh.material as { isMeshBasicMaterial?: boolean }).isMeshBasicMaterial) {
     const e = meshMatrix.multiplyMatrices(toRoot, mesh.matrixWorld).elements;
     const pos = mesh.geometry.attributes.position;
     for (let i = 0; i < pos.count; i++) {

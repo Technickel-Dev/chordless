@@ -169,6 +169,7 @@ export function createBowedSystem(config: BowedConfig) {
         // The bow hand curls round the frog, close to the strings: only the left hand grabs.
         grabHands: [0],
         parts,
+        fractures: [{ sources: [root.getObjectByName('Body')!], pieces: cello ? 12 : 9, structural: true }],
         sound: (speed, _part, broke) => {
           if (speed > 0.4) this.synth.knock(Math.min(1, speed / 9), broke, cello ? 0.75 : 1.3);
         },
@@ -232,6 +233,12 @@ export function createBowedSystem(config: BowedConfig) {
           this.synth.stopAll();
           this.amp.fill(0);
           this.bow.reset();
+          // Nothing marks where fingers and bow meet a broken instrument.
+          const m = this.model;
+          for (const glow of m.vibrations) glow.visible = false;
+          for (const dot of m.stopDots) dot.visible = false;
+          for (const shadow of m.fingerShadows) shadow.visible = false;
+          m.bowMark.visible = false;
         }
       }
       if (playing) {

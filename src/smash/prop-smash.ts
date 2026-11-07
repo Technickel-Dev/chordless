@@ -8,15 +8,18 @@
  * into the floor. A fist can also pick it up whole, or pull a grabbable part
  * off it; opening the hand throws what it held. Hands can push it over.
  * Every hit leaves its mark where it lands (see scars.ts) and wears down the
- * parts near it most, so hits in one spot knock that spot's parts off first;
- * when the instrument's own health runs out it is wrecked and everything
- * comes loose. Loose things tumble with tumble.ts. Pinching both hands for a
+ * parts near it most, so hits in one spot knock that spot's parts off first.
+ * Its body can be set to break too (see fracture.ts): chunks of it come away
+ * one at a time around the hits, leaving holes. When its health runs out, or
+ * most of a structural body has gone, it is wrecked and everything comes
+ * loose. Loose things tumble with tumble.ts. Pinching both hands for a
  * second, or setting Smashable.repair, puts it back together.
  */
 
 import { Box3, Entity, Group, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from '@iwsdk/core';
 import { JOINT, TrackedHand } from '../guitar/hands.js';
 import { Smashable, SmashCondition, SmashHold } from './smashable-component.js';
+import { breakableMeshes, fractureMeshes } from './fracture.js';
 import { Hull, hullOf, HULL_SIZE } from './hull.js';
 import { Scars } from './scars.js';
 import { RigidBody, STAGE_FLOOR } from './tumble.js';
@@ -33,6 +36,18 @@ export interface PropPart {
   grabbable?: boolean;
   /** It snaps and is gone (strings) rather than flying off. */
   vanish?: boolean;
+}
+
+/** A body that breaks into chunks, one at a time, around the hits. */
+export interface PropFracture {
+  /** What breaks: every solid mesh under these. */
+  sources: Object3D[];
+  /** About how many chunks. */
+  pieces: number;
+  /** The part it belongs to, by index in `parts`; on the instrument itself if left out. */
+  owner?: number;
+  /** With most of it gone there is nothing left to hold the instrument together. */
+  structural?: boolean;
 }
 
 export interface PropSmashConfig {
@@ -53,6 +68,7 @@ export interface PropSmashConfig {
   /** Hands push the instrument inside this box, in its own space: min xyz, then max xyz. */
   pushBox?: readonly [number, number, number, number, number, number];
   parts: PropPart[];
+  fractures?: PropFracture[];
   /** Objects under the instrument that are not part of it, such as drumsticks in the hands. */
   ignore?: Object3D[];
   /**
@@ -75,6 +91,8 @@ const MAX_THROW_SPEED = 15;
 const MAX_THROW_SPIN = 25;
 const REARM_HEIGHT = 0.03;
 const IMPACT_COOLDOWN = 0.08;
+/** Different points of a swung instrument reach the floor over several frames: that is one blow. */
+const SWING_COOLDOWN = 0.25;
 /** Faster "hits" are the system moving the instrument somewhere new. */
 const TELEPORT_SPEED = 25;
 /** A hand moving into the push box slower than this is resting on it. */
@@ -90,6 +108,12 @@ const SHOCK = 0.15;
 const PART_WEAR = 3;
 /** How far a blow carries, as a share of the instrument's size. */
 const REACH = 0.4;
+/** However far a chunk is from a hit, it still feels this share of the blow. */
+const CHUNK_SHOCK = 0.06;
+/** How readily a chunk breaks off, as `breakAt` is for a part. */
+const CHUNK_BREAK_AT = 0.75;
+/** With this share of a structural body gone, the instrument is wrecked. */
+const COLLAPSE = 0.65;
 const FIST_TIPS = [JOINT.indexTip, JOINT.middleTip, JOINT.ringTip] as const;
 /** No part or the whole: what a hand is not about to grab. */
 const NOTHING = -2;
@@ -103,8 +127,23 @@ interface Home {
   scale: Vector3;
 }
 
+/** A body breaking into chunks. */
+interface Fracture {
+  sources: Mesh[];
+  chunks: Part[];
+  /** The part it belongs to, or null if the instrument itself. */
+  owner: Part | null;
+  structural: boolean;
+  /** How far a blow reaches across it (m). */
+  reach: number;
+  /** The chunks are showing in place of the sources. */
+  cracked: boolean;
+}
+
 interface Part {
   spec: PropPart;
+  /** The body this is a chunk of, if it is one. */
+  chunkOf: Fracture | null;
   index: number;
   /** In the instrument's space. */
   box: Box3;
@@ -133,6 +172,9 @@ export class PropSmasher {
   readonly scars: Scars;
 
   private readonly parts: Part[] = [];
+  private readonly fractures: Fracture[] = [];
+  /** A part has come off, so the contact points need gathering again. */
+  private pointsStale = false;
   private readonly loose: Part[] = [];
   /** The whole instrument, once it comes loose. */
   private readonly body: RigidBody;
@@ -163,6 +205,9 @@ export class PropSmasher {
   private readonly grabTime = [0, 0];
   private readonly pushPalm = [new Vector3(), new Vector3()];
   private readonly pushValid = [false, false];
+  /** The lowest point of a part in the hand last frame, and whether it has lifted clear to strike again. */
+  private heldPrev = Infinity;
+  private heldArmed = true;
   private lostTime = 0;
   private returnTime = 0;
   private cooldown = 0;
@@ -208,6 +253,7 @@ export class PropSmasher {
       }));
       this.parts.push({
         spec,
+        chunkOf: null,
         index,
         box: new Box3(),
         centre: new Vector3(),
@@ -220,6 +266,7 @@ export class PropSmasher {
         cooldown: 0,
       });
     });
+    this.buildFractures(config.fractures ?? []);
     const capacity = HULL_SIZE * (1 + this.parts.length);
     this.pointLocal = new Float32Array(capacity * 3);
     this.pointPart = new Int16Array(capacity);
@@ -247,15 +294,17 @@ export class PropSmasher {
     this.coreHull.finish(this.coreBox);
     const whole = this.wholeBox.copy(this.coreBox);
     for (const part of this.parts) {
-      if (!part.attached) continue;
+      if (!part.attached || part.chunkOf?.owner != null) continue;
       part.hull.reset();
       for (const o of part.spec.objects) hullOf(o, part.hull, toRoot, null);
       part.hull.finish(part.box);
       whole.union(part.box);
     }
+    // Everything may have broken off, leaving nothing to measure.
+    if (whole.isEmpty()) whole.expandByPoint(this.tmp.set(0, 0, 0)).expandByScalar(0.01);
     const total = volume(whole);
     for (const part of this.parts) {
-      if (!part.attached) continue;
+      if (!part.attached || part.chunkOf?.owner != null) continue;
       part.box.getCenter(part.centre);
       const { points, count } = part.hull;
       for (let i = 0; i < count * 3; i += 3) {
@@ -271,6 +320,55 @@ export class PropSmasher {
     if (this.coreHull.count === 0) this.coreHull.fromBox(whole);
     setMass(this.body, this.config.mass, whole);
     this.rebuildPoints();
+  }
+
+  /** Cuts each breaking body into its hidden chunks, which then count as parts. */
+  private buildFractures(fractures: PropFracture[]): void {
+    fractures.forEach((config, f) => {
+      const sources = breakableMeshes(config.sources);
+      if (sources.length === 0) return;
+      const size = new Box3();
+      for (const source of sources) size.expandByObject(source);
+      const diagonal = size.getSize(new Vector3()).length();
+      const owner = config.owner != null ? this.parts[config.owner] : null;
+      const fracture: Fracture = {
+        sources,
+        chunks: [],
+        owner,
+        structural: config.structural ?? false,
+        reach: diagonal / Math.sqrt(config.pieces),
+        cracked: false,
+      };
+      if (owner == null) for (const source of sources) this.owned.add(source);
+      const maxEdge = diagonal / (Math.sqrt(config.pieces) * 3.5);
+      for (const meshes of fractureMeshes(sources, config.pieces, maxEdge, 17 + f)) {
+        for (const mesh of meshes) this.owned.add(mesh);
+        const chunk: Part = {
+          spec: { name: 'LooseChunk', objects: meshes, breakAt: CHUNK_BREAK_AT },
+          chunkOf: fracture,
+          index: this.parts.length,
+          box: new Box3(),
+          centre: new Vector3(),
+          hull: new Hull(),
+          pivot: new Group(),
+          body: onStage(new RigidBody(new Float32Array(HULL_SIZE * 3), 1, [1, 1, 1])),
+          homes: meshes.map((object) => ({
+            object,
+            parent: object.parent!,
+            position: object.position.clone(),
+            quaternion: object.quaternion.clone(),
+            scale: object.scale.clone(),
+          })),
+          attached: true,
+          integrity: 1,
+          cooldown: 0,
+        };
+        chunk.pivot.name = 'LooseChunk';
+        this.parts.push(chunk);
+        fracture.chunks.push(chunk);
+      }
+      this.fractures.push(fracture);
+    });
   }
 
   /** Whether part `index` (in config order) is still on the instrument. */
@@ -310,6 +408,7 @@ export class PropSmasher {
       if (this.hold === SmashHold.Thrown) this.updateLoose(dt);
       this.updateDebris(dt);
       this.scars.update(dt);
+      if (this.pointsStale) this.rebuildPoints();
       this.updateReturn(dt, hands);
     }
     this.sync(entity);
@@ -318,6 +417,7 @@ export class PropSmasher {
   /** Every part back on, health full, and back in play. */
   repair(): void {
     for (const part of this.parts) {
+      part.integrity = 1;
       if (part.attached) continue;
       for (const home of part.homes) {
         home.parent.add(home.object);
@@ -328,7 +428,11 @@ export class PropSmasher {
       part.pivot.removeFromParent();
       if (part.spec.vanish) for (const o of part.spec.objects) o.visible = true;
       part.attached = true;
-      part.integrity = 1;
+    }
+    for (const fracture of this.fractures) {
+      fracture.cracked = false;
+      for (const source of fracture.sources) source.visible = true;
+      for (const chunk of fracture.chunks) for (const o of chunk.spec.objects) o.visible = false;
     }
     this.scars.restore();
     this.loose.length = 0;
@@ -370,6 +474,7 @@ export class PropSmasher {
   /** The contact points of the instrument and the parts still on it. */
   private rebuildPoints(): void {
     let n = 0;
+    this.pointsStale = false;
     const add = (hull: Hull, part: number) => {
       for (let i = 0; i < hull.count; i++, n++) {
         for (let k = 0; k < 3; k++) {
@@ -380,7 +485,7 @@ export class PropSmasher {
       }
     };
     add(this.coreHull, -1);
-    for (const part of this.parts) if (part.attached) add(part.hull, part.index);
+    for (const part of this.parts) if (part.attached && part.chunkOf?.owner == null) add(part.hull, part.index);
     this.pointCount = n;
     this.body.pointCount = n;
     this.root.updateMatrixWorld(true);
@@ -399,7 +504,10 @@ export class PropSmasher {
     // The pose history is the held thing's while a hand holds a part of it.
     if (this.held == null) this.record(this.root);
     const struck = this.scanFloor(this.root.matrixWorld, dt);
-    if (struck >= 0) this.strike(this.lastScan, this.pointPart[struck]);
+    if (struck >= 0 && this.cooldown <= 0) {
+      this.cooldown = SWING_COOLDOWN;
+      this.strike(this.lastScan, this.pointPart[struck]);
+    }
   }
 
   private lastScan = 0;
@@ -474,6 +582,7 @@ export class PropSmasher {
     } else {
       const part = this.parts[target];
       this.detach(part);
+      this.rebuildPoints();
       this.held = part.pivot;
       this.heldPart = part;
     }
@@ -485,6 +594,8 @@ export class PropSmasher {
     grip.updateWorldMatrix(true, false);
     this.held.updateMatrixWorld(true);
     this.desired.copy(this.held.matrixWorld);
+    this.heldArmed = true;
+    this.heldPrev = Infinity;
     this.offset.copy(grip.matrixWorld).invert().multiply(this.held.matrixWorld);
   }
 
@@ -505,16 +616,76 @@ export class PropSmasher {
     this.holderGrip!.updateWorldMatrix(true, false);
     this.desired.multiplyMatrices(this.holderGrip!.matrixWorld, this.offset);
     this.desired.decompose(held.position, held.quaternion, this.scale);
-    if (held === this.root) {
+    if (this.heldPart != null) {
+      this.heldPartFloor(this.heldPart, held, dt);
+      if (this.held !== held) return;
+    } else if (held === this.root) {
       const struck = this.scanFloor(this.desired, dt);
       // The floor stops it even though the hand goes on.
       held.position.y -= this.lowest;
       held.updateMatrixWorld(true);
-      if (struck >= 0) this.strike(this.lastScan, this.pointPart[struck]);
+      if (struck >= 0 && this.cooldown <= 0) {
+        this.cooldown = SWING_COOLDOWN;
+        this.strike(this.lastScan, this.pointPart[struck]);
+      }
       if (this.held !== held) return;
     }
     held.updateMatrixWorld(true);
     this.record(held);
+  }
+
+  /** A part swung into the floor in the hand: it stops there, and breaks as if it had landed. */
+  private heldPartFloor(part: Part, pivot: Object3D, dt: number): void {
+    const b = part.body;
+    let lowest = Infinity;
+    let at = 0;
+    for (let i = 0; i < b.pointCount; i++) {
+      const y = this.tmp.fromArray(b.points, i * 3).applyMatrix4(this.desired).y - STAGE_FLOOR;
+      if (y < lowest) {
+        lowest = y;
+        at = i;
+      }
+    }
+    const down = (this.heldPrev - lowest) / dt;
+    this.heldPrev = lowest;
+    if (lowest > REARM_HEIGHT) this.heldArmed = true;
+    if (lowest >= 0) return;
+    pivot.position.y -= lowest;
+    pivot.updateMatrixWorld(true);
+    if (!this.heldArmed || down > TELEPORT_SPEED) return;
+    this.heldArmed = false;
+    this.debrisHit.fromArray(b.points, at * 3).applyMatrix4(pivot.matrixWorld);
+    this.debrisHit.y = STAGE_FLOOR;
+    this.throwVelocity(this.vel, this.spin);
+    this.partLanded(part, this.debrisHit, down, this.vel, this.spin);
+  }
+
+  /**
+   * A part that has come off strikes the floor at `speed`: it sounds, takes
+   * dents, breaks up if it can, and from then on rests on its new shape.
+   */
+  private partLanded(part: Part, at: Vector3, speed: number, v: Vector3, w: Vector3): void {
+    const b = part.body;
+    // A chunk clatters as what it came from, more quietly.
+    const from = part.chunkOf;
+    if (from != null) this.config.sound(speed * 0.4, from.owner?.index ?? -1, false);
+    else this.config.sound(speed, part.index, false);
+    part.cooldown = IMPACT_COOLDOWN;
+    this.clatter = CLATTER_INTERVAL;
+    const tap = this.config.tap ?? 1.2;
+    const landed = speed > tap;
+    if (landed) this.crackNear(part, at);
+    this.scars.hit(part.pivot, at, speed);
+    if (landed) this.breakChunks(part, at, (speed - tap) * this.config.wear, speed, v, w, part.pivot.position);
+    part.pivot.updateMatrixWorld(true);
+    this.inverse.copy(part.pivot.matrixWorld).invert();
+    part.hull.reset();
+    hullOf(part.pivot, part.hull, this.inverse, null);
+    part.hull.finish(this.wholeBoxScratch);
+    if (part.hull.count > 0) {
+      b.points.set(part.hull.points.subarray(0, part.hull.count * 3));
+      b.pointCount = part.hull.count;
+    }
   }
 
   /** Opening the hand throws what it held at the speed it was moving. */
@@ -562,8 +733,10 @@ export class PropSmasher {
   /** A hit at `speed` m/s by `part` (-1 the instrument itself), struck at `hit`. */
   private strike(speed: number, part: number): void {
     const tap = this.config.tap ?? 1.2;
+    // What a chunk of the instrument hits with sounds as the instrument.
+    const sounding = part >= 0 && this.parts[part].chunkOf != null ? -1 : part;
     if (speed < tap || this.health <= 0) {
-      this.config.sound(speed, part, false);
+      this.config.sound(speed, sounding, false);
       return;
     }
     this.impacts++;
@@ -576,13 +749,17 @@ export class PropSmasher {
     const onCore = this.coreBox.isEmpty() ? 1 : Math.max(0, 1 - this.coreBox.distanceToPoint(local) / this.reach);
     this.health = Math.max(0, this.health - loss * (0.35 + 0.65 * onCore));
     this.version++;
+    this.crackNear(null, this.hit);
     // Before anything flies, so the marks are on the parts that do.
     this.scars.hit(this.root, this.hit, speed);
     let broke = false;
     this.rootMotion(this.vel, this.spin);
     const centre = this.world.copy(this.centre).applyMatrix4(this.root.matrixWorld);
+    if (this.breakChunks(null, this.hit, loss, speed, this.vel, this.spin, centre)) broke = true;
+    // Collapsing partway through leaves chunks it had already passed: they go too.
+    if (this.health <= 0) this.breakChunks(null, this.hit, loss, speed, this.vel, this.spin, centre);
     for (const p of this.parts) {
-      if (!p.attached) continue;
+      if (!p.attached || p.chunkOf != null) continue;
       const near = Math.max(SHOCK, 1 - p.box.distanceToPoint(local) / this.reach);
       p.integrity -= (loss * near * PART_WEAR) / (1.15 - p.spec.breakAt);
       if (p.integrity > 0 && this.health > 0) continue;
@@ -590,11 +767,72 @@ export class PropSmasher {
       else this.launch(p, this.vel, this.spin, speed, centre);
       broke = true;
     }
-    this.config.sound(speed, part, broke);
+    this.config.sound(speed, sounding, broke);
+    if (this.pointsStale) this.rebuildPoints();
     if (this.health > 0) return;
-    // Wrecked: whatever is left comes loose, out of the hand or the system's hold.
+    // Wrecked: whatever is left comes loose, out of the hand or the system's hold,
+    // resting on what is left of it.
     if (this.held === this.root) this.letGo();
+    this.refit();
     if (this.hold !== SmashHold.Thrown) this.loosen(this.vel, this.spin);
+  }
+
+  /** The first blow near a body shows it in its chunks, still in place. */
+  private crackNear(owner: Part | null, at: Vector3): void {
+    for (const fracture of this.fractures) {
+      if (fracture.owner !== owner || fracture.cracked) continue;
+      for (const chunk of fracture.chunks) {
+        if (this.chunkDistance(chunk, at) >= fracture.reach) continue;
+        this.crack(fracture);
+        break;
+      }
+    }
+  }
+
+  private crack(fracture: Fracture): void {
+    fracture.cracked = true;
+    for (const source of fracture.sources) source.visible = false;
+    for (const chunk of fracture.chunks) {
+      if (chunk.attached) for (const o of chunk.spec.objects) o.visible = true;
+    }
+  }
+
+  /** How far the world point is from the middle of a chunk. */
+  private chunkDistance(chunk: Part, at: Vector3): number {
+    const mesh = chunk.spec.objects[0] as Mesh;
+    mesh.updateWorldMatrix(true, false);
+    const middle = this.tmp2.copy(mesh.geometry.boundingSphere!.center).applyMatrix4(mesh.matrixWorld);
+    return middle.distanceTo(at);
+  }
+
+  /**
+   * Wears the chunks of `owner`'s bodies by how near they are to the hit, and
+   * sends off those it breaks. Returns whether any broke; a structural body
+   * mostly gone takes the instrument's health with it.
+   */
+  private breakChunks(owner: Part | null, at: Vector3, loss: number, speed: number, v: Vector3, w: Vector3, centre: Vector3): boolean {
+    let broke = false;
+    let gone = 0;
+    let structure = 0;
+    for (const fracture of this.fractures) {
+      if (fracture.owner !== owner) continue;
+      if (fracture.structural) structure += fracture.chunks.length;
+      for (const chunk of fracture.chunks) {
+        if (!chunk.attached) {
+          if (fracture.structural) gone++;
+          continue;
+        }
+        const near = Math.max(CHUNK_SHOCK, 1 - this.chunkDistance(chunk, at) / fracture.reach);
+        chunk.integrity -= (loss * near * PART_WEAR) / (1.15 - CHUNK_BREAK_AT);
+        if (chunk.integrity > 0 && this.health > 0) continue;
+        if (!fracture.cracked) this.crack(fracture);
+        this.launch(chunk, v, w, speed, centre);
+        if (fracture.structural) gone++;
+        broke = true;
+      }
+    }
+    if (structure > 0 && gone / structure >= COLLAPSE) this.health = 0;
+    return broke;
   }
 
   /** How the instrument is moving: from its recent poses, or from the simulation once loose. */
@@ -622,21 +860,35 @@ export class PropSmasher {
   /** Takes a part off the instrument into world space, where it simulates on its own. */
   private detach(part: Part): void {
     if (!part.attached) return;
-    // Measured as it is now, in case the system has moved it since.
-    this.refit();
-    const root = this.root;
+    // Measured as it is now, dents and all, in world space: it may be on a
+    // part that has already come off, and many can break in a single hit.
+    part.hull.reset();
+    for (const o of part.spec.objects) {
+      o.updateWorldMatrix(true, true);
+      hullOf(o, part.hull, IDENTITY, null);
+    }
+    part.hull.finish(part.box);
+    part.box.getCenter(part.centre);
+    const { points, count } = part.hull;
+    for (let i = 0; i < count * 3; i += 3) {
+      part.body.points[i] = points[i] - part.centre.x;
+      part.body.points[i + 1] = points[i + 1] - part.centre.y;
+      part.body.points[i + 2] = points[i + 2] - part.centre.z;
+    }
+    part.body.pointCount = count;
+    setMass(part.body, Math.max(0.05, (this.config.mass * volume(part.box)) / volume(this.wholeBox)), part.box);
     const pivot = part.pivot;
-    pivot.position.copy(part.centre).applyMatrix4(root.matrixWorld);
-    root.getWorldQuaternion(pivot.quaternion);
+    pivot.position.copy(part.centre);
+    pivot.quaternion.identity();
     pivot.scale.set(1, 1, 1);
     this.debrisRoot.add(pivot);
     pivot.updateMatrixWorld(true);
     for (const home of part.homes) pivot.attach(home.object);
-    part.body.setPose(pivot.position.x, pivot.position.y, pivot.position.z, pivot.quaternion.x, pivot.quaternion.y, pivot.quaternion.z, pivot.quaternion.w);
+    part.body.setPose(pivot.position.x, pivot.position.y, pivot.position.z, 0, 0, 0, 1);
     part.attached = false;
     this.piecesOff++;
     this.version++;
-    this.rebuildPoints();
+    if (part.chunkOf?.owner == null) this.pointsStale = true;
   }
 
   /**
@@ -694,23 +946,12 @@ export class PropSmasher {
       part.pivot.position.set(b.p[0], b.p[1], b.p[2]);
       part.pivot.quaternion.set(b.q[0], b.q[1], b.q[2], b.q[3]);
       if (b.impactSpeed > 1 && part.cooldown <= 0 && this.clatter <= 0) {
-        this.config.sound(b.impactSpeed, part.index, false);
-        part.cooldown = IMPACT_COOLDOWN;
-        this.clatter = CLATTER_INTERVAL;
-        // A part landing hard takes its own dents.
         part.pivot.updateMatrixWorld(true);
         this.debrisHit.fromArray(b.points, Math.max(0, b.impactPoint) * 3).applyMatrix4(part.pivot.matrixWorld);
         this.debrisHit.y = STAGE_FLOOR;
-        this.scars.hit(part.pivot, this.debrisHit, b.impactSpeed);
-        // It rests on its shape as it is now, dents and all.
-        this.inverse.copy(part.pivot.matrixWorld).invert();
-        part.hull.reset();
-        hullOf(part.pivot, part.hull, this.inverse, null);
-        part.hull.finish(this.wholeBoxScratch);
-        if (part.hull.count > 0) {
-          b.points.set(part.hull.points.subarray(0, part.hull.count * 3));
-          b.pointCount = part.hull.count;
-        }
+        this.vel.set(b.v[0], b.v[1], b.v[2]);
+        this.spin.set(b.w[0], b.w[1], b.w[2]);
+        this.partLanded(part, this.debrisHit, b.impactSpeed, this.vel, this.spin);
       }
     }
   }
@@ -842,6 +1083,8 @@ export class PropSmasher {
     return open >= 2;
   }
 }
+
+const IDENTITY = new Matrix4();
 
 function onStage(body: RigidBody): RigidBody {
   body.floor = STAGE_FLOOR;

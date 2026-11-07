@@ -228,8 +228,9 @@ async function bowed(ctx, { button, component, root, gripX, debris, screenshot }
     await wait(2500);
     const floor = await offFloor(frame, debris);
     expect(floor.off.length === 0, `pieces not on the floor: ${JSON.stringify(floor.off)}`);
+    // All of it may have broken up, leaving nothing of the instrument itself.
     const body = await extent(root);
-    expect(body.min > FLOOR - 0.012 && body.min < FLOOR + 0.05, `body lowest point ${body.min.toFixed(3)} m`);
+    expect(!Number.isFinite(body.min) || (body.min > FLOOR - 0.012 && body.min < FLOOR + 0.05), `body lowest point ${body.min} m`);
     return `${s.impacts} hits (last ${s.lastImpact.toFixed(1)} m/s), ${s.piecesOff} pieces off, ${floor.count} on the floor`;
   });
   await dispatch('set_hand_pose', { device: 'hand-left', poseId: 'open' });
@@ -268,7 +269,7 @@ async function handHeld(ctx, { button, component, root, device, side, debris, sc
     for (let i = 0; i < 8 && s.condition !== 'wrecked'; i++) {
       await moveHand(device, { ...hand }, 0.35);
       // Down to the floor: a horn held below the hand only reaches it with the wrist there.
-      const drop = Math.max((await extent(root)).min - FLOOR + 0.1, hand.y - FLOOR);
+      const drop = Math.max((await extent(root)).min - FLOOR + 0.1, hand.y - FLOOR + 0.25);
       await moveHand(device, { ...hand, y: hand.y - drop }, drop / 8);
       await wait(200);
       s = await smashState(component);
@@ -280,8 +281,9 @@ async function handHeld(ctx, { button, component, root, device, side, debris, sc
     await wait(2500);
     const floor = await offFloor(frame, debris);
     expect(floor.off.length === 0, `pieces not on the floor: ${JSON.stringify(floor.off)}`);
+    // All of it may have broken up, leaving nothing of the instrument itself.
     const body = await extent(root);
-    expect(body.min > FLOOR - 0.012 && body.min < FLOOR + 0.05, `lowest point ${body.min.toFixed(3)} m`);
+    expect(!Number.isFinite(body.min) || (body.min > FLOOR - 0.012 && body.min < FLOOR + 0.05), `lowest point ${body.min} m`);
     return `${s.impacts} hits (last ${s.lastImpact.toFixed(1)} m/s), ${s.piecesOff} pieces off; it lies on the floor`;
   });
   await lookAndShoot(root, screenshot);

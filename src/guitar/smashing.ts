@@ -58,6 +58,8 @@ const MAX_THROW_SPIN = 25;
 const REARM_HEIGHT = 0.03;
 /** A thrown guitar's bounces closer together than this count as one. */
 const IMPACT_COOLDOWN = 0.08;
+/** Different points of a swung guitar reach the floor over several frames: that is one blow. */
+const SWING_COOLDOWN = 0.25;
 /** Debris clatters at most this often. */
 const CLATTER_INTERVAL = 0.05;
 const TOP_FRET = 19;
@@ -322,7 +324,10 @@ export class GuitarSmasher {
     const root = this.model.root;
     root.position.y -= lowest;
     root.updateMatrixWorld(true);
-    if (struck >= 0) this.strike(fastest, this.activeRegion[struck] as Region);
+    if (struck >= 0 && this.cooldown <= 0) {
+      this.cooldown = SWING_COOLDOWN;
+      this.strike(fastest, this.activeRegion[struck] as Region);
+    }
   }
 
   /** Remembers where the held object's centre was, to throw it at its speed. */

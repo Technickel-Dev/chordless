@@ -35,5 +35,7 @@ export const AirGuitar = createComponent('AirGuitar', {
   strings: { type: Types.Int8, default: 6, label: 'Strings still on' },
   neckBroken: { type: Types.Boolean, default: false },
   impacts: { type: Types.Int32, default: 0, label: 'Hits taken so far' },
+  dents: { type: Types.Int32, default: 0, label: 'Dents in it' },
+  shardsOff: { type: Types.Int8, default: 0, label: 'Shards of the body gone' },
   lastImpact: { type: Types.Float32, default: 0, label: 'Last hit speed (m/s)' },
 });

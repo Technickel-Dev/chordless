@@ -6,15 +6,19 @@
  * and a point of it striking the floor (y = 0) faster than `tap` m/s costs
  * health, so an instrument played in the hands is smashed by swinging it
  * into the floor. A fist can also pick it up whole, or pull a grabbable part
- * off it; opening the hand throws what it held. Hands can push it over. As
- * health falls, parts break off and tumble away; at zero it is wrecked and
- * comes loose entirely. Loose things tumble with tumble.ts. Pinching both
- * hands for a second, or setting Smashable.repair, puts it back together.
+ * off it; opening the hand throws what it held. Hands can push it over.
+ * Every hit leaves its mark where it lands (see scars.ts) and wears down the
+ * parts near it most, so hits in one spot knock that spot's parts off first;
+ * when the instrument's own health runs out it is wrecked and everything
+ * comes loose. Loose things tumble with tumble.ts. Pinching both hands for a
+ * second, or setting Smashable.repair, puts it back together.
  */
 
 import { Box3, Entity, Group, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from '@iwsdk/core';
 import { JOINT, TrackedHand } from '../guitar/hands.js';
 import { Smashable, SmashCondition, SmashHold } from './smashable-component.js';
+import { Hull, hullOf, HULL_SIZE } from './hull.js';
+import { Scars } from './scars.js';
 import { RigidBody, STAGE_FLOOR } from './tumble.js';
 
 export type SmashHoldValue = (typeof SmashHold)[keyof typeof SmashHold];
@@ -23,7 +27,7 @@ export interface PropPart {
   name: string;
   /** What breaks off together. */
   objects: Object3D[];
-  /** Breaks off on any hit that leaves health at or below this. */
+  /** How readily it breaks off, 0 (sturdy) to about 1 (fragile). */
   breakAt: number;
   /** A fist can pull it off and throw it on its own. */
   grabbable?: boolean;
@@ -80,6 +84,12 @@ const PUSH_MAX_SPEED = 4;
 const RETURN_SECONDS = 1;
 const PINCH_DISTANCE = 0.018;
 const CLATTER_INTERVAL = 0.03;
+/** However far a part is from a hit, it still feels this share of the blow. */
+const SHOCK = 0.15;
+/** How much harder a blow is on a part beside it than on the instrument's health. */
+const PART_WEAR = 3;
+/** How far a blow carries, as a share of the instrument's size. */
+const REACH = 0.4;
 const FIST_TIPS = [JOINT.indexTip, JOINT.middleTip, JOINT.ringTip] as const;
 /** No part or the whole: what a hand is not about to grab. */
 const NOTHING = -2;
@@ -106,6 +116,8 @@ interface Part {
   body: RigidBody;
   homes: Home[];
   attached: boolean;
+  /** What is left of it, 1 to 0; at 0 it comes off. */
+  integrity: number;
   cooldown: number;
 }
 
@@ -117,6 +129,8 @@ export class PropSmasher {
   piecesOff = 0;
   /** Bumped whenever something the Smashable component shows has changed. */
   version = 0;
+  /** The dents, cracks and chips each hit leaves where it lands. */
+  readonly scars: Scars;
 
   private readonly parts: Part[] = [];
   private readonly loose: Part[] = [];
@@ -124,7 +138,11 @@ export class PropSmasher {
   private readonly body: RigidBody;
   private readonly centre = new Vector3();
   private readonly coreBox = new Box3();
+  private readonly reach: number;
+  private readonly hitLocal = new Vector3();
+  private readonly debrisHit = new Vector3();
   private readonly wholeBox = new Box3();
+  private readonly wholeBoxScratch = new Box3();
   private readonly coreHull = new Hull();
   /** What the core is measured without: the parts and anything ignored. */
   private readonly owned = new Set<Object3D>();
@@ -198,6 +216,7 @@ export class PropSmasher {
         body: onStage(new RigidBody(new Float32Array(HULL_SIZE * 3), 1, [1, 1, 1])),
         homes,
         attached: true,
+        integrity: 1,
         cooldown: 0,
       });
     });
@@ -209,6 +228,9 @@ export class PropSmasher {
     this.body = onStage(new RigidBody(new Float32Array(capacity * 3), config.mass, [1, 1, 1]));
     this.body.friction = config.friction ?? this.body.friction;
     this.refit();
+    const size = this.wholeBox.getSize(new Vector3()).length();
+    this.reach = Math.max(0.08, size * REACH);
+    this.scars = new Scars(debrisRoot, Math.min(1, Math.max(0.25, size)));
   }
 
   /**
@@ -287,6 +309,7 @@ export class PropSmasher {
       if (this.config.pushBox != null && smashable && this.hold !== SmashHold.Held) this.updatePush(dt, hands);
       if (this.hold === SmashHold.Thrown) this.updateLoose(dt);
       this.updateDebris(dt);
+      this.scars.update(dt);
       this.updateReturn(dt, hands);
     }
     this.sync(entity);
@@ -305,7 +328,9 @@ export class PropSmasher {
       part.pivot.removeFromParent();
       if (part.spec.vanish) for (const o of part.spec.objects) o.visible = true;
       part.attached = true;
+      part.integrity = 1;
     }
+    this.scars.restore();
     this.loose.length = 0;
     this.letGo();
     this.hold = SmashHold.Worn;
@@ -314,7 +339,7 @@ export class PropSmasher {
     this.lastImpact = 0;
     this.piecesOff = 0;
     this.histCount = 0;
-    this.rebuildPoints();
+    this.refit();
     this.repaired = true;
     this.version++;
   }
@@ -331,6 +356,7 @@ export class PropSmasher {
     entity.setValue(Smashable, 'health', this.health);
     entity.setValue(Smashable, 'piecesOff', this.piecesOff);
     entity.setValue(Smashable, 'impacts', this.impacts);
+    entity.setValue(Smashable, 'dents', this.scars.dents);
     entity.setValue(Smashable, 'lastImpact', this.lastImpact);
   }
 
@@ -358,8 +384,10 @@ export class PropSmasher {
     this.pointCount = n;
     this.body.pointCount = n;
     this.root.updateMatrixWorld(true);
+    // In the hand's pose, not where the floor stopped it, as the strike check compares against.
+    const pose = this.held === this.root ? this.desired : this.root.matrixWorld;
     for (let i = 0; i < n; i++) {
-      const y = this.tmp.fromArray(this.pointLocal, i * 3).applyMatrix4(this.root.matrixWorld).y - STAGE_FLOOR;
+      const y = this.tmp.fromArray(this.pointLocal, i * 3).applyMatrix4(pose).y - STAGE_FLOOR;
       this.prevY[i] = y;
       this.armed[i] = y > REARM_HEIGHT ? 1 : 0;
     }
@@ -456,6 +484,7 @@ export class PropSmasher {
     this.histCount = 0;
     grip.updateWorldMatrix(true, false);
     this.held.updateMatrixWorld(true);
+    this.desired.copy(this.held.matrixWorld);
     this.offset.copy(grip.matrixWorld).invert().multiply(this.held.matrixWorld);
   }
 
@@ -539,14 +568,24 @@ export class PropSmasher {
     }
     this.impacts++;
     this.lastImpact = speed;
-    this.health = Math.max(0, this.health - (speed - tap) * this.config.wear);
+    const loss = (speed - tap) * this.config.wear;
+    this.root.updateMatrixWorld(true);
+    this.inverse.copy(this.root.matrixWorld).invert();
+    const local = this.hitLocal.copy(this.hit).applyMatrix4(this.inverse);
+    // The instrument's own health feels the blow most when it lands on the instrument itself.
+    const onCore = this.coreBox.isEmpty() ? 1 : Math.max(0, 1 - this.coreBox.distanceToPoint(local) / this.reach);
+    this.health = Math.max(0, this.health - loss * (0.35 + 0.65 * onCore));
     this.version++;
+    // Before anything flies, so the marks are on the parts that do.
+    this.scars.hit(this.root, this.hit, speed);
     let broke = false;
     this.rootMotion(this.vel, this.spin);
-    this.root.updateMatrixWorld(true);
     const centre = this.world.copy(this.centre).applyMatrix4(this.root.matrixWorld);
     for (const p of this.parts) {
-      if (!p.attached || (p.spec.breakAt < this.health && this.health > 0)) continue;
+      if (!p.attached) continue;
+      const near = Math.max(SHOCK, 1 - p.box.distanceToPoint(local) / this.reach);
+      p.integrity -= (loss * near * PART_WEAR) / (1.15 - p.spec.breakAt);
+      if (p.integrity > 0 && this.health > 0) continue;
       if (p.spec.vanish) this.vanish(p);
       else this.launch(p, this.vel, this.spin, speed, centre);
       broke = true;
@@ -658,6 +697,20 @@ export class PropSmasher {
         this.config.sound(b.impactSpeed, part.index, false);
         part.cooldown = IMPACT_COOLDOWN;
         this.clatter = CLATTER_INTERVAL;
+        // A part landing hard takes its own dents.
+        part.pivot.updateMatrixWorld(true);
+        this.debrisHit.fromArray(b.points, Math.max(0, b.impactPoint) * 3).applyMatrix4(part.pivot.matrixWorld);
+        this.debrisHit.y = STAGE_FLOOR;
+        this.scars.hit(part.pivot, this.debrisHit, b.impactSpeed);
+        // It rests on its shape as it is now, dents and all.
+        this.inverse.copy(part.pivot.matrixWorld).invert();
+        part.hull.reset();
+        hullOf(part.pivot, part.hull, this.inverse, null);
+        part.hull.finish(this.wholeBoxScratch);
+        if (part.hull.count > 0) {
+          b.points.set(part.hull.points.subarray(0, part.hull.count * 3));
+          b.pointCount = part.hull.count;
+        }
       }
     }
   }
@@ -788,116 +841,6 @@ export class PropSmasher {
     }
     return open >= 2;
   }
-}
-
-const meshMatrix = new Matrix4();
-
-/**
- * 98 directions, spread round the sphere: every (x, y, z) with components
- * from -2 to 2, less those pointing the same way as another. Between two of
- * them a round coil is under-reached by under 3% of its radius.
- */
-const HULL_DIRECTIONS: number[] = [];
-for (let x = -2; x <= 2; x++)
-  for (let y = -2; y <= 2; y++)
-    for (let z = -2; z <= 2; z++) {
-      if (x === 0 && y === 0 && z === 0) continue;
-      // (2, 2, 0) points as (1, 1, 0) does: keep only the smallest of each.
-      if (x % 2 === 0 && y % 2 === 0 && z % 2 === 0) continue;
-      const len = Math.hypot(x, y, z);
-      HULL_DIRECTIONS.push(x / len, y / len, z / len);
-    }
-const HULL_SIZE = HULL_DIRECTIONS.length / 3;
-
-/**
- * The furthest point of a shape in each of HULL_SIZE directions: a few
- * points that hug it, so a round bell rests on its rim rather than on the
- * corner of a box drawn round it. A box keeps just its 8 corners.
- */
-class Hull {
-  readonly points = new Float32Array(HULL_SIZE * 3);
-  count = 0;
-  private readonly best = new Float64Array(HULL_SIZE);
-
-  reset(): void {
-    this.best.fill(-Infinity);
-    this.count = 0;
-  }
-
-  add(x: number, y: number, z: number): void {
-    for (let d = 0; d < HULL_SIZE; d++) {
-      const reach = HULL_DIRECTIONS[d * 3] * x + HULL_DIRECTIONS[d * 3 + 1] * y + HULL_DIRECTIONS[d * 3 + 2] * z;
-      if (reach <= this.best[d]) continue;
-      this.best[d] = reach;
-      this.points[d * 3] = x;
-      this.points[d * 3 + 1] = y;
-      this.points[d * 3 + 2] = z;
-    }
-  }
-
-  /** Packs the points found, dropping repeats, and sets `box` round them. */
-  finish(box: Box3): void {
-    box.makeEmpty();
-    let n = 0;
-    const p = this.points;
-    for (let d = 0; d < HULL_SIZE; d++) {
-      if (this.best[d] === -Infinity) continue;
-      const x = p[d * 3];
-      const y = p[d * 3 + 1];
-      const z = p[d * 3 + 2];
-      let seen = false;
-      for (let i = 0; i < n && !seen; i++) seen = p[i * 3] === x && p[i * 3 + 1] === y && p[i * 3 + 2] === z;
-      if (seen) continue;
-      p[n * 3] = x;
-      p[n * 3 + 1] = y;
-      p[n * 3 + 2] = z;
-      box.expandByPoint(meshBoxPoint.set(x, y, z));
-      n++;
-    }
-    this.count = n;
-  }
-
-  /** The corners of `box`, for something with no shape of its own. */
-  fromBox(box: Box3): void {
-    let i = 0;
-    for (const x of [box.min.x, box.max.x])
-      for (const y of [box.min.y, box.max.y])
-        for (const z of [box.min.z, box.max.z]) {
-          this.points[i++] = x;
-          this.points[i++] = y;
-          this.points[i++] = z;
-        }
-    this.count = 8;
-  }
-}
-
-const meshBoxPoint = new Vector3();
-
-/**
- * Adds every vertex of every mesh under `object` (skipping `skip`) to
- * `hull`, in the space `toRoot` maps into. Hidden helpers under it (a glow,
- * a fingertip shadow) can be parked anywhere, so they do not count;
- * `object` itself counts hidden or not, since a put-away instrument is
- * still measured.
- */
-function hullOf(object: Object3D, hull: Hull, toRoot: Matrix4, skip: Set<Object3D> | null, top = true): void {
-  if (skip?.has(object) || (!top && !object.visible)) return;
-  const mesh = object as Mesh;
-  if (mesh.isMesh) {
-    const e = meshMatrix.multiplyMatrices(toRoot, mesh.matrixWorld).elements;
-    const pos = mesh.geometry.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      const z = pos.getZ(i);
-      hull.add(
-        e[0] * x + e[4] * y + e[8] * z + e[12],
-        e[1] * x + e[5] * y + e[9] * z + e[13],
-        e[2] * x + e[6] * y + e[10] * z + e[14],
-      );
-    }
-  }
-  for (const child of object.children) hullOf(child, hull, toRoot, skip, false);
 }
 
 function onStage(body: RigidBody): RigidBody {

@@ -88,7 +88,7 @@ export class AirTriangleSystem extends createSystem({
     }
     this.smash = new PropSmasher(this.model.triangle, this.debris, {
       mass: 0.3,
-      wear: 0.12,
+      wear: 0.06,
       parts,
       // The bar hitting the floor rings, as loud as the blow.
       sound: (speed) => {

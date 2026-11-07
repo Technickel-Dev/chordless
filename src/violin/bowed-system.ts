@@ -164,7 +164,7 @@ export function createBowedSystem(config: BowedConfig) {
       const cello = config.instrument === 'cello';
       this.smash = new PropSmasher(root, this.debris, {
         mass: cello ? 3 : 0.5,
-        wear: cello ? 0.1 : 0.14,
+        wear: cello ? 0.05 : 0.07,
         grabWhole: true,
         // The bow hand curls round the frog, close to the strings: only the left hand grabs.
         grabHands: [0],

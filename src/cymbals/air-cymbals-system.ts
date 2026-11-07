@@ -83,7 +83,7 @@ export class AirCymbalsSystem extends createSystem({
       this.smash.push(
         new PropSmasher(cymbal, this.debris, {
           mass: 1.4,
-          wear: 0.1,
+          wear: 0.05,
           parts,
           // A plate hitting the floor crashes, as loud as the blow.
           sound: (speed) => {

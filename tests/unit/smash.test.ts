@@ -13,6 +13,7 @@ import {
   seededRandom,
   SMASH,
 } from '../../src/guitar/smash.js';
+import { dentPositions } from '../../src/smash/dent.js';
 import { GRAVITY, RigidBody } from '../../src/smash/tumble.js';
 
 /** Corners of a box centred on its centre of mass. */
@@ -68,58 +69,112 @@ describe('tumble', () => {
 
 describe('applyImpact', () => {
   const always = () => 0.5;
+  // Three shards along the body: toward the tail, the middle, and toward the neck.
+  const SHARDS = [-0.2, 0, 0, 0, 0.15, 0];
+  const hit = (d: ReturnType<typeof freshDamage>, speed: number, region: Region, x = -0.2, y = 0, out = newOutcome()) =>
+    applyImpact(d, speed, region, x, y, SHARDS, always, out);
 
   it('only knocks below the tap speed', () => {
-    const d = freshDamage(6);
-    const out = applyImpact(d, SMASH.tap - 0.1, Region.Body, always, newOutcome());
+    const d = freshDamage(6, 3);
+    const out = hit(d, SMASH.tap - 0.1, Region.Body);
     expect(out.loss).toBe(0);
     expect(d.health).toBe(1);
+    expect(d.shards).toEqual([1, 1, 1]);
   });
 
   it('snaps more strings the harder it hits', () => {
-    const soft = freshDamage(6);
-    const hard = freshDamage(6);
-    applyImpact(soft, SMASH.snap, Region.Body, always, newOutcome());
-    applyImpact(hard, SMASH.snap + SMASH.snapStep * 2, Region.Body, always, newOutcome());
+    const soft = freshDamage(6, 3);
+    const hard = freshDamage(6, 3);
+    hit(soft, SMASH.snap, Region.Body);
+    hit(hard, SMASH.snap + SMASH.snapStep * 2, Region.Body);
     expect(intactStrings(soft)).toBe(5);
     expect(intactStrings(hard)).toBe(3);
   });
 
-  it('snaps the neck on a hard headstock hit, taking every string', () => {
-    const d = freshDamage(6);
-    const out = applyImpact(d, SMASH.neckBreak, Region.Head, always, newOutcome());
-    expect(out.neckBroke).toBe(true);
-    expect(d.neckBroken).toBe(true);
-    expect(intactStrings(d)).toBe(0);
-    expect(d.wrecked).toBe(false);
+  it('snaps the strings nearest the hit', () => {
+    // Low E is on the +Y edge, high E on the -Y edge.
+    const lowSide = freshDamage(6, 3);
+    const highSide = freshDamage(6, 3);
+    const a = hit(lowSide, SMASH.snap, Region.Body, -0.1, 0.1);
+    const b = hit(highSide, SMASH.snap, Region.Body, -0.1, -0.1);
+    expect(a.snapped).toEqual([0]);
+    expect(b.snapped).toEqual([5]);
   });
 
-  it('does not snap the neck on a body hit', () => {
-    const d = freshDamage(6);
-    applyImpact(d, 9, Region.Body, always, newOutcome());
-    expect(d.neckBroken).toBe(false);
+  it('wears the shard a hit lands on far more than the ones away from it', () => {
+    const d = freshDamage(6, 3);
+    hit(d, 3, Region.Body);
+    expect(d.shards[0]).toBeLessThan(d.shards[1]);
+    expect(d.shards[1]).toBeLessThanOrEqual(d.shards[2]);
+    expect(1 - d.shards[0]).toBeGreaterThan((1 - d.shards[2]) * 3);
+  });
+
+  it('breaks the spot it keeps hitting first', () => {
+    const d = freshDamage(6, 3);
+    const out = newOutcome();
+    const off: number[] = [];
+    for (let i = 0; i < 3 && off.length === 0; i++) off.push(...hit(d, 4, Region.Body, -0.2, 0, out).shardsOff);
+    expect(off).toEqual([0]);
+    expect(d.wrecked).toBe(false);
+    expect(d.shards[2]).toBeGreaterThan(0);
+  });
+
+  it('takes more than one hard hit to snap the neck, and only neck hits count', () => {
+    const d = freshDamage(6, 3);
+    for (let i = 0; i < 2; i++) hit(d, 6, Region.Body);
+    expect(d.neck).toBe(1);
+    const first = hit(d, 6, Region.Neck, 0.3, 0);
+    expect(first.neckBroke).toBe(false);
+    expect(d.neck).toBeLessThan(1);
+    const second = hit(d, 6, Region.Neck, 0.3, 0);
+    expect(second.neckBroke).toBe(true);
+    expect(intactStrings(d)).toBe(0);
   });
 
   it('shatters on one huge body hit', () => {
-    const d = freshDamage(6);
-    const out = applyImpact(d, SMASH.shatter, Region.Body, always, newOutcome());
+    const d = freshDamage(6, 3);
+    const out = hit(d, SMASH.shatter, Region.Body);
     expect(out.shattered).toBe(true);
+    expect(out.shardsOff).toEqual([0, 1, 2]);
     expect(d.wrecked).toBe(true);
     expect(d.health).toBe(0);
   });
 
-  it('wears down to a wreck over a few hard swings', () => {
-    const d = freshDamage(6);
-    const out = newOutcome();
-    let hits = 0;
-    while (!d.wrecked && hits < 10) {
-      applyImpact(d, 8, Region.Body, always, out);
-      hits++;
-    }
-    expect(hits).toBeGreaterThanOrEqual(2);
-    expect(hits).toBeLessThanOrEqual(4);
+  it('falls apart once most of its shards are gone', () => {
+    const d = freshDamage(6, 3);
+    d.shards[0] = 0;
+    const out = hit(d, 8, Region.Body, 0, 0);
+    expect(d.wrecked).toBe(true);
+    expect(d.shards).toEqual([0, 0, 0]);
+    expect(out.neckBroke).toBe(true);
     // Nothing more happens to a wreck.
-    expect(applyImpact(d, 20, Region.Body, always, out).loss).toBe(0);
+    expect(hit(d, 20, Region.Body).loss).toBe(0);
+  });
+});
+
+describe('dentPositions', () => {
+  it('pushes what is at the hit most, fades out, and leaves the rest alone', () => {
+    const p = Float64Array.from([0, 0, 0, 0.05, 0, 0, 0.2, 0, 0]);
+    const moved = dentPositions(p, 0, 0, 0, 0, 1, 0, 0.1, 0.02);
+    expect(moved).toBe(2);
+    expect(p[1]).toBeGreaterThan(0.012);
+    expect(p[4]).toBeGreaterThan(0);
+    expect(p[4]).toBeLessThan(p[1]);
+    expect(p[7]).toBe(0);
+  });
+
+  it('adds up over repeated hits', () => {
+    const p = Float64Array.from([0, 0, 0]);
+    dentPositions(p, 0, 0, 0, 0, 1, 0, 0.1, 0.01);
+    const once = p[1];
+    dentPositions(p, 0, 0, 0, 0, 1, 0, 0.1, 0.01);
+    expect(p[1]).toBeGreaterThan(once);
+  });
+
+  it('moves copies of a vertex together, so non-indexed meshes do not tear', () => {
+    const p = Float64Array.from([0.03, 0.01, 0, 0.03, 0.01, 0]);
+    dentPositions(p, 0, 0, 0, 0, 1, 0, 0.1, 0.02);
+    expect(p[1]).toBe(p[4]);
   });
 });
 

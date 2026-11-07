@@ -61,7 +61,7 @@ export default async function run({ page, frame, workspaceRoot }) {
         let min = Infinity;
         let max = -Infinity;
         object.traverseVisible((o) => {
-          if (!o.isMesh) return;
+          if (!o.isMesh || o.userData.scar) return;
           const pos = o.geometry.attributes.position;
           const e = o.matrixWorld.elements;
           for (let k = 0; k < pos.count; k++) {
@@ -82,10 +82,23 @@ export default async function run({ page, frame, workspaceRoot }) {
     );
     const out = [];
     for (let i = 0; i < count; i++) out.push(await extent('AirGuitarDebris', i));
-    return out;
+    return out.filter((p) => p.name !== 'Chips');
   };
   /** Pieces sunk into the floor, or not lying on it. */
   const notOnFloor = (pieces) => pieces.filter((p) => p.min < -0.012 || p.min > 0.05);
+  /** How many meshes of the guitar are dented, and how many cracks are on it. */
+  const scarMarks = () =>
+    frame.evaluate(() => {
+      const scene = window.FRAMEWORK_MCP_RUNTIME.world.scene;
+      const out = { dented: 0, cracks: 0 };
+      for (const name of ['AirGuitar', 'AirGuitarDebris']) {
+        scene.getObjectByName(name).traverse((o) => {
+          if (o.isMesh && o.geometry.userData.dented) out.dented++;
+          if (o.name === 'Crack') out.cracks++;
+        });
+      }
+      return out;
+    });
   const hand = { x: 0, y: 0, z: 0 };
   const moveHand = async (to, duration) => {
     Object.assign(hand, to);
@@ -179,13 +192,33 @@ export default async function run({ page, frame, workspaceRoot }) {
       const g = await strike(5);
       expect(g.impacts >= 1 && g.health < 1 && g.strings < 6, JSON.stringify(g));
       expect(g.condition === 'damaged', `condition ${g.condition}`);
-      return `${g.lastImpact.toFixed(1)} m/s: health ${(g.health * 100).toFixed(0)}%, ${g.strings} strings`;
+      expect(g.dents >= 1, `${g.dents} dents`);
+      return `${g.lastImpact.toFixed(1)} m/s: health ${(g.health * 100).toFixed(0)}%, ${g.strings} strings, ${g.dents} dents`;
+    });
+
+    await test('The hit left dents and cracks on the guitar itself', async () => {
+      const marks = await scarMarks();
+      expect(marks.dented > 0, 'no mesh was dented');
+      expect(marks.cracks > 0, 'no cracks on the guitar');
+      return `${marks.dented} meshes dented, ${marks.cracks} cracks`;
+    });
+
+    await test('More hits add more marks, breaking pieces off one at a time', async () => {
+      const before = await guitar();
+      const marksBefore = await scarMarks();
+      const g = await strike(4);
+      const marks = await scarMarks();
+      expect(g.condition !== 'wrecked', 'one more hit should not wreck it');
+      expect(g.dents > before.dents, `dents ${before.dents} to ${g.dents}`);
+      expect(marks.cracks > marksBefore.cracks || marks.dented >= marksBefore.dented, JSON.stringify(marks));
+      expect(g.shardsOff < 9, `${g.shardsOff} shards off`);
+      return `${g.dents} dents, ${marks.cracks} cracks, ${g.shardsOff} of 9 shards off`;
     });
 
     let shards = 0;
     await test('Hard swings wreck it into shards that land on the floor', async () => {
       let g = await guitar();
-      for (let i = 0; i < 6 && g.condition !== 'wrecked'; i++) g = await strike(9);
+      for (let i = 0; i < 10 && g.condition !== 'wrecked'; i++) g = await strike(9);
       expect(g.condition === 'wrecked', `after ${g.impacts} hits: ${JSON.stringify(g)}`);
       expect(g.neckBroken && g.strings === 0, `neck ${g.neckBroken}, strings ${g.strings}`);
       await wait(2500);
@@ -199,7 +232,9 @@ export default async function run({ page, frame, workspaceRoot }) {
     });
     // Look down at the wreck for the screenshot, then back up.
     const centre = await frame.evaluate(() => {
-      const pieces = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName('AirGuitarDebris').children;
+      const pieces = window.FRAMEWORK_MCP_RUNTIME.world.scene
+        .getObjectByName('AirGuitarDebris')
+        .children.filter((p) => p.name !== 'Chips');
       const c = { x: 0, y: 0, z: 0 };
       for (const p of pieces) {
         c.x += p.position.x / pieces.length;
@@ -229,7 +264,9 @@ export default async function run({ page, frame, workspaceRoot }) {
       const pieces = await debris();
       expect(g.hold === 'worn' && g.condition === 'intact' && g.strings === 6 && !g.neckBroken, JSON.stringify(g));
       expect(pieces.length === 0, `${pieces.length} pieces left`);
-      return 'worn, intact, 6 strings';
+      const marks = await scarMarks();
+      expect(marks.dented === 0 && marks.cracks === 0 && g.dents === 0, JSON.stringify(marks));
+      return 'worn, intact, 6 strings, no marks';
     });
 
     await test('Swinging and opening the hand throws it, and it lands', async () => {

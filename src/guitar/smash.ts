@@ -3,62 +3,82 @@
  * Three.js or IWSDK imports, so the rules can be unit tested in Node.
  */
 
+import { GUITAR, stringY } from './geometry.js';
+
 /** Which part of the guitar struck the floor. */
 export const Region = { Body: 0, Neck: 1, Head: 2 } as const;
 export type Region = (typeof Region)[keyof typeof Region];
 
 /** Impact speeds are in metres per second, at the point that hit. */
 export const SMASH = {
-  /** Slower hits only knock on the wood. */
+  /** Slower hits only knock. */
   tap: 1.2,
-  /** Hits this hard snap a string, and one more for each `snapStep` faster. */
+  /** Hits this hard snap the string nearest them, and one more for each `snapStep` faster. */
   snap: 2.5,
   snapStep: 1.6,
-  /** A neck or headstock hit this hard snaps the neck... */
-  neckBreak: 6,
-  /** ...or this hard once the guitar is down to half health. */
-  weakNeckBreak: 4,
+  /** What a neck hit takes off the neck, per m/s above `tap`: two hard hits snap it. */
+  neckWear: 1 / 8,
+  /** The headstock passes on less of a blow to the neck than the neck takes itself. */
+  headShare: 0.8,
+  /** What a body hit takes off a shard right beside it, per m/s above `tap`. */
+  shardWear: 1 / 5,
+  /** How far from a hit (m) the shards of the body feel it. */
+  shardReach: 0.16,
+  /** Every hit also shakes the whole body by this share of its force, wherever it landed. */
+  shake: 0.15,
+  /** With this share of its shards gone, the rest of the body falls apart. */
+  collapse: 0.65,
   /** A body hit this hard shatters it outright. */
   shatter: 11,
-  /** Health lost per m/s above `tap`: a hard 8 m/s swing takes about half. */
-  wear: 1 / 14,
 } as const;
 
-/** The body takes the full blow; the neck and headstock pass some to the hand. */
-const REGION_WEAR = [1, 0.8, 0.6];
-
 export interface GuitarDamage {
-  /** 1 is new, 0 is wrecked. */
+  /** 1 is new, 0 is wrecked: how much of the shards and neck is left, for display. */
   health: number;
   /** Whether each string, low E first, is still on. */
   strings: boolean[];
+  /** What is left of the neck, 1 to 0. */
+  neck: number;
   neckBroken: boolean;
-  /** The body has shattered: nothing is left to hold. */
+  /** What is left of each shard of the body, 1 to 0; at 0 it has come off. */
+  shards: number[];
+  /** The body has fallen apart: nothing of it is left to hold. */
   wrecked: boolean;
 }
 
 export interface ImpactOutcome {
-  /** Health this hit took. */
+  /** How hard this hit was on what it struck, above the speed that only knocks. */
   loss: number;
   /** Strings this hit snapped. */
   snapped: number[];
+  /** Shards this hit knocked off. */
+  shardsOff: number[];
   neckBroke: boolean;
   shattered: boolean;
 }
 
-export function freshDamage(stringCount: number): GuitarDamage {
-  return { health: 1, strings: Array(stringCount).fill(true), neckBroken: false, wrecked: false };
+export function freshDamage(stringCount: number, shardCount = 0): GuitarDamage {
+  return {
+    health: 1,
+    strings: Array(stringCount).fill(true),
+    neck: 1,
+    neckBroken: false,
+    shards: Array(shardCount).fill(1),
+    wrecked: false,
+  };
 }
 
 export function repairDamage(d: GuitarDamage): void {
   d.health = 1;
   d.strings.fill(true);
+  d.neck = 1;
   d.neckBroken = false;
+  d.shards.fill(1);
   d.wrecked = false;
 }
 
 export function newOutcome(): ImpactOutcome {
-  return { loss: 0, snapped: [], neckBroke: false, shattered: false };
+  return { loss: 0, snapped: [], shardsOff: [], neckBroke: false, shattered: false };
 }
 
 export function intactStrings(d: GuitarDamage): number {
@@ -69,44 +89,73 @@ export function intactStrings(d: GuitarDamage): number {
 
 /**
  * Applies one hit to `d`, writing what broke into `out` (reused, so a hit
- * allocates nothing). `random` picks which strings snap.
+ * allocates nothing). (x, y) is where it landed on the guitar, and
+ * `shardCentres` the x, y of each shard: what is near the hit is what gets
+ * hurt, so hits in one spot break that spot first. `random` varies which of
+ * the nearest strings snaps.
  */
 export function applyImpact(
   d: GuitarDamage,
   speed: number,
   region: Region,
+  x: number,
+  y: number,
+  shardCentres: readonly number[],
   random: () => number,
   out: ImpactOutcome,
 ): ImpactOutcome {
   out.loss = 0;
   out.snapped.length = 0;
+  out.shardsOff.length = 0;
   out.neckBroke = false;
   out.shattered = false;
   if (d.wrecked || speed < SMASH.tap) return out;
+  const force = speed - SMASH.tap;
+  out.loss = force * SMASH.shardWear;
 
-  out.loss = Math.min(d.health, (speed - SMASH.tap) * SMASH.wear * REGION_WEAR[region]);
-  d.health -= out.loss;
-
-  if (
-    !d.neckBroken &&
-    region !== Region.Body &&
-    (speed >= SMASH.neckBreak || (d.health < 0.5 && speed >= SMASH.weakNeckBreak))
-  ) {
-    d.neckBroken = true;
-    out.neckBroke = true;
-  }
-  if ((region === Region.Body && speed >= SMASH.shatter) || d.health <= 0) {
-    d.health = 0;
-    d.wrecked = true;
-    out.shattered = true;
-    // The neck comes away from a shattered body too.
-    if (!d.neckBroken) {
+  if (region !== Region.Body) {
+    d.neck = Math.max(0, d.neck - force * SMASH.neckWear * (region === Region.Head ? SMASH.headShare : 1));
+    if (d.neck <= 0 && !d.neckBroken) {
       d.neckBroken = true;
       out.neckBroke = true;
     }
   }
 
-  // A broken neck or body takes every string with it.
+  let gone = 0;
+  const shatter = region === Region.Body && speed >= SMASH.shatter;
+  for (let i = 0; i < d.shards.length; i++) {
+    if (d.shards[i] <= 0) {
+      gone++;
+      continue;
+    }
+    let wear = force * SMASH.shardWear * SMASH.shake;
+    if (region === Region.Body) {
+      const distance = Math.hypot(shardCentres[i * 2] - x, shardCentres[i * 2 + 1] - y);
+      wear += force * SMASH.shardWear * Math.max(0, 1 - distance / SMASH.shardReach);
+    }
+    d.shards[i] = shatter ? 0 : Math.max(0, d.shards[i] - wear);
+    if (d.shards[i] <= 0) {
+      gone++;
+      out.shardsOff.push(i);
+    }
+  }
+  if (d.shards.length > 0 && gone / d.shards.length >= SMASH.collapse) {
+    for (let i = 0; i < d.shards.length; i++) {
+      if (d.shards[i] <= 0) continue;
+      d.shards[i] = 0;
+      out.shardsOff.push(i);
+    }
+    d.wrecked = true;
+    out.shattered = true;
+    // The neck comes away from a body that has fallen apart.
+    if (!d.neckBroken) {
+      d.neck = 0;
+      d.neckBroken = true;
+      out.neckBroke = true;
+    }
+  }
+
+  // A broken neck or body takes every string with it; otherwise the nearest go.
   let toSnap =
     out.neckBroke || out.shattered
       ? d.strings.length
@@ -114,19 +163,31 @@ export function applyImpact(
         ? 1 + Math.floor((speed - SMASH.snap) / SMASH.snapStep)
         : 0;
   while (toSnap > 0) {
-    const left = intactStrings(d);
-    if (left === 0) break;
-    let pick = Math.min(left - 1, Math.floor(random() * left));
+    let nearest = -1;
+    let best = Infinity;
     for (let s = 0; s < d.strings.length; s++) {
       if (!d.strings[s]) continue;
-      if (pick-- === 0) {
-        d.strings[s] = false;
-        out.snapped.push(s);
-        break;
+      const distance = Math.abs(stringY(s, Math.min(x, GUITAR.nutX)) - y) + random() * 0.012;
+      if (distance < best) {
+        best = distance;
+        nearest = s;
       }
     }
+    if (nearest < 0) break;
+    d.strings[nearest] = false;
+    out.snapped.push(nearest);
     toSnap--;
   }
+
+  let left = d.neck * 0.2;
+  if (d.shards.length > 0) {
+    let sum = 0;
+    for (let i = 0; i < d.shards.length; i++) sum += d.shards[i];
+    left += (sum / d.shards.length) * 0.8;
+  } else {
+    left += 0.8;
+  }
+  d.health = d.wrecked ? 0 : left;
   return out;
 }
 

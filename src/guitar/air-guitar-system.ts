@@ -558,6 +558,10 @@ export class AirGuitarSystem extends createSystem({
     e.setValue(AirGuitar, 'strings', intactStrings(d));
     e.setValue(AirGuitar, 'neckBroken', d.neckBroken);
     e.setValue(AirGuitar, 'impacts', smash.impacts);
+    e.setValue(AirGuitar, 'dents', smash.scars.dents);
+    let shardsOff = 0;
+    for (let i = 0; i < d.shards.length; i++) if (d.shards[i] <= 0) shardsOff++;
+    e.setValue(AirGuitar, 'shardsOff', shardsOff);
     e.setValue(AirGuitar, 'lastImpact', smash.lastImpact);
   }
 

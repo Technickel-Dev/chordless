@@ -76,7 +76,7 @@ export default async function run({ page, frame, workspaceRoot }) {
       let min = Infinity;
       let max = -Infinity;
       object.traverseVisible((o) => {
-        if (!o.isMesh) return;
+        if (!o.isMesh || o.userData.scar) return;
         const pos = o.geometry.attributes.position;
         const e = o.matrixWorld.elements;
         for (let k = 0; k < pos.count; k++) {
@@ -176,17 +176,18 @@ const offFloor = (frame, debris) =>
       const root = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(n);
       root.updateMatrixWorld(true);
       const out = [];
-      for (const piece of root.children) {
+      const pieces = root.children.filter((c) => c.name !== 'Chips');
+      for (const piece of pieces) {
         let min = Infinity;
         piece.traverseVisible((o) => {
-          if (!o.isMesh) return;
+          if (!o.isMesh || o.userData.scar) return;
           const pos = o.geometry.attributes.position;
           const e = o.matrixWorld.elements;
           for (let k = 0; k < pos.count; k++) min = Math.min(min, e[1] * pos.getX(k) + e[5] * pos.getY(k) + e[9] * pos.getZ(k) + e[13]);
         });
         if (min !== Infinity && (min < floor - 0.012 || min > floor + 0.05)) out.push({ name: piece.name, min });
       }
-      return { count: root.children.length, off: out };
+      return { count: pieces.length, off: out };
     },
     [debris, FLOOR],
   );
@@ -223,6 +224,7 @@ async function bowed(ctx, { button, component, root, gripX, debris, screenshot }
     }
     expect(s.condition === 'wrecked' && s.hold === 'thrown', `after ${s.impacts} hits: ${JSON.stringify(s)}`);
     expect(s.piecesOff >= 4, `${s.piecesOff} pieces off`);
+    expect(s.dents >= 1, `${s.dents} dents`);
     await wait(2500);
     const floor = await offFloor(frame, debris);
     expect(floor.off.length === 0, `pieces not on the floor: ${JSON.stringify(floor.off)}`);
@@ -273,6 +275,7 @@ async function handHeld(ctx, { button, component, root, device, side, debris, sc
     }
     expect(s.condition === 'wrecked' && s.hold === 'thrown', `after ${s.impacts} hits: ${JSON.stringify(s)}`);
     expect(s.piecesOff >= 2, `${s.piecesOff} pieces off`);
+    expect(s.dents >= 1, `${s.dents} dents`);
     await moveHand(device, { ...hand }, 0.3);
     await wait(2500);
     const floor = await offFloor(frame, debris);
@@ -330,13 +333,19 @@ const SCENARIOS = {
       return 'still in place';
     });
     await test('Shoving the top of the case topples it, shaking parts loose', async () => {
-      await moveHand('hand-right', await toWorld(frame, 'AirPiano', [0.1, 0.1, -0.08]));
-      await wait(300);
-      await moveHand('hand-right', await toWorld(frame, 'AirPiano', [0.1, 0.12, -0.6]), 0.3);
-      await moveHand('hand-right', { x: 0.4, y: 1.2, z: 0.3 });
-      await wait(3500);
+      // A shove that only rocks it lets it settle back, so keep shoving as a player would.
+      let tilt = 0;
+      for (let i = 0; i < 4 && tilt < 60; i++) {
+        await moveHand('hand-right', await toWorld(frame, 'AirPiano', [0.1, 0.1, -0.08]));
+        await wait(300);
+        await moveHand('hand-right', await toWorld(frame, 'AirPiano', [0.1, 0.12, -0.6]), 0.3);
+        await moveHand('hand-right', { x: 0.4, y: 1.2, z: 0.3 });
+        await wait(2000);
+        tilt = await lean(frame, 'AirPiano');
+      }
+      await wait(1000);
       const s = await smashState('AirPiano');
-      const tilt = await lean(frame, 'AirPiano');
+      tilt = await lean(frame, 'AirPiano');
       expect(s.hold === 'thrown', `hold ${s.hold}`);
       expect(tilt > 60, `leans only ${tilt.toFixed(0)} degrees`);
       expect(s.impacts >= 1 && s.health < 1 && s.piecesOff > 0, JSON.stringify(s));

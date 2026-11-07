@@ -5,7 +5,7 @@
  * body breaks into Voronoi shards of its outline.
  */
 
-import { ExtrudeGeometry, Group, Mesh, Shape, Vector3 } from '@iwsdk/core';
+import { Box3, ExtrudeGeometry, Group, Matrix4, Mesh, Shape, Vector3 } from '@iwsdk/core';
 import { fretX, GUITAR, STRING_COUNT, stringY } from './geometry.js';
 import { boardGeometry, GuitarModel, NECK_START, neckGeometry } from './guitar-model.js';
 import {
@@ -18,6 +18,7 @@ import {
   scatterSeeds,
   seededRandom,
 } from './smash.js';
+import { Hull, hullOf, HULL_SIZE } from '../smash/hull.js';
 import { RigidBody } from '../smash/tumble.js';
 
 /** Where the neck snaps: between the 5th and 6th frets, clear of the inlays. */
@@ -59,6 +60,13 @@ export interface GuitarWreck {
   regions: Uint8Array;
   /** The first points, which are all that is left once the neck has snapped. */
   pointsWithoutNeck: number;
+  /** The shard each point is on, or -1: it goes when the shard does. */
+  pointShard: Int8Array;
+  /** The x, y of each shard's middle. */
+  shardCentres: number[];
+  /** The shard carrying the bridge, and the one over the sound hole. */
+  bridgeShard: number;
+  holeShard: number;
 }
 
 export function createGuitarWreck(model: GuitarModel): GuitarWreck {
@@ -125,8 +133,13 @@ export function createGuitarWreck(model: GuitarModel): GuitarWreck {
   const cells = fractureCells(outline, scatterSeeds(outline, SHARD_COUNT, 0.07, seededRandom(7)));
   const bridge = model.body.getObjectByName('Bridge')!;
   const saddle = model.body.getObjectByName('Saddle')!;
+  const shardCentres: number[] = [];
+  let bridgeShard = 0;
+  let holeShard = 0;
   const shards = cells.map((cell, i) => {
     const [cx, cy] = polygonCentroid(cell);
+    shardCentres.push(cx, cy);
+    if (pointInPolygon(0, 0, cell)) holeShard = i;
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
@@ -145,6 +158,7 @@ export function createGuitarWreck(model: GuitarModel): GuitarWreck {
     // of the top and past the shard's edges.
     const hasBridge = pointInPolygon(GUITAR.bridgeX, 0, cell);
     if (hasBridge) {
+      bridgeShard = i;
       for (const y of [0.075, -0.075]) {
         corners.push(new Vector3(GUITAR.bridgeX - 0.023, y, 0.008), new Vector3(GUITAR.bridgeX + 0.007, y, 0.008));
       }
@@ -204,6 +218,17 @@ export function createGuitarWreck(model: GuitarModel): GuitarWreck {
     regions.push(Region.Neck);
   }
   const pointsWithoutNeck = guitarPoints.length;
+  const pointShard = new Int8Array(guitarPoints.length + upperPoints.length).fill(-1);
+  for (let i = 0; i < RIM_SAMPLES * 2; i++) {
+    let best = Infinity;
+    for (let c = 0; c < shardCentres.length / 2; c++) {
+      const distance = Math.hypot(guitarPoints[i].x - shardCentres[c * 2], guitarPoints[i].y - shardCentres[c * 2 + 1]);
+      if (distance < best) {
+        best = distance;
+        pointShard[i] = c;
+      }
+    }
+  }
   // The upper piece's break-end points duplicate the stub's, so skip them.
   for (let i = 4; i < upperPoints.length; i++) {
     guitarPoints.push(upperPoints[i]);
@@ -225,6 +250,10 @@ export function createGuitarWreck(model: GuitarModel): GuitarWreck {
     points,
     regions: Uint8Array.from(regions),
     pointsWithoutNeck,
+    pointShard,
+    shardCentres,
+    bridgeShard,
+    holeShard,
   };
 }
 
@@ -236,10 +265,23 @@ export function showNeckSnapped(model: GuitarModel, wreck: GuitarWreck): void {
   for (const stub of wreck.nutStubs) stub.visible = true;
 }
 
-/** The body has shattered: swap it for its shards. */
-export function showShattered(model: GuitarModel, wreck: GuitarWreck): void {
-  model.body.visible = false;
+/**
+ * The body has taken its first real blow: swap its solid sides and top for
+ * the shards, still in place, so they can come away one at a time. The
+ * sound hole stays until the shard under it goes.
+ */
+export function showCracked(model: GuitarModel, wreck: GuitarWreck): void {
+  for (const name of ['Sides', 'Top', 'Bridge', 'Saddle']) model.body.getObjectByName(name)!.visible = false;
   for (const shard of wreck.shards) shard.pivot.visible = true;
+}
+
+/** The shard under the sound hole has gone, and the hole with it. */
+export function showHoleGone(model: GuitarModel): void {
+  for (const name of ['Rosette', 'SoundHole']) model.body.getObjectByName(name)!.visible = false;
+}
+
+/** The shard with the bridge on it has gone: nothing holds the strings' ends there. */
+export function showBridgeGone(wreck: GuitarWreck): void {
   for (const stub of wreck.bridgeStubs) stub.visible = false;
 }
 
@@ -256,10 +298,9 @@ export function restoreGuitar(model: GuitarModel, wreck: GuitarWreck): void {
   for (const stub of wreck.bridgeStubs) stub.visible = false;
   for (const stub of wreck.nutStubs) stub.visible = false;
   for (const string of model.strings) string.visible = true;
-  model.body.visible = true;
+  for (const part of model.body.children) part.visible = true;
   model.neck.visible = true;
   model.board.visible = true;
-  wreck.guitar.pointCount = wreck.points.length / 3;
 }
 
 function makePiece(
@@ -275,7 +316,30 @@ function makePiece(
   const inner = new Group();
   inner.position.copy(com).negate();
   pivot.add(inner);
-  return { pivot, inner, home: com.clone(), body: new RigidBody(flatten(points, com), mass, boxInertia(mass, size)) };
+  // Room for the shape measured when it breaks off, which can have more points than this first guess.
+  const measured = flatten(points, com);
+  const contact = new Float32Array(Math.max(measured.length, HULL_SIZE * 3));
+  contact.set(measured);
+  const body = new RigidBody(contact, mass, boxInertia(mass, size));
+  body.pointCount = points.length;
+  return { pivot, inner, home: com.clone(), body };
+}
+
+const hull = new Hull();
+const hullBox = new Box3();
+const toPivot = new Matrix4();
+
+/** Sets a piece's contact points from its shape as it is now, dents and all. */
+export function measurePiece(piece: WreckPiece): void {
+  const { pivot, body } = piece;
+  pivot.updateMatrixWorld(true);
+  toPivot.copy(pivot.matrixWorld).invert();
+  hull.reset();
+  hullOf(pivot, hull, toPivot, null);
+  hull.finish(hullBox);
+  if (hull.count === 0) return;
+  body.points.set(hull.points.subarray(0, hull.count * 3));
+  body.pointCount = hull.count;
 }
 
 /** Principal moments of a solid box of the given size. */

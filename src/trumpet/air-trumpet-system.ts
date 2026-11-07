@@ -104,7 +104,7 @@ export class AirTrumpetSystem extends createSystem({
     }
     this.smash = new PropSmasher(root, this.debris, {
       mass: 1.1,
-      wear: 0.1,
+      wear: 0.05,
       parts,
       sound: (speed, _part, broke) => {
         if (speed > 0.4) this.synth.knock(Math.min(1, speed / 9), broke, 2);

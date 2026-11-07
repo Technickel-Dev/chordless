@@ -14,6 +14,7 @@ import { JOINT, TrackedHand } from './hands.js';
 import {
   applyImpact,
   freshDamage,
+  type GuitarDamage,
   newOutcome,
   Region,
   repairDamage,
@@ -21,14 +22,18 @@ import {
   SMASH,
 } from './smash.js';
 import { GuitarSynth } from './synth.js';
+import { Scars } from '../smash/scars.js';
 import { STAGE_FLOOR } from '../smash/tumble.js';
 import {
   BREAK_X,
   createGuitarWreck,
   GuitarWreck,
+  measurePiece,
   restoreGuitar,
+  showBridgeGone,
+  showCracked,
+  showHoleGone,
   showNeckSnapped,
-  showShattered,
   WreckPiece,
 } from './wreck-model.js';
 
@@ -61,7 +66,7 @@ const FIST_TIPS = [JOINT.indexTip, JOINT.middleTip, JOINT.ringTip] as const;
 
 export class GuitarSmasher {
   hold: Hold = GuitarHold.Worn;
-  readonly damage = freshDamage(STRING_COUNT);
+  readonly damage: GuitarDamage;
   impacts = 0;
   /** Speed of the last hit that counted, m/s. */
   lastImpact = 0;
@@ -69,6 +74,14 @@ export class GuitarSmasher {
   version = 0;
 
   private readonly wreck: GuitarWreck;
+  /** The dents, cracks and chips each hit leaves where it lands. */
+  readonly scars: Scars;
+  /** The body is in its shards, still in place. */
+  private cracked = false;
+  /** The contact points still on the guitar: where in it, and what part of it. */
+  private readonly activeLocal: Float32Array;
+  private readonly activeRegion: Uint8Array;
+  private activeCount = 0;
   private readonly outcome = newOutcome();
   private readonly random = seededRandom(1);
   /** Pieces off the guitar, flying or lying on the floor. */
@@ -102,6 +115,7 @@ export class GuitarSmasher {
   private readonly palm = new Vector3();
   private readonly hit = new Vector3();
   private readonly centre = new Vector3();
+  private readonly debrisHit = new Vector3();
   private readonly vel = new Vector3();
   private readonly spin = new Vector3();
   private readonly scale = new Vector3();
@@ -120,9 +134,14 @@ export class GuitarSmasher {
     this.wreck = createGuitarWreck(model);
     for (const piece of [this.wreck.upper, this.wreck.lower, ...this.wreck.shards]) piece.body.floor = STAGE_FLOOR;
     this.wreck.guitar.floor = STAGE_FLOOR;
+    this.damage = freshDamage(STRING_COUNT, this.wreck.shards.length);
+    this.scars = new Scars(debrisRoot);
     const count = this.wreck.points.length / 3;
     this.prevY = new Float32Array(count);
     this.armed = new Uint8Array(count);
+    this.activeLocal = new Float32Array(count * 3);
+    this.activeRegion = new Uint8Array(count);
+    this.rebuildPoints();
   }
 
   /**
@@ -142,6 +161,7 @@ export class GuitarSmasher {
     else if (smashable && !this.damage.wrecked) this.updateGrab(dt, hands, grips);
     if (this.hold === GuitarHold.Thrown && !this.damage.wrecked) this.updateThrown(dt);
     this.updateDebris(dt);
+    this.scars.update(dt);
   }
 
   /** Back on the player's body. A wrecked guitar comes back new. */
@@ -163,6 +183,9 @@ export class GuitarSmasher {
     restoreGuitar(this.model, this.wreck);
     this.debris.length = 0;
     repairDamage(this.damage);
+    this.scars.restore();
+    this.cracked = false;
+    this.rebuildPoints();
     this.letGo();
     this.hold = GuitarHold.Worn;
     this.impacts = 0;
@@ -213,14 +236,35 @@ export class GuitarSmasher {
     this.histCount = 0;
     grip.updateWorldMatrix(true, false);
     object.updateMatrixWorld(true);
+    this.desired.copy(object.matrixWorld);
     this.offset.copy(grip.matrixWorld).invert().multiply(object.matrixWorld);
-    if (object !== this.model.root) return;
-    const points = this.wreck.points;
-    for (let i = 0; i < this.prevY.length; i++) {
-      const y = this.tmp.fromArray(points, i * 3).applyMatrix4(object.matrixWorld).y - STAGE_FLOOR;
-      this.prevY[i] = y;
-      this.armed[i] = y > REARM_HEIGHT ? 1 : 0;
+    if (object === this.model.root) this.rebuildPoints();
+  }
+
+  /** Gathers the contact points of what is still on the guitar, and starts them afresh. */
+  private rebuildPoints(): void {
+    const { points, regions, pointShard, pointsWithoutNeck, centre, guitar } = this.wreck;
+    const d = this.damage;
+    const root = this.model.root;
+    root.updateMatrixWorld(true);
+    // In the hand's pose, not where the floor stopped it, as the strike check compares against.
+    const pose = this.held === root ? this.desired : root.matrixWorld;
+    let n = 0;
+    for (let i = 0; i < points.length / 3; i++) {
+      if (i >= pointsWithoutNeck && d.neckBroken) continue;
+      if (pointShard[i] >= 0 && d.shards[pointShard[i]] <= 0) continue;
+      for (let k = 0; k < 3; k++) {
+        this.activeLocal[n * 3 + k] = points[i * 3 + k];
+        guitar.points[n * 3 + k] = points[i * 3 + k] - centre.getComponent(k);
+      }
+      this.activeRegion[n] = regions[i];
+      const y = this.tmp.fromArray(points, i * 3).applyMatrix4(pose).y - STAGE_FLOOR;
+      this.prevY[n] = y;
+      this.armed[n] = y > REARM_HEIGHT ? 1 : 0;
+      n++;
     }
+    this.activeCount = n;
+    guitar.pointCount = n;
   }
 
   private updateHeld(dt: number): void {
@@ -256,8 +300,8 @@ export class GuitarSmasher {
    * down; the floor then stops the guitar even though the hand goes on.
    */
   private strikeFloor(dt: number): void {
-    const { points, regions } = this.wreck;
-    const count = this.damage.neckBroken ? this.wreck.pointsWithoutNeck : points.length / 3;
+    const points = this.activeLocal;
+    const count = this.activeCount;
     let lowest = 0;
     let fastest = 0;
     let struck = -1;
@@ -278,7 +322,7 @@ export class GuitarSmasher {
     const root = this.model.root;
     root.position.y -= lowest;
     root.updateMatrixWorld(true);
-    if (struck >= 0) this.strike(fastest, regions[struck] as Region);
+    if (struck >= 0) this.strike(fastest, this.activeRegion[struck] as Region);
   }
 
   /** Remembers where the held object's centre was, to throw it at its speed. */
@@ -353,7 +397,7 @@ export class GuitarSmasher {
     const q = root.quaternion;
     body.setPose(c.x, c.y, c.z, q.x, q.y, q.z, q.w);
     body.setVelocity(v.x, v.y, v.z, w.x, w.y, w.z);
-    body.pointCount = this.damage.neckBroken ? this.wreck.pointsWithoutNeck : this.wreck.points.length / 3;
+    this.rebuildPoints();
     body.wake();
     this.cooldown = 0;
     if (this.hold !== GuitarHold.Thrown) {
@@ -373,22 +417,33 @@ export class GuitarSmasher {
     root.updateMatrixWorld(true);
     if (body.impactPoint < 0 || body.impactSpeed < 0.3 || this.cooldown > 0) return;
     this.cooldown = IMPACT_COOLDOWN;
-    this.hit.fromArray(this.wreck.points, body.impactPoint * 3).applyMatrix4(root.matrixWorld);
+    this.hit.fromArray(this.activeLocal, body.impactPoint * 3).applyMatrix4(root.matrixWorld);
     this.hit.y = STAGE_FLOOR;
-    this.strike(body.impactSpeed, this.wreck.regions[body.impactPoint] as Region);
+    this.strike(body.impactSpeed, this.activeRegion[body.impactPoint] as Region);
   }
 
   /** A hit at `speed` m/s on `region`, struck at `this.hit`. */
   private strike(speed: number, region: Region): void {
     const d = this.damage;
-    const out = applyImpact(d, speed, region, this.random, this.outcome);
+    const root = this.model.root;
+    root.updateMatrixWorld(true);
+    this.inverse.copy(root.matrixWorld).invert();
+    const at = this.tmp.copy(this.hit).applyMatrix4(this.inverse);
+    const out = applyImpact(d, speed, region, at.x, at.y, this.wreck.shardCentres, this.random, this.outcome);
     const now = this.synth.now;
+    // The first real blow to the body, or any shard coming off, shows the body in its shards.
+    if (!this.cracked && (out.shardsOff.length > 0 || (region === Region.Body && out.loss > 0))) {
+      this.cracked = true;
+      showCracked(this.model, this.wreck);
+    }
+    // Before anything flies, so the marks are on the pieces that do.
+    this.scars.hit(root, this.hit, speed);
     if (speed >= SMASH.tap) {
       this.impacts++;
       this.lastImpact = speed;
       this.version++;
     }
-    this.synth.knock(speed / 10, out.loss > 0.12 || out.neckBroke || out.shattered, now);
+    this.synth.knock(speed / 10, out.shardsOff.length > 0 || out.neckBroke || out.shattered, now);
     // Every string still on crashes out together.
     if (speed >= SMASH.snap) {
       const velocity = Math.min(1, speed / 9);
@@ -401,8 +456,34 @@ export class GuitarSmasher {
       }
     }
     for (let i = 0; i < out.snapped.length; i++) this.snapString(out.snapped[i], now);
+    this.knockOffShards(speed, now);
     if (out.neckBroke) this.snapNeck(speed);
     if (out.shattered) this.shatter(speed);
+    // Only when a point has gone: rebuilding re-arms them all.
+    if (out.shardsOff.length > 0 || out.neckBroke) this.rebuildPoints();
+  }
+
+  /** The shards this hit broke loose fly off, taking what was on them. */
+  private knockOffShards(speed: number, now: number): void {
+    const { shardsOff } = this.outcome;
+    if (shardsOff.length === 0) return;
+    const root = this.model.root;
+    this.guitarMotion(this.vel, this.spin);
+    this.centre.copy(this.wreck.centre).applyMatrix4(root.matrixWorld);
+    for (let i = 0; i < shardsOff.length; i++) {
+      const shard = shardsOff[i];
+      this.launch(this.wreck.shards[shard], this.vel, this.spin, speed, this.centre);
+      if (shard === this.wreck.holeShard) showHoleGone(this.model);
+      if (shard === this.wreck.bridgeShard) {
+        // Nothing holds the strings at this end now.
+        showBridgeGone(this.wreck);
+        for (let s = 0; s < STRING_COUNT; s++) {
+          if (!this.damage.strings[s]) continue;
+          this.damage.strings[s] = false;
+          this.snapString(s, now);
+        }
+      }
+    }
   }
 
   private snapString(s: number, now: number): void {
@@ -420,7 +501,6 @@ export class GuitarSmasher {
     const { upper } = this.wreck;
     const root = this.model.root;
     showNeckSnapped(this.model, this.wreck);
-    this.wreck.guitar.pointCount = this.wreck.pointsWithoutNeck;
     this.guitarMotion(this.vel, this.spin);
     this.centre.copy(this.wreck.centre).applyMatrix4(root.matrixWorld);
     const holder = this.holder;
@@ -439,11 +519,10 @@ export class GuitarSmasher {
 
   private shatter(speed: number): void {
     const root = this.model.root;
-    showShattered(this.model, this.wreck);
+    this.model.body.visible = false;
+    showBridgeGone(this.wreck);
     this.guitarMotion(this.vel, this.spin);
     this.centre.copy(this.wreck.centre).applyMatrix4(root.matrixWorld);
-    const shards = this.wreck.shards;
-    for (let i = 0; i < shards.length; i++) this.launch(shards[i], this.vel, this.spin, speed, this.centre);
     // A hand on the neck keeps it; otherwise the neck goes too.
     if (this.held === root) return;
     this.launchNeck(this.vel, this.spin, speed, this.centre);
@@ -477,6 +556,7 @@ export class GuitarSmasher {
     const pivot = piece.pivot;
     pivot.visible = true;
     this.debrisRoot.attach(pivot);
+    measurePiece(piece);
     const p = pivot.position;
     const q = pivot.quaternion;
     piece.body.setPose(p.x, p.y, p.z, q.x, q.y, q.z, q.w);
@@ -546,6 +626,12 @@ export class GuitarSmasher {
       if (b.impactSpeed > 1 && this.clatter <= 0) {
         this.synth.knock(Math.min(0.5, b.impactSpeed / 12), false);
         this.clatter = CLATTER_INTERVAL;
+        // A piece landing hard takes its own dents.
+        piece.pivot.updateMatrixWorld(true);
+        this.debrisHit.fromArray(b.points, Math.max(0, b.impactPoint) * 3).applyMatrix4(piece.pivot.matrixWorld);
+        this.debrisHit.y = STAGE_FLOOR;
+        this.scars.hit(piece.pivot, this.debrisHit, b.impactSpeed);
+        measurePiece(piece);
       }
     }
   }

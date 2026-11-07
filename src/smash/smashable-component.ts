@@ -17,5 +17,6 @@ export const Smashable = createComponent('Smashable', {
   health: { type: Types.Float32, default: 1, label: 'Health left (0 = wrecked)' },
   piecesOff: { type: Types.Int16, default: 0, label: 'Pieces broken off' },
   impacts: { type: Types.Int32, default: 0, label: 'Hits taken so far' },
+  dents: { type: Types.Int32, default: 0, label: 'Dents in it' },
   lastImpact: { type: Types.Float32, default: 0, label: 'Last hit speed (m/s)' },
 });

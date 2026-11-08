@@ -49,6 +49,9 @@ export interface PropFracture {
   owner?: number;
   /** With most of it gone there is nothing left to hold the instrument together. */
   structural?: boolean;
+  /** How far a blow carries across it, and how readily its chunks give, against the usual 1. */
+  reach?: number;
+  fragility?: number;
 }
 
 export interface PropSmashConfig {
@@ -58,6 +61,8 @@ export interface PropSmashConfig {
   wear: number;
   /** Slower hits only knock. */
   tap?: number;
+  /** A chunk broken off by a hit this hard (m/s) bursts into fragments; heavy things burst at less. */
+  splinterSpeed?: number;
   /** Grip of the whole instrument on the floor: rubber feet grip hard, so a shove tips it rather than sliding it. */
   friction?: number;
   /** A fist on the instrument picks the whole of it up. */
@@ -119,7 +124,7 @@ const CHUNK_WEAR = 1.5;
 const COLLAPSE = 0.65;
 /** What a hit does goes with its energy, the square of its speed above `tap`, over this. */
 const ENERGY_SCALE = 6;
-/** A chunk broken off by a hit this hard (m/s) bursts into fragments rather than coming off whole. */
+/** A chunk broken off by a hit this hard (m/s) bursts into fragments rather than coming off whole, unless the instrument says otherwise. */
 const SPLINTER_SPEED = 4;
 const FIST_TIPS = [JOINT.indexTip, JOINT.middleTip, JOINT.ringTip] as const;
 /** No part or the whole: what a hand is not about to grab. */
@@ -143,6 +148,7 @@ interface Fracture {
   structural: boolean;
   /** How far a blow reaches across it (m). */
   reach: number;
+  fragility: number;
   /** The chunks are showing in place of the sources. */
   cracked: boolean;
 }
@@ -346,7 +352,8 @@ export class PropSmasher {
         chunks: [],
         owner,
         structural: config.structural ?? false,
-        reach: diagonal / Math.sqrt(config.pieces),
+        reach: (diagonal / Math.sqrt(config.pieces)) * (config.reach ?? 1),
+        fragility: config.fragility ?? 1,
         cracked: false,
       };
       if (owner == null) for (const source of sources) this.owned.add(source);
@@ -843,13 +850,14 @@ export class PropSmasher {
           continue;
         }
         const near = Math.max(CHUNK_SHOCK, 1 - this.chunkDistance(chunk, at) / reach);
-        chunk.integrity -= (loss * near * PART_WEAR * CHUNK_WEAR) / (1.15 - CHUNK_BREAK_AT);
+        chunk.integrity -= (loss * near * PART_WEAR * CHUNK_WEAR * fracture.fragility) / (1.15 - CHUNK_BREAK_AT);
         if (chunk.integrity > 0 && this.health > 0) continue;
         if (!fracture.cracked) this.crack(fracture);
-        if (speed >= SPLINTER_SPEED) {
+        const burstAt = this.config.splinterSpeed ?? SPLINTER_SPEED;
+        if (speed >= burstAt) {
           // Hit hard, it bursts where it was struck rather than coming away whole.
           this.detach(chunk);
-          this.splinters.burst(chunk.pivot, at, Math.min(9, Math.max(2, Math.round((speed - 3) * 1.3))), v, w, centre, speed * 0.5);
+          this.splinters.burst(chunk.pivot, at, Math.min(9, Math.max(2, Math.round((speed - burstAt) * 1.3) + 2)), v, w, centre, Math.max(1.5, speed * 0.5));
           // Its fragments are all that is left of it; a repair brings it back.
           chunk.pivot.removeFromParent();
         } else {

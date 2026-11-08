@@ -95,6 +95,8 @@ export class AirPianoSystem extends createSystem({
       mass: 120,
       // Heavy: going over at only 3 m/s still lands with a great deal of energy.
       wear: 0.45,
+      // So heavy that even going over at walking pace splits its case apart.
+      splinterSpeed: 2.2,
       friction: 1.2,
       pushBox: PUSH_BOX,
       parts: this.breakableParts(),
@@ -102,6 +104,9 @@ export class AirPianoSystem extends createSystem({
         {
           sources: ['Body', 'Keybed', 'KeySlip', 'KeyWell'].map((name) => this.model.root.getObjectByName(name)!),
           pieces: 12,
+          // A heavy case going over: the jolt runs right through it.
+          reach: 1.8,
+          fragility: 1.5,
         },
       ],
       sound: (speed, part, broke) => this.crash(speed, part, broke),

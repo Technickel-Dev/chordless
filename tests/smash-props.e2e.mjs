@@ -193,7 +193,7 @@ const offFloor = (frame, debris) =>
         });
         if (min !== Infinity && (min < floor - 0.012 || min > floor + 0.05)) out.push({ name: piece.name, min });
       }
-      return { count: pieces.length, off: out };
+      return { count: pieces.length, off: out, fragments: pieces.filter((c) => c.name === 'Splinter').length };
     },
     [debris, FLOOR],
   );
@@ -282,7 +282,9 @@ async function bowed(ctx, { button, component, root, gripX, debris, screenshot }
     // All of it may have broken up, leaving nothing of the instrument itself.
     const body = await extent(root);
     expect(!Number.isFinite(body.min) || (body.min > FLOOR - 0.012 && body.min < FLOOR + 0.05), `body lowest point ${body.min} m`);
-    return `${s.impacts} hits (last ${s.lastImpact.toFixed(1)} m/s), ${s.piecesOff} pieces off, ${floor.count} on the floor`;
+    // Hard hits burst what they break into fragments.
+    expect(floor.fragments > 0, 'nothing burst into fragments');
+    return `${s.impacts} hits (last ${s.lastImpact.toFixed(1)} m/s), ${s.piecesOff} pieces off, ${floor.fragments} fragments, ${floor.count} on the floor`;
   });
   await dispatch('set_hand_pose', { device: 'hand-left', poseId: 'open' });
   await lookAndShoot(root, screenshot);
@@ -335,7 +337,9 @@ async function handHeld(ctx, { button, component, root, device, side, debris, sc
     // All of it may have broken up, leaving nothing of the instrument itself.
     const body = await extent(root);
     expect(!Number.isFinite(body.min) || (body.min > FLOOR - 0.012 && body.min < FLOOR + 0.05), `lowest point ${body.min} m`);
-    return `${s.impacts} hits (last ${s.lastImpact.toFixed(1)} m/s), ${s.piecesOff} pieces off; it lies on the floor`;
+    // Hard hits burst what they break into fragments.
+    expect(floor.fragments > 0, 'nothing burst into fragments');
+    return `${s.impacts} hits (last ${s.lastImpact.toFixed(1)} m/s), ${s.piecesOff} pieces off, ${floor.fragments} fragments; it lies on the floor`;
   });
   await lookAndShoot(root, screenshot);
   await test('Reset on the panel puts it back together, in the hand', async () => {
@@ -402,7 +406,9 @@ const SCENARIOS = {
       expect(s.hold === 'thrown', `hold ${s.hold}`);
       expect(tilt > 60, `leans only ${tilt.toFixed(0)} degrees`);
       expect(s.impacts >= 1 && s.health < 1 && s.piecesOff > 0, JSON.stringify(s));
-      return `over at ${tilt.toFixed(0)} degrees: hit at ${s.lastImpact.toFixed(1)} m/s, health ${(s.health * 100).toFixed(0)}%, ${s.piecesOff} pieces off`;
+      const floor = await offFloor(frame, 'AirPianoDebris');
+      expect(floor.fragments > 0, 'its case did not burst');
+      return `over at ${tilt.toFixed(0)} degrees: hit at ${s.lastImpact.toFixed(1)} m/s, health ${(s.health * 100).toFixed(0)}%, ${s.piecesOff} pieces off, ${floor.fragments} fragments`;
     });
     await lookAndShoot('AirPiano', 'smash-piano');
     await test('Reset on the panel stands it back up, whole', async () => {
@@ -453,7 +459,8 @@ const SCENARIOS = {
       const moved = Math.hypot(at.x - from.x, at.z - from.z);
       expect(moved > 0.4, `moved only ${moved.toFixed(2)} m`);
       expect(e.min > -0.012 && e.min < 0.05, `lowest point ${e.min.toFixed(3)} m`);
-      return `landed ${moved.toFixed(2)} m away, lowest point ${e.min.toFixed(3)} m`;
+      const floor = await offFloor(frame, 'AirDrumsDebris');
+      return `landed ${moved.toFixed(2)} m away, lowest point ${e.min.toFixed(3)} m, ${floor.fragments} fragments`;
     });
     await lookAndShoot('SnareLoose', 'smash-drums');
     await test('Reset on the panel puts the snare back on its stand', async () => {

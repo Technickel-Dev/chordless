@@ -5,7 +5,7 @@ import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { JOINT, JOINT_COUNT, TrackedHand } from '../guitar/hands.js';
 import { AirViolin, Intonation } from './air-violin-component.js';
 import type { BowSpec } from './bow.js';
-import { BowContact, bowedAmplitude, bowPose, createBowPose } from './bow.js';
+import { BowContact, bowedAmplitude, bowPose, collideBow, createBowPose } from './bow.js';
 import type { BowedGeometry } from './geometry.js';
 import { StopReader } from './stopping.js';
 import { BowedSynth, type BowedVoice } from './synth.js';
@@ -406,6 +406,11 @@ export function createBowedSystem(config: BowedConfig) {
         this.bow.reset();
         return;
       }
+      // The hair is found in violin space first, so the body can stop it.
+      this.toLocal(this.right, this.rightLocal);
+      const pose = bowPose(this.rightLocal, this.pose, config.bow);
+      const lift = collideBow(pose, G);
+
       bowPose(this.right.positions, this.worldPose, config.bow);
       const p = this.worldPose;
       this.axisX.fromArray(p.along);
@@ -415,10 +420,14 @@ export function createBowedSystem(config: BowedConfig) {
       this.basis.makeBasis(this.axisX, this.axisY, this.axisZ);
       bowRoot.quaternion.setFromRotationMatrix(this.basis);
       bowRoot.position.fromArray(p.frog);
+      if (lift > 0) {
+        // The same lift, up out of the top, in the world.
+        this.tmp.set(0, 0, 1).transformDirection(this.model.root.matrixWorld);
+        bowRoot.position.addScaledVector(this.tmp, lift);
+      }
       bowRoot.updateMatrixWorld(true);
 
-      this.toLocal(this.right, this.rightLocal);
-      this.bow.update(bowPose(this.rightLocal, this.pose, config.bow), dt);
+      this.bow.update(pose, dt);
     }
 
     /** Turns the bow's contact and the stops into each string's sound and glow. */

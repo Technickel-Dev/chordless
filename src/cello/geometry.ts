@@ -29,6 +29,7 @@ export const CELLO_SPEC: BowedSpec = {
   boardWidthEnd: 0.062,
   bowNearBridge: 0.015,
   bowPastBoard: 0.05,
+  bodyScale: 2.127,
 };
 
 export const CELLO_GEOMETRY = bowedGeometry(CELLO_SPEC);

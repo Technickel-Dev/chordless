@@ -29,7 +29,7 @@ import {
 } from '@iwsdk/core';
 import { CELLO_GEOMETRY } from '../cello/geometry.js';
 import { BOW, type BowSpec } from '../violin/bow.js';
-import { type BowedGeometry, VIOLIN_GEOMETRY } from '../violin/geometry.js';
+import { type BowedGeometry, bodyHalfWidth, VIOLIN_GEOMETRY } from '../violin/geometry.js';
 import { alignSpan, bevelBox, LoftSurface, placeOnSurface, type TubeSection } from './lib/hardsurface.js';
 
 /** The loft library sweeps along Z with width on X and height on Y; violin parts run along X. */
@@ -105,18 +105,6 @@ const named = <T extends Object3D>(object: T, name: string): T => {
   object.name = name;
   return object;
 };
-
-/** Half the body's width along its length: lower bout, C-waist, upper bout. */
-export function bodyHalfWidth(x: number): number {
-  // Each bout a rounded-square superellipse; the C-bouts a concave curve
-  // between them, which leaves the four corners standing out where they meet.
-  const bout = (centre: number, halfLength: number, halfWidth: number) =>
-    halfWidth * Math.max(0, 1 - Math.abs((x - centre) / halfLength) ** 2.6) ** (1 / 2.6);
-  const lower = bout(-0.075, 0.098, 0.103);
-  const upper = bout(0.112, 0.08, 0.084);
-  const cBout = x > 0.0 && x < 0.062 ? 0.053 + 12 * (x - 0.031) ** 2 : 0;
-  return Math.max(0.002, lower, upper, cBout);
-}
 
 /** The body: one lofted shell, its top and back arched, the ribs straight. */
 function body(m: Materials): Group {

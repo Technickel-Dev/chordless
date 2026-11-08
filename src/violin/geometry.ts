@@ -43,6 +43,20 @@ export interface BowedSpec {
   /** Where along the strings the bow draws a sound, from the bridge: nearest, and past the fingerboard's end. */
   bowNearBridge: number;
   bowPastBoard: number;
+  /** The body's outline is the violin's scaled by this (see bodyHalfWidth). */
+  bodyScale: number;
+}
+
+/** Half the body's width along its length, for a violin: lower bout, C-waist, upper bout. */
+export function bodyHalfWidth(x: number): number {
+  // Each bout a rounded-square superellipse; the C-bouts a concave curve
+  // between them, which leaves the four corners standing out where they meet.
+  const bout = (centre: number, halfLength: number, halfWidth: number) =>
+    halfWidth * Math.max(0, 1 - Math.abs((x - centre) / halfLength) ** 2.6) ** (1 / 2.6);
+  const lower = bout(-0.075, 0.098, 0.103);
+  const upper = bout(0.112, 0.08, 0.084);
+  const cBout = x > 0.0 && x < 0.062 ? 0.053 + 12 * (x - 0.031) ** 2 : 0;
+  return Math.max(0.002, lower, upper, cBout);
 }
 
 /** A full-size violin. */
@@ -67,6 +81,7 @@ export const VIOLIN_SPEC: BowedSpec = {
   boardWidthEnd: 0.042,
   bowNearBridge: 0.008,
   bowPastBoard: 0.03,
+  bodyScale: 1,
 };
 
 export type BowedGeometry = ReturnType<typeof bowedGeometry>;
@@ -113,6 +128,9 @@ export function bowedGeometry(spec: BowedSpec) {
     const sin = stringY(s, BRIDGE_X) / spec.archRadius;
     return [sin, Math.sqrt(1 - sin * sin)];
   };
+  /** Whether (`x`, `y`) lies over the body, whose top is the z = 0 plane. */
+  const overBody = (x: number, y: number) =>
+    x > spec.tailX && x < spec.shoulderX && Math.abs(y) < spec.bodyScale * bodyHalfWidth(x / spec.bodyScale);
   /** Semitones above the open string that stopping it at `x` plays. */
   const stopSemitones = (x: number) => 12 * Math.log2(spec.stringLength / Math.max(1e-4, x - BRIDGE_X));
   /** Where to stop a string to play `semitones` above it. */
@@ -143,6 +161,7 @@ export function bowedGeometry(spec: BowedSpec) {
     stopSemitones,
     stopX,
     nearestString,
+    overBody,
   };
 }
 

@@ -128,6 +128,35 @@ export function bowPose(joints: ArrayLike<number>, out: BowPose, bow: BowSpec = 
   return out;
 }
 
+/** The hair rests this far above the top of the body when it is pushed down onto it. */
+const HAIR_CLEARANCE = 0.0015;
+/** Points tried along the hair when it is lowered onto the body. */
+const COLLISION_SAMPLES = 24;
+
+/**
+ * Stops a bow going through the instrument. If any of the hair over the
+ * body is below its top (the z = 0 plane, in violin space), the bow is lifted
+ * out by the deepest of it. Returns how far the bow was lifted (0 when it
+ * was clear), and moves `pose` in place. The strings stand above the top, so
+ * a bow pressed through them comes to rest on the wood.
+ */
+export function collideBow(pose: BowPose, geo: BowedGeometry = VIOLIN_GEOMETRY): number {
+  let deepest = 0;
+  for (let i = 0; i <= COLLISION_SAMPLES; i++) {
+    const t = i / COLLISION_SAMPLES;
+    const x = pose.hair0[0] + (pose.hair1[0] - pose.hair0[0]) * t;
+    const y = pose.hair0[1] + (pose.hair1[1] - pose.hair0[1]) * t;
+    if (!geo.overBody(x, y)) continue;
+    const z = pose.hair0[2] + (pose.hair1[2] - pose.hair0[2]) * t;
+    deepest = Math.max(deepest, HAIR_CLEARANCE - z);
+  }
+  if (deepest <= 0) return 0;
+  pose.frog[2] += deepest;
+  pose.hair0[2] += deepest;
+  pose.hair1[2] += deepest;
+  return deepest;
+}
+
 /**
  * Which strings a bow's hair is drawing, and how. Feed it the hair once a
  * frame in violin space. A string sounds when the hair crosses it between

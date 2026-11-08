@@ -18,6 +18,10 @@ It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
 SDK. WebXR is the browser standard for VR and AR, so the app runs in the Quest
 browser with no install.
 
+Play it at <https://technickel-dev.github.io/chordless/>: open that address in
+the Quest browser and press Enter XR. Every push to `main` redeploys it through
+[the Pages workflow](.github/workflows/deploy-pages.yml).
+
 ## Run it
 
 Requires Node.js 20.19+ (or 22.12+, or 24+).
@@ -75,12 +79,20 @@ are:
 a second: the sound hole moves to your right pinch and the neck points toward
 your left. The placement is remembered.
 
-**Panel.** Point a hand at the panel and pinch to press **Guitar**,
-**Violin**, **Cello**, **Cymbals**, **Triangle**, **Piano** or **Drums** (which instrument to play),
-**Prev scene** / **Next scene** (where you play: the theatre stage first, then
-the other scenes in `src/scene-list.ts`), **Clean** or **Overdrive**, **Vol −** /
-**Vol +**, or **Reset position** (back to the default position; the piano and
-drum kit move to where you stand).
+**Panel.** The panel is icons, not instructions. Point a hand at it and pinch
+an instrument tile to take that instrument out. The menu then folds down to two
+buttons, and a strip of pictograms shows how to play the instrument (which hand
+does what) for a few seconds. The **menu** button (three lines) opens the menu
+again, and the **?** button brings the pictograms back. Under the tiles are
+volume down / up, the guitar's clean (wave) or overdrive (lightning) tone, reset
+position (crosshair: back to the default position; the piano and drum kit move
+to where you stand), and the scene arrows (where you play: the theatre stage
+first, then the other scenes in `src/scene-list.ts`).
+
+**Signs.** Each instrument has a small sign beside it. Until you play, it shows
+the next thing to do as sky-blue pictograms (show your hands, put the trumpet
+to your lips, pinch to blow); while you play, it names the chord, note or hit,
+with any reminder faded.
 
 ### The violin
 

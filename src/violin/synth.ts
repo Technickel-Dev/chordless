@@ -1,4 +1,5 @@
 import { makeRoomImpulse, midiToHz } from '../guitar/synth.js';
+import { makeNoise, playKnock } from '../smash/knock.js';
 
 /** Highest harmonic of the bowed tone; the body rolls off far below it anyway. */
 const HARMONICS = 48;
@@ -115,6 +116,8 @@ export class BowedSynth {
   readonly ctx: BaseAudioContext;
   private readonly master: GainNode;
   private readonly voices: Voice[] = [];
+  /** White noise for the instrument knocking on the floor. */
+  private readonly knockNoise: AudioBuffer;
 
   /**
    * Plays through a live AudioContext by default; pass an
@@ -128,6 +131,7 @@ export class BowedSynth {
     this.ctx = context ?? new AudioContext({ latencyHint: 'interactive' });
     const ctx = this.ctx;
     this.master = ctx.createGain();
+    this.knockNoise = makeNoise(ctx);
 
     const body = this.createBody();
     const wave = bowedWave(ctx);
@@ -233,6 +237,11 @@ export class BowedSynth {
   }
 
   /** Silences every string at once. */
+  /** The instrument hitting the floor: a knock, or a crack as something breaks; `pitch` scales its band. */
+  knock(intensity: number, crack: boolean, pitch = 1): void {
+    playKnock(this.ctx, this.master, this.knockNoise, intensity, crack, pitch);
+  }
+
   stopAll(): void {
     const t = this.ctx.currentTime;
     for (const v of this.voices) {

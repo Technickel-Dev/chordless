@@ -17,10 +17,16 @@ import { AirTrombone } from './trombone/air-trombone-component.js';
 import { AirTrumpet } from './trumpet/air-trumpet-component.js';
 import { AirViolin } from './violin/air-violin-component.js';
 import { SCENES, sceneFromQuery, sceneUrl } from './scene-list.js';
+import { Smashable } from './smash/smashable-component.js';
 
 /** The instruments, by the panel button that takes each one out. */
 type Instrument = 'guitar' | 'violin' | 'cello' | 'cymbals' | 'triangle' | 'piano' | 'drums' | 'trumpet' | 'trombone' | 'horn';
 const INSTRUMENTS: Instrument[] = ['guitar', 'violin', 'cello', 'cymbals', 'triangle', 'piano', 'drums', 'trumpet', 'trombone', 'horn'];
+
+/** How long an instrument's hint strip stays up after it is chosen. */
+const HINT_SECONDS = 20;
+
+type PanelElement = ReturnType<UIKitMLAsset['getElementById']>;
 
 export class PanelSystem extends createSystem({
   guitars: { required: [AirGuitar] },
@@ -33,9 +39,25 @@ export class PanelSystem extends createSystem({
   trumpets: { required: [AirTrumpet] },
   trombones: { required: [AirTrombone] },
   horns: { required: [AirHorn] },
+  smashables: { required: [Smashable] },
 }) {
-  private readonly buttons = new Map<Instrument, ReturnType<UIKitMLAsset['getElementById']>>();
+  private readonly buttons = new Map<Instrument, PanelElement>();
+  private readonly hints = new Map<Instrument, PanelElement>();
+  /** The bar's buttons and the two folding sections of the loaded panel. */
+  private layout: Record<'menu' | 'hint' | 'title' | 'menuOpen' | 'menuClose' | 'hintToggle' | 'toneGroup', PanelElement> = {
+    menu: null,
+    hint: null,
+    title: null,
+    menuOpen: null,
+    menuClose: null,
+    hintToggle: null,
+    toneGroup: null,
+  };
   private showing: Instrument | null = null;
+  /** The menu starts open so the first thing seen is the instrument choice. */
+  private menuOpen = true;
+  /** Seconds left on the hint strip; 0 when it is hidden. */
+  private hintTime = 0;
   private sceneIndex = 0;
   private loadingScene = false;
   /** Listener teardown for the current level's panel; reset on every level load. */
@@ -56,6 +78,7 @@ export class PanelSystem extends createSystem({
 
     this.wireGuitarControls(panel);
     this.wireSceneControls(panel);
+    this.wireFolding(panel);
 
     const xrButton = panel.getElementById('xr-button');
     const exitButton = panel.getElementById('exit-button');
@@ -81,6 +104,64 @@ export class PanelSystem extends createSystem({
         exitButton.setProperties({ display: is2D ? 'none' : 'flex' });
       }),
     );
+  }
+
+  /**
+   * The bar's menu button folds the menu away and back; the help button
+   * brings back the pictogram hints for whichever instrument is out.
+   */
+  private wireFolding(panel: UIKitMLAsset): void {
+    const layout = this.layout;
+    layout.menu = panel.getElementById('menu');
+    layout.hint = panel.getElementById('hint');
+    layout.title = panel.getElementById('title');
+    layout.menuOpen = panel.getElementById('menu-open');
+    layout.menuClose = panel.getElementById('menu-close');
+    layout.hintToggle = panel.getElementById('hint-toggle');
+    layout.toneGroup = panel.getElementById('tone-group');
+    this.hints.clear();
+    for (const name of INSTRUMENTS) this.hints.set(name, panel.getElementById(`hint-${name}`));
+    const handlers: [string, () => void][] = [
+      [
+        'menu-open',
+        () => {
+          this.menuOpen = true;
+          this.hintTime = 0;
+          this.applyLayout();
+        },
+      ],
+      [
+        'menu-close',
+        () => {
+          this.menuOpen = false;
+          this.applyLayout();
+        },
+      ],
+      [
+        'hint-toggle',
+        () => {
+          this.hintTime = this.hintTime > 0 ? 0 : HINT_SECONDS;
+          this.menuOpen = false;
+          this.applyLayout();
+        },
+      ],
+    ];
+    this.listen(panel, handlers);
+    this.applyLayout();
+  }
+
+  /** Show only what the current state needs: the menu, one hint strip, or just the bar. */
+  private applyLayout(): void {
+    const { menu, hint, title, menuOpen, menuClose, hintToggle, toneGroup } = this.layout;
+    const hinting = this.hintTime > 0 && !this.menuOpen;
+    menu?.setProperties({ display: this.menuOpen ? 'flex' : 'none' });
+    title?.setProperties({ display: this.menuOpen ? 'flex' : 'none' });
+    menuOpen?.setProperties({ display: this.menuOpen ? 'none' : 'flex' });
+    menuClose?.setProperties({ display: this.menuOpen ? 'flex' : 'none' });
+    hintToggle?.setProperties({ variant: hinting ? 'primary' : 'secondary' });
+    toneGroup?.setProperties({ display: this.showing === 'guitar' ? 'flex' : 'none' });
+    hint?.setProperties({ display: hinting ? 'flex' : 'none' });
+    for (const [name, strip] of this.hints) strip?.setProperties({ display: name === this.showing ? 'flex' : 'none' });
   }
 
   private unwirePanel(): void {
@@ -149,6 +230,12 @@ export class PanelSystem extends createSystem({
       for (const entity of this.queries.trumpets.entities) entity.setValue(AirTrumpet, 'active', name === 'trumpet');
       for (const entity of this.queries.trombones.entities) entity.setValue(AirTrombone, 'active', name === 'trombone');
       for (const entity of this.queries.horns.entities) entity.setValue(AirHorn, 'active', name === 'horn');
+      // Get the menu out of the way and show how to hold and play it instead.
+      this.showing = name;
+      this.menuOpen = false;
+      this.hintTime = HINT_SECONDS;
+      this.repaintInstruments();
+      this.applyLayout();
     };
     const nudgeVolume = (step: number) => {
       forEachGuitar((e) => e.setValue(AirGuitar, 'volume', clamp01((e.getValue(AirGuitar, 'volume') ?? 0.8) + step)));
@@ -205,10 +292,15 @@ export class PanelSystem extends createSystem({
       [
         'reset-guitar',
         () => {
-          forEachGuitar((e) => e.setValue(AirGuitar, 'resetPlacement', true));
+          forEachGuitar((e) => {
+            e.setValue(AirGuitar, 'resetPlacement', true);
+            e.setValue(AirGuitar, 'repair', true);
+          });
           forEachBowed((e, c) => e.setValue(c, 'resetPlacement', true));
           for (const e of this.queries.pianos.entities) e.setValue(AirPiano, 'resetPlacement', true);
           for (const e of this.queries.drums.entities) e.setValue(AirDrums, 'resetPlacement', true);
+          // And everything smashed is put back together.
+          for (const e of this.queries.smashables.entities) e.setValue(Smashable, 'repair', true);
         },
       ],
     ];
@@ -225,8 +317,15 @@ export class PanelSystem extends createSystem({
     }
   }
 
-  /** The instrument buttons show which instrument is out, however it was chosen. */
-  update(): void {
+  /**
+   * The instrument buttons and hint strip show which instrument is out,
+   * however it was chosen; the hint strip folds away once its time is up.
+   */
+  update(delta: number): void {
+    if (this.hintTime > 0) {
+      this.hintTime = Math.max(0, this.hintTime - delta);
+      if (this.hintTime === 0) this.applyLayout();
+    }
     let out: Instrument = 'guitar';
     for (const e of this.queries.violins.entities) if (e.getValue(AirViolin, 'active')) out = 'violin';
     for (const e of this.queries.cellos.entities) if (e.getValue(AirCello, 'active')) out = 'cello';
@@ -239,7 +338,12 @@ export class PanelSystem extends createSystem({
     for (const e of this.queries.horns.entities) if (e.getValue(AirHorn, 'active')) out = 'horn';
     if (out === this.showing) return;
     this.showing = out;
-    for (const [name, button] of this.buttons) button?.setProperties({ variant: name === out ? 'primary' : 'secondary' });
+    this.repaintInstruments();
+    this.applyLayout();
+  }
+
+  private repaintInstruments(): void {
+    for (const [name, button] of this.buttons) button?.setProperties({ variant: name === this.showing ? 'primary' : 'secondary' });
   }
 }
 

@@ -1,6 +1,6 @@
-import { createSystem, Entity, Group, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
+import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { dynamicMark } from '../cymbals/air-cymbals-system.js';
-import { ACCENT } from '../guitar/guitar-model.js';
+import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { TrackedHand } from '../guitar/hands.js';
 import { AirTriangle } from './air-triangle-component.js';
 import { SIDE_NAMES } from './geometry.js';
@@ -15,7 +15,20 @@ import {
   trianglePose,
 } from './strike.js';
 import { TriangleSynth } from './synth.js';
+import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
+import { Smashable, SmashHold } from '../smash/smashable-component.js';
 import { createTriangleModel, type TriangleModel } from './triangle-model.js';
+
+/** The sign's pictograms: how to hold it, how to play, how to stop it ringing. */
+const HOW_TO_HOLD: readonly HudStep[] = [
+  { icon: 'grab', caption: 'CLIP LEFT' },
+  { icon: 'hammer', caption: 'BEATER RIGHT' },
+];
+const HOW_TO_PLAY: readonly HudStep[] = [
+  { icon: 'hammer', caption: 'STRIKE' },
+  { icon: 'gauge', caption: 'FAST = LOUD', faint: true },
+];
+const HOW_TO_STOP: readonly HudStep[] = [{ icon: 'volumeX', caption: 'TOUCH TO STOP', faint: true }];
 
 /** The HUD floats this far in front of, below and left of the head (m), as the cymbals' does. */
 const HUD_FORWARD = 0.6;
@@ -42,6 +55,10 @@ export class AirTriangleSystem extends createSystem({
   private synth!: TriangleSynth;
   private readonly left = new TrackedHand();
   private readonly right = new TrackedHand();
+  private readonly hands: TrackedHand[] = [];
+  private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
+  private smash!: PropSmasher;
+  private debris!: Group;
   private readonly pose = createTrianglePose();
   private readonly beater = createBeaterPose();
   private readonly strike = new StrikeDetector();
@@ -68,7 +85,28 @@ export class AirTriangleSystem extends createSystem({
     this.model = createTriangleModel();
     this.entity = this.world.createTransformEntity(this.model.triangle, { persistent: true });
     this.entity.addComponent(AirTriangle);
+    this.entity.addComponent(Smashable);
     this.world.createTransformEntity(this.model.beater, { persistent: true });
+    this.debris = new Group();
+    this.debris.name = 'AirTriangleDebris';
+    this.debris.visible = false;
+    this.world.createTransformEntity(this.debris, { persistent: true });
+    this.hands.push(this.left, this.right);
+    const parts: PropPart[] = [];
+    for (const [name, breakAt] of [['Loop', 0.8], ['Clip', 0.5]] as const) {
+      const object = this.model.triangle.getObjectByName(name);
+      if (object) parts.push({ name: `LooseTriangle${name}`, objects: [object], breakAt });
+    }
+    this.smash = new PropSmasher(this.model.triangle, this.debris, {
+      mass: 0.3,
+      wear: 0.06,
+      parts,
+      fractures: [{ sources: [this.model.triangle.getObjectByName('Bar')!], pieces: 4, structural: true }],
+      // The bar hitting the floor rings, as loud as the blow.
+      sound: (speed) => {
+        if (speed > 0.6) this.synth.strike({ loudness: Math.min(1, speed / 8), position: 0.5, across: 0 });
+      },
+    });
     this.world.createTransformEntity(this.model.hud.sprite, { persistent: true });
     this.setVisible(false);
 
@@ -108,9 +146,11 @@ export class AirTriangleSystem extends createSystem({
     this.readHead();
 
     const { triangle, beater } = this.model;
-    triangle.visible = left.tracked;
+    // Smashed out of the hand, it lies where it fell and is not played.
+    const inHand = this.smash.hold === SmashHold.Worn;
+    triangle.visible = left.tracked || !inHand;
     beater.visible = right.tracked;
-    if (left.tracked) {
+    if (left.tracked && inHand) {
       const p = trianglePose(left.positions, this.head, this.pose);
       this.place(triangle, p.origin, this.x.fromArray(p.x), this.y.fromArray(p.y), this.z.fromArray(p.z));
     }
@@ -125,9 +165,13 @@ export class AirTriangleSystem extends createSystem({
       this.place(beater, b.grip, this.x, this.y, this.z);
     }
 
+    this.grips[0] = this.player.gripSpaces.left;
+    this.grips[1] = this.player.gripSpaces.right;
+    this.smash.update(dt, this.hands, this.grips, e);
+
     const strike = this.strike;
     const now = this.synth.ctx.currentTime;
-    if (left.tracked && right.tracked) {
+    if (left.tracked && right.tracked && inHand) {
       toTriangle(this.pose, this.beater.butt, this.butt);
       toTriangle(this.pose, this.beater.tip, this.tip);
       strike.update(this.butt, this.tip, dt);
@@ -144,7 +188,7 @@ export class AirTriangleSystem extends createSystem({
 
     // The holding hand's free fingers on the bar, or the beater resting on it, damp it.
     let fingers = false;
-    if (left.tracked) {
+    if (left.tracked && inHand) {
       for (let i = 0; i < DAMPING_JOINTS.length; i++) {
         const j = DAMPING_JOINTS[i] * 3;
         this.joint[0] = left.positions[j];
@@ -165,7 +209,7 @@ export class AirTriangleSystem extends createSystem({
     this.damped = damping;
 
     const ringing = this.synth.ringing(now);
-    this.model.glow.visible = ringing > 0.01 && triangle.visible;
+    this.model.glow.visible = ringing > 0.01 && triangle.visible && inHand;
     this.model.glowMaterial.opacity = Math.min(0.7, ringing * 0.8);
     const shown = Math.round(ringing * 100) / 100;
     if (shown !== this.shownRinging) {
@@ -181,7 +225,10 @@ export class AirTriangleSystem extends createSystem({
     if (this.shown === visible) return;
     this.shown = visible;
     this.setVisible(visible);
+    this.debris.visible = visible;
     if (!visible) {
+      // Put away, it comes back out whole.
+      this.smash.repair();
       this.synth.stopAll();
       this.strike.reset();
     }
@@ -220,15 +267,22 @@ export class AirTriangleSystem extends createSystem({
     hud.sprite.position.z -= this.fwd.x * HUD_LEFT;
     hud.sprite.position.y -= HUD_BELOW;
     if (!this.left.tracked || !this.right.tracked) {
-      hud.draw(['Show both hands', 'Pinch the clip left, beater right'], ACCENT.idle);
+      hud.draw({ steps: HOW_TO_HOLD }, ACCENT.idle);
       return;
     }
     const e = this.entity;
     if (ringing > 0.02 && (e.getValue(AirTriangle, 'strikes') ?? 0) > 0) {
       const volume = Math.round((e.getValue(AirTriangle, 'volume') ?? 0.8) * 100);
-      hud.draw([`DING ${dynamicMark(e.getValue(AirTriangle, 'lastStrike') ?? 0)}`, `${e.getValue(AirTriangle, 'lastSide')} · ${volume}%`, 'Touch it or rest the beater on it to stop'], ACCENT.playing);
+      hud.draw(
+        {
+          headline: `DING ${dynamicMark(e.getValue(AirTriangle, 'lastStrike') ?? 0)}`,
+          detail: `${e.getValue(AirTriangle, 'lastSide')} · ${volume}%`,
+          steps: HOW_TO_STOP,
+        },
+        ACCENT.playing,
+      );
       return;
     }
-    hud.draw(['Triangle', 'Strike the bar with the beater', 'Faster is louder'], ACCENT.idle);
+    hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
   }
 }

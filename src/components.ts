@@ -16,5 +16,6 @@ import { AirHorn } from './horn/air-horn-component.js';
 import { AirTrombone } from './trombone/air-trombone-component.js';
 import { AirTrumpet } from './trumpet/air-trumpet-component.js';
 import { AirViolin } from './violin/air-violin-component.js';
+import { Smashable } from './smash/smashable-component.js';
 
-export default defineComponents([AirGuitar, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums, AirTrumpet, AirTrombone, AirHorn]);
+export default defineComponents([AirGuitar, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums, AirTrumpet, AirTrombone, AirHorn, Smashable]);

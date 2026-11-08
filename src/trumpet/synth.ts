@@ -1,4 +1,5 @@
 import { makeRoomImpulse, midiToHz } from '../guitar/synth.js';
+import { makeNoise, playKnock } from '../smash/knock.js';
 
 /** Harmonics in each spectrum; the bell rolls them off long before the top one. */
 const HARMONICS = 32;
@@ -129,6 +130,8 @@ export const TRUMPET_VOICE: BrassVoice = {
 export class TrumpetSynth {
   readonly ctx: BaseAudioContext;
   private readonly master: GainNode;
+  /** White noise for the horn clanging on the floor. */
+  private knockNoise: AudioBuffer | null = null;
   private readonly oscs: OscillatorNode[] = [];
   private readonly layers: GainNode[] = [];
   private readonly vibrato: GainNode;
@@ -350,6 +353,12 @@ export class TrumpetSynth {
   }
 
   /** Silences the trumpet at once. */
+  /** The horn hitting the floor: a clang, or a crack as something breaks off; `pitch` scales its band. */
+  knock(intensity: number, crack: boolean, pitch = 1): void {
+    this.knockNoise ??= makeNoise(this.ctx);
+    playKnock(this.ctx, this.master, this.knockNoise, intensity, crack, pitch);
+  }
+
   stopAll(): void {
     const t = this.ctx.currentTime;
     this.level.gain.cancelScheduledValues(t);

@@ -1,13 +1,23 @@
-import { createSystem, Entity, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
+import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
 import { dynamicMark } from '../cymbals/air-cymbals-system.js';
-import { ACCENT } from '../guitar/guitar-model.js';
+import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { JOINT, TrackedHand } from '../guitar/hands.js';
 import { fitPianoStand } from '../scene-assets/piano.scene-asset.js';
 import { AirPiano } from './air-piano-component.js';
-import { KEY_COUNT, keyLever, PIANO } from './geometry.js';
+import { KEY_COUNT, KEYBOARD_WIDTH, keyLever, PIANO } from './geometry.js';
 import { heldName, Keyboard, TIP_COUNT, TIPS_PER_HAND } from './keys.js';
 import { createPianoModel, type PianoModel } from './piano-model.js';
 import { PianoSynth } from './synth.js';
+import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
+import { Smashable, SmashHold } from '../smash/smashable-component.js';
+import { seededRandom } from '../guitar/smash.js';
+
+/** The sign's pictograms while no key is down. */
+const SHOW_HANDS: readonly HudStep[] = [{ icon: 'hand', caption: 'SHOW HANDS' }];
+const HOW_TO_PLAY: readonly HudStep[] = [
+  { icon: 'pointer', caption: 'PRESS KEYS' },
+  { icon: 'gauge', caption: 'FAST = LOUD', faint: true },
+];
 
 /** Where the piano is set down when brought out, from the head (m). */
 const PLACEMENT = {
@@ -24,12 +34,21 @@ const FLOOR_Y = 0.035;
 const TIPS = [JOINT.thumbTip, JOINT.indexTip, JOINT.middleTip, JOINT.ringTip, JOINT.pinkyTip];
 /** How fast a let-go key springs back up (1/s). */
 const KEY_RETURN = 45;
+/**
+ * Where hands push the piano over, in piano space: the case behind the
+ * keys, above them, where fingers playing never reach.
+ */
+const PUSH_BOX = [-KEYBOARD_WIDTH / 2 - 0.08, -0.02, -0.47, KEYBOARD_WIDTH / 2 + 0.08, 0.16, -0.17] as const;
+/** How long a cluster from a crash rings before it is let go (s). */
+const CRASH_RING = 1.4;
 
 /**
  * A piano keyboard set down in front of the player, played with all ten
  * fingertips: a key goes down as far as a finger pushes it, sounds as loud
  * as the finger was moving when it got most of the way down, and stops when
- * let up.
+ * let up. Shoved hard on its case it topples, and hitting the floor shakes
+ * its keys, lid and pedals loose (see ../smash/prop-smash.ts); each key
+ * sounds its note where it lands.
  */
 export class AirPianoSystem extends createSystem({
   items: { required: [AirPiano] },
@@ -40,6 +59,11 @@ export class AirPianoSystem extends createSystem({
   private model!: PianoModel;
   private entity!: Entity;
   private synth!: PianoSynth;
+  private smash!: PropSmasher;
+  private debris!: Group;
+  private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
+  private readonly crashNotes: number[] = [];
+  private crashUntil = 0;
   private readonly keyboard = new Keyboard();
   private readonly hands = [new TrackedHand(), new TrackedHand()] as const;
   private readonly tips = new Float32Array(TIP_COUNT * 3);
@@ -61,7 +85,26 @@ export class AirPianoSystem extends createSystem({
     this.model = createPianoModel();
     this.entity = this.world.createTransformEntity(this.model.root, { persistent: true });
     this.entity.addComponent(AirPiano);
+    this.entity.addComponent(Smashable);
     this.model.root.visible = false;
+    this.debris = new Group();
+    this.debris.name = 'AirPianoDebris';
+    this.debris.visible = false;
+    this.world.createTransformEntity(this.debris, { persistent: true });
+    this.smash = new PropSmasher(this.model.root, this.debris, {
+      mass: 120,
+      wear: 0.13,
+      friction: 1.2,
+      pushBox: PUSH_BOX,
+      parts: this.breakableParts(),
+      fractures: [
+        {
+          sources: ['Body', 'Keybed', 'KeySlip', 'KeyWell'].map((name) => this.model.root.getObjectByName(name)!),
+          pieces: 12,
+        },
+      ],
+      sound: (speed, part, broke) => this.crash(speed, part, broke),
+    });
 
     const unlock = () => this.synth.resume();
     window.addEventListener('pointerdown', unlock);
@@ -89,10 +132,12 @@ export class AirPianoSystem extends createSystem({
     const broughtOut = !this.shown;
     this.show(true);
     const dt = Math.min(delta, 0.1);
-    if (broughtOut || e.getValue(AirPiano, 'resetPlacement')) {
+    if (e.getValue(AirPiano, 'resetPlacement')) this.smash.repair();
+    if (broughtOut || this.smash.takeRepaired() || e.getValue(AirPiano, 'resetPlacement')) {
       e.setValue(AirPiano, 'resetPlacement', false);
       this.place();
     }
+    this.letCrashGo();
     this.synth.setVolume(e.getValue(AirPiano, 'volume') ?? 0.8);
 
     const adapters = this.input.xr.visualAdapters.hand;
@@ -112,10 +157,80 @@ export class AirPianoSystem extends createSystem({
       }
     }
 
-    this.keyboard.update(this.tips, this.tracked, dt);
-    this.sound();
-    this.animateKeys(dt);
+    this.grips[0] = this.player.gripSpaces.left;
+    this.grips[1] = this.player.gripSpaces.right;
+    this.smash.update(dt, this.hands, this.grips, e);
+    // Knocked over, it is no longer there to play.
+    if (this.smash.hold === SmashHold.Worn) {
+      this.keyboard.update(this.tips, this.tracked, dt);
+      this.sound();
+      this.animateKeys(dt);
+    } else if (this.heldNotes.length > 0 || e.getValue(AirPiano, 'keysDown')) {
+      this.letGoOfKeys();
+    }
     this.updateHud(left.tracked || right.tracked);
+  }
+
+  /**
+   * What shakes loose as it takes damage: the music rest first, then the
+   * lid, the fallboard and the pedals, with the keys coming away one by one
+   * all the way down.
+   */
+  private breakableParts(): PropPart[] {
+    const root = this.model.root;
+    const random = seededRandom(88);
+    const parts: PropPart[] = this.model.keys.map((key, k) => ({
+      name: `LooseKey${PIANO.lowest + k}`,
+      objects: [key],
+      breakAt: 0.1 + random() * 0.75,
+    }));
+    const named: [string, number][] = [['MusicRest', 0.85], ['Lid', 0.7], ['Fallboard', 0.5], ['Pedals', 0.35]];
+    for (const [name, breakAt] of named) {
+      const object = root.getObjectByName(name);
+      if (object) parts.push({ name: `Loose${name}`, objects: [object], breakAt });
+    }
+    return parts;
+  }
+
+  /**
+   * A hit: a key landing sounds its own note; the piano itself sounds a
+   * cluster as loud as the blow, from the end that struck.
+   */
+  private crash(speed: number, part: number, broke: boolean): void {
+    const loudness = Math.min(1, speed / 6);
+    if (loudness < 0.06) return;
+    const now = this.synth.ctx.currentTime;
+    if (part >= 0 && part < KEY_COUNT) {
+      this.synth.noteOn(PIANO.lowest + part, loudness * 0.7, now);
+      this.synth.noteOff(PIANO.lowest + part, now + 0.6);
+      return;
+    }
+    this.synth.knock(loudness, broke);
+    if (part >= KEY_COUNT || speed < 2) return;
+    const random = Math.random;
+    const low = PIANO.lowest + Math.floor(random() * (KEY_COUNT - 14));
+    for (let i = 0; i < 6; i++) {
+      const midi = low + Math.floor(random() * 14);
+      this.synth.noteOn(midi, loudness * (0.6 + 0.4 * random()), now + i * 0.006);
+      this.crashNotes.push(midi);
+    }
+    this.crashUntil = now + CRASH_RING;
+  }
+
+  /** Lets the last crash's cluster go once it has rung. */
+  private letCrashGo(): void {
+    if (this.crashNotes.length === 0 || this.synth.ctx.currentTime < this.crashUntil) return;
+    for (const midi of this.crashNotes) this.synth.noteOff(midi);
+    this.crashNotes.length = 0;
+  }
+
+  /** Lifts every finger off the keys at once, as when the piano goes over. */
+  private letGoOfKeys(): void {
+    this.keyboard.reset();
+    for (const midi of this.heldNotes) this.synth.noteOff(midi);
+    this.heldNotes.length = 0;
+    this.entity.setValue(AirPiano, 'keysDown', 0);
+    this.entity.setValue(AirPiano, 'chord', '');
   }
 
   /** Sounds this frame's strikes and lets up this frame's releases. */
@@ -177,6 +292,8 @@ export class AirPianoSystem extends createSystem({
     fitPianoStand(root, keyY - FLOOR_Y);
     root.updateMatrixWorld(true);
     this.toPiano.copy(root.matrixWorld).invert();
+    // The stand changed length: measure the piano again for pushing over.
+    this.smash.refit();
   }
 
   /** Shows or puts away the piano, silencing it when put away. */
@@ -184,7 +301,10 @@ export class AirPianoSystem extends createSystem({
     if (this.shown === visible) return;
     this.shown = visible;
     this.model.root.visible = visible;
+    this.debris.visible = visible;
     if (visible) return;
+    // Put away, it comes back out whole.
+    this.smash.repair();
     this.synth.stopAll();
     this.keyboard.reset();
     this.shownDepth.fill(0);
@@ -202,16 +322,16 @@ export class AirPianoSystem extends createSystem({
   private updateHud(handsTracked: boolean): void {
     const hud = this.model.hud;
     if (!handsTracked) {
-      hud.draw(['Show your hands', 'Play the keys with your fingertips'], ACCENT.idle);
+      hud.draw({ steps: SHOW_HANDS }, ACCENT.idle);
       return;
     }
     const e = this.entity;
     const chord = e.getValue(AirPiano, 'chord') ?? '';
     if (chord !== '') {
       const volume = Math.round((e.getValue(AirPiano, 'volume') ?? 0.8) * 100);
-      hud.draw([chord, `${dynamicMark(e.getValue(AirPiano, 'lastVelocity') ?? 0)} · ${volume}%`], ACCENT.playing);
+      hud.draw({ headline: chord, detail: `${dynamicMark(e.getValue(AirPiano, 'lastVelocity') ?? 0)} · ${volume}%` }, ACCENT.playing);
       return;
     }
-    hud.draw(['Piano', 'Press the keys with your fingertips', 'Faster is louder'], ACCENT.idle);
+    hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
   }
 }

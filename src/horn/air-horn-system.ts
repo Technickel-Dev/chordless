@@ -1,13 +1,25 @@
-import { createSystem, Entity, Matrix4, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
-import { ACCENT } from '../guitar/guitar-model.js';
+import { createSystem, Entity, Group, Matrix4, Object3D, Quaternion, Vector3, VisibilityState } from '@iwsdk/core';
+import { ACCENT, type HudStep } from '../guitar/guitar-model.js';
 import { TrackedHand } from '../guitar/hands.js';
 import { AIR_STOP } from '../trumpet/playing.js';
 import { AirHorn } from './air-horn-component.js';
+import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
+import { Smashable, SmashHold } from '../smash/smashable-component.js';
 import { BELL, BELL_AXIS, HORN } from './geometry.js';
 import { createHornPose, holdFrenchHorn, LIPS, toHorn } from './hold.js';
 import { Breath, fingeringName, handCover, noteName, PARTIALS, PartialSelector, soundingNote, ValveReader, WRITTEN_ABOVE } from './playing.js';
 import { HornSynth } from './synth.js';
 import { createHornModel, type HornModel } from './horn-model.js';
+
+/** The sign's pictograms for each step from picking it up to playing. */
+const SHOW_LEFT_HAND: readonly HudStep[] = [{ icon: 'hand', caption: 'LEFT HAND' }];
+const HOW_TO_HOLD: readonly HudStep[] = [
+  { icon: 'smile', caption: 'TO LIPS' },
+  { icon: 'pointer', caption: 'LEVERS LEFT' },
+];
+const HAND_IN_BELL: readonly HudStep[] = [{ icon: 'hand', caption: 'RIGHT IN BELL' }];
+const BLOW: readonly HudStep[] = [{ icon: 'wind', caption: 'PINCH RIGHT' }];
+const TILT: readonly HudStep[] = [{ icon: 'arrowUp', caption: 'TILT = PITCH', faint: true }];
 
 /** The HUD floats this far in front of, below and left of the head (m): clear of the bell on the right. */
 const HUD_FORWARD = 0.6;
@@ -36,6 +48,11 @@ export class AirHornSystem extends createSystem({
   private model!: HornModel;
   private entity!: Entity;
   private synth!: HornSynth;
+  private smash!: PropSmasher;
+  private debris!: Group;
+  private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
+  /** Smashed out of the hand: it lies where it fell, silent. */
+  private silenced = false;
   private readonly hands = [new TrackedHand(), new TrackedHand()] as const;
   readonly pose = createHornPose();
   readonly valves = new ValveReader();
@@ -67,6 +84,35 @@ export class AirHornSystem extends createSystem({
     this.model = createHornModel();
     this.entity = this.world.createTransformEntity(this.model.horn, { persistent: true });
     this.entity.addComponent(AirHorn);
+    this.entity.addComponent(Smashable);
+    this.debris = new Group();
+    this.debris.name = 'AirHornDebris';
+    this.debris.visible = false;
+    this.world.createTransformEntity(this.debris, { persistent: true });
+    const root = this.model.horn;
+    // Swung into the floor it dents and sheds these, in this order, as it takes damage.
+    const breaks: [string, number][] = [
+        ['HornMouthpiece', 0.8],
+        ['HornValves', 0.2],
+    ];
+    const parts: PropPart[] = [];
+    for (const [part, breakAt] of breaks) {
+      const object = root.getObjectByName(part);
+      if (object) parts.push({ name: `LooseHorn${part}`, objects: [object], breakAt });
+    }
+    this.smash = new PropSmasher(root, this.debris, {
+      mass: 2.5,
+      wear: 0.05,
+      parts,
+      // The bell and coils tear apart around where it keeps landing.
+      fractures: [
+        { sources: [root.getObjectByName('HornBell')!], pieces: 7, structural: true },
+        { sources: [root.getObjectByName('HornCoils')!], pieces: 7, structural: true },
+      ],
+      sound: (speed, _part, broke) => {
+        if (speed > 0.4) this.synth.knock(Math.min(1, speed / 9), broke, 2);
+      },
+    });
     this.world.createTransformEntity(this.model.hud.sprite, { persistent: true });
     this.setVisible(false);
 
@@ -94,7 +140,12 @@ export class AirHornSystem extends createSystem({
     }
     this.show(true);
     const dt = Math.min(delta, 0.1);
-    if (e.getValue(AirHorn, 'resetPlacement')) e.setValue(AirHorn, 'resetPlacement', false);
+    if (e.getValue(AirHorn, 'resetPlacement')) {
+      this.smash.repair();
+      e.setValue(AirHorn, 'resetPlacement', false);
+    }
+    this.grips[0] = this.player.gripSpaces.left;
+    this.grips[1] = this.player.gripSpaces.right;
     this.synth.setVolume(e.getValue(AirHorn, 'volume') ?? 0.8);
 
     const adapters = this.input.xr.visualAdapters.hand;
@@ -104,6 +155,20 @@ export class AirHornSystem extends createSystem({
     if (e.getValue(AirHorn, 'leftHand') !== left.tracked) e.setValue(AirHorn, 'leftHand', left.tracked);
     if (e.getValue(AirHorn, 'rightHand') !== right.tracked) e.setValue(AirHorn, 'rightHand', right.tracked);
     this.readHead();
+    if (this.smash.hold !== SmashHold.Worn) {
+      // Smashed out of the hand, it lies where it fell and does not play.
+      this.model.horn.visible = true;
+      if (!this.silenced) {
+        this.silenced = true;
+        this.synth.stopAll();
+        this.breath.reset();
+      }
+      this.smash.update(dt, this.hands, this.grips, e);
+      this.publish();
+      this.updateHud();
+      return;
+    }
+    this.silenced = false;
 
     const horn = this.model.horn;
     horn.visible = left.tracked;
@@ -128,6 +193,8 @@ export class AirHornSystem extends createSystem({
     horn.quaternion.setFromRotationMatrix(this.basis);
     horn.position.fromArray(pose.origin);
     horn.updateMatrixWorld(true);
+    // Swung into the floor, it takes damage (and once wrecked comes loose).
+    this.smash.update(dt, this.hands, this.grips, e);
 
     this.valves.update(left.positions);
     for (let i = 0; i < 3; i++) this.model.levers[i].position.y = HORN.leverTop - this.valves.depth[i] * HORN.travel;
@@ -166,6 +233,9 @@ export class AirHornSystem extends createSystem({
     if (this.shown === visible) return;
     this.shown = visible;
     this.setVisible(visible);
+    this.debris.visible = visible;
+    // Put away, it comes back out whole.
+    if (!visible) this.smash.repair();
     if (!visible) {
       this.synth.stopAll();
       this.breath.reset();
@@ -232,22 +302,21 @@ export class AirHornSystem extends createSystem({
     hud.sprite.position.y -= HUD_BELOW;
     const [left, right] = this.hands;
     if (!left.tracked) {
-      hud.draw(['Show your left hand', 'The horn goes in it'], ACCENT.idle);
+      hud.draw({ steps: SHOW_LEFT_HAND }, ACCENT.idle);
       return;
     }
     if (!this.pose.atLips) {
-      hud.draw(['French horn', 'Hold it out to your lips', 'Left fingers on the levers'], ACCENT.idle);
+      hud.draw({ steps: HOW_TO_HOLD }, ACCENT.idle);
       return;
     }
     if (!right.tracked) {
-      hud.draw([this.writtenName, `Valves ${this.fingering}`, 'Show your right hand: pinch it to blow'], ACCENT.placing);
+      hud.draw({ headline: this.writtenName, valves: this.fingering, steps: HAND_IN_BELL }, ACCENT.placing);
       return;
     }
-    const partial = PARTIALS[this.partials.index].partial;
     if (this.breath.blowing) {
-      hud.draw([this.writtenName, `Valves ${this.fingering} · partial ${partial}`, 'Tilt it to change partial'], ACCENT.playing);
+      hud.draw({ headline: this.writtenName, valves: this.fingering, steps: TILT }, ACCENT.playing);
       return;
     }
-    hud.draw([this.writtenName, `Valves ${this.fingering} · partial ${partial}`, 'Pinch your right hand to blow'], ACCENT.placing);
+    hud.draw({ headline: this.writtenName, valves: this.fingering, steps: BLOW }, ACCENT.placing);
   }
 }

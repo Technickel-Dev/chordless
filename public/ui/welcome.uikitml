@@ -1,74 +1,94 @@
 <!--
-  Panel, Button and ButtonLabel come from the bundled Horizon kit.
-  RectangleGoggles and LogIn are bundled Lucide icon components. The :dark
-  styles apply because iwsdk.config.json prefers the dark color scheme.
-  PanelSystem wires the instrument, tone, volume and reset ids below to the
-  AirGuitar, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums,
-  AirTrumpet, AirTrombone and AirHorn components, and scene-prev / scene-next to the level list in
-  src/scene-list.ts.
+  Panel, Button, ButtonIcon and ButtonLabel come from the bundled Horizon kit;
+  every other capitalised tag is a bundled Lucide icon. The :dark styles apply
+  because iwsdk.config.json prefers the dark color scheme.
+
+  The panel is icon-first and has three parts that PanelSystem shows and hides:
+  - the bar (always there): menu-open / menu-close and hint-toggle;
+  - #menu: instrument tiles, the guitar tone, volume, reset, scene and XR controls;
+  - #hint: one strip of pictograms per instrument (hint-guitar, hint-violin, ...).
+  Choosing an instrument folds the menu away and shows that instrument's hint
+  for a few seconds, so only the bar is left while playing.
 -->
 <style>
   .panel-root {
     flex-direction: column;
-    width: 640px;
+    align-items: stretch;
   }
 
-  .panel-content {
-    flex-direction: column;
-    gap: 6px;
-    padding-top: 22px;
-    padding-right: 22px;
-    padding-bottom: 12px;
-    padding-left: 22px;
-  }
-
-  .eyebrow {
-    color: #6b5a00;
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 1.4px;
-  }
-
-  .eyebrow:dark {
-    color: #f5d90a;
-  }
-
-  .heading {
-    color: #1c1d20;
-    font-size: 30px;
-    font-weight: 700;
-    line-height: 1.2;
-  }
-
-  .heading:dark {
-    color: #fafaf7;
-  }
-
-  .body {
-    color: #3a3b40;
-    font-size: 18px;
-    line-height: 1.35;
-  }
-
-  .body:dark {
-    color: #dddfe3;
-  }
-
-  .row {
-    flex-direction: row;
-    gap: 10px;
-    padding-right: 22px;
-    padding-bottom: 14px;
-    padding-left: 22px;
-  }
-
-  .scene-row {
+  .bar {
     flex-direction: row;
     align-items: center;
     gap: 10px;
-    padding-right: 22px;
-    padding-bottom: 14px;
-    padding-left: 22px;
+    padding-top: 12px;
+    padding-right: 12px;
+    padding-bottom: 12px;
+    padding-left: 12px;
+  }
+
+  .icon-button {
+    width: 64px;
+    height: 64px;
+    justify-content: center;
+    padding-left: 0px;
+    padding-right: 0px;
+  }
+
+  .title {
+    flex-grow: 1;
+    justify-content: center;
+    color: #185fa5;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 3px;
+  }
+
+  .title:dark {
+    color: #85b7eb;
+  }
+
+  .menu {
+    flex-direction: column;
+    gap: 14px;
+    width: 640px;
+    padding-right: 20px;
+    padding-bottom: 20px;
+    padding-left: 20px;
+  }
+
+  .tiles {
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .tile {
+    flex-direction: column;
+    width: 112px;
+    height: 104px;
+    gap: 6px;
+    justify-content: center;
+    align-items: center;
+    padding-left: 0px;
+    padding-right: 0px;
+  }
+
+  .tile-label {
+    font-size: 15px;
+  }
+
+  .controls {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .spacer {
+    flex-grow: 1;
+  }
+
+  .group {
+    flex-direction: row;
+    gap: 6px;
   }
 
   .scene-name {
@@ -80,106 +100,340 @@
   }
 
   .scene-name:dark {
-    color: #f5d90a;
+    color: #85b7eb;
   }
 
-  .button {
-    justify-content: flex-start;
-    margin-left: 22px;
-    margin-right: 22px;
-    margin-bottom: 22px;
+  .xr {
+    justify-content: center;
   }
 
-  .button-label {
-    transform-translate-y: 1px;
+  .hint {
+    flex-direction: column;
+    padding-right: 20px;
+    padding-bottom: 20px;
+    padding-left: 20px;
+  }
+
+  .steps {
+    flex-direction: row;
+    gap: 14px;
+    justify-content: center;
+  }
+
+  .step {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 150px;
+  }
+
+  .step-icon {
+    width: 84px;
+    height: 84px;
+    border-radius: 42px;
+    justify-content: center;
+    align-items: center;
+    background-color: #85b7eb;
+  }
+
+  .glyph {
+    width: 44px;
+    height: 44px;
+    color: #042c53;
+  }
+
+  .step-text {
+    color: #1c1d20;
+    font-size: 19px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .step-text:dark {
+    color: #fafaf7;
+  }
+
+  .side {
+    padding-top: 3px;
+    padding-right: 10px;
+    padding-bottom: 3px;
+    padding-left: 10px;
+    border-radius: 10px;
+    background-color: #e4e5e9;
+    color: #3a3b40;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+  }
+
+  .side:dark {
+    background-color: #3a3b40;
+    color: #dddfe3;
   }
 </style>
 <Panel class="panel-root">
-  <div class="panel-content">
-    <div class="eyebrow">CHORDLESS - AIR INSTRUMENTS</div>
-    <div class="heading">Play with your hands</div>
-    <div class="body">Put the controllers down. The guitar hangs in front of you.</div>
-    <div class="body">Left fingertips press the strings between the frets.</div>
-    <div class="body">Right index fingertip plucks: sweep to strum, flick for one string.</div>
-    <div class="body">Lift above the strings to move back silently; rest on one to mute it.</div>
-    <div class="body">Pinch both hands for a second to move the guitar to them.</div>
-    <div class="body">Violin and cello: stop the strings anywhere on the fingerboard. The bow is in your right hand: draw it across near the bridge, tilt it to change string.</div>
-    <div class="body">Cymbals: one in each hand. Clash them together, faster for louder; press them together or to your chest to stop the ringing.</div>
-    <div class="body">Triangle: pinch its clip in your left hand; strike it with the beater in your right fist. Touch it with your free fingers, or rest the beater on it, to stop it.</div>
-    <div class="body">Piano: it stands in front of you. Press the keys with any fingertip; faster is louder.</div>
-    <div class="body">Drums: a stick in each fist. Bring the tips down on the heads and cymbals; hit the snare's rim for a rimshot, the hi-hat's edge to open it, the ride's bell for its ping. The round pad by your right knee is the kick.</div>
-    <div class="body">Trumpet: right fingers press the valves; hold it out to your lips and tilt the bell up for higher notes. Pinch your left hand to blow; cup it over the bell to mute.</div>
-    <div class="body">Trombone: hold it to your lips in your left hand and tilt it up for higher notes; pinch that hand to blow. Right fingertips on the slide brace move the slide.</div>
-    <div class="body">French horn: hold it to your lips in your left hand, its fingers on the valve levers, and tilt it up for higher notes. Your right hand goes in the bell: pinch it to blow, deeper in for a darker tone.</div>
-  </div>
-  <div class="row">
-    <Button id="instrument-guitar" variant="primary">
-      <ButtonLabel>Guitar</ButtonLabel>
+  <div class="bar">
+    <Button id="menu-open" variant="secondary" class="icon-button">
+      <ButtonIcon><Menu></Menu></ButtonIcon>
     </Button>
-    <Button id="instrument-violin" variant="secondary">
-      <ButtonLabel>Violin</ButtonLabel>
+    <Button id="menu-close" variant="secondary" class="icon-button">
+      <ButtonIcon><X></X></ButtonIcon>
     </Button>
-    <Button id="instrument-cello" variant="secondary">
-      <ButtonLabel>Cello</ButtonLabel>
-    </Button>
-    <Button id="instrument-cymbals" variant="secondary">
-      <ButtonLabel>Cymbals</ButtonLabel>
-    </Button>
-    <Button id="instrument-triangle" variant="secondary">
-      <ButtonLabel>Triangle</ButtonLabel>
-    </Button>
-    <Button id="instrument-piano" variant="secondary">
-      <ButtonLabel>Piano</ButtonLabel>
-    </Button>
-    <Button id="instrument-drums" variant="secondary">
-      <ButtonLabel>Drums</ButtonLabel>
-    </Button>
-    <Button id="instrument-trumpet" variant="secondary">
-      <ButtonLabel>Trumpet</ButtonLabel>
-    </Button>
-    <Button id="instrument-trombone" variant="secondary">
-      <ButtonLabel>Trombone</ButtonLabel>
-    </Button>
-    <Button id="instrument-horn" variant="secondary">
-      <ButtonLabel>Horn</ButtonLabel>
+    <div id="title" class="title">CHORDLESS</div>
+    <Button id="hint-toggle" variant="secondary" class="icon-button">
+      <ButtonIcon><CircleHelp></CircleHelp></ButtonIcon>
     </Button>
   </div>
-  <div class="row">
-    <Button id="tone-clean" variant="primary">
-      <ButtonLabel>Clean</ButtonLabel>
+
+  <div id="menu" class="menu">
+    <div class="tiles">
+      <Button id="instrument-guitar" variant="primary" class="tile">
+        <ButtonIcon><Guitar></Guitar></ButtonIcon>
+        <ButtonLabel class="tile-label">Guitar</ButtonLabel>
+      </Button>
+      <Button id="instrument-violin" variant="secondary" class="tile">
+        <ButtonIcon><Music2></Music2></ButtonIcon>
+        <ButtonLabel class="tile-label">Violin</ButtonLabel>
+      </Button>
+      <Button id="instrument-cello" variant="secondary" class="tile">
+        <ButtonIcon><Music4></Music4></ButtonIcon>
+        <ButtonLabel class="tile-label">Cello</ButtonLabel>
+      </Button>
+      <Button id="instrument-piano" variant="secondary" class="tile">
+        <ButtonIcon><Piano></Piano></ButtonIcon>
+        <ButtonLabel class="tile-label">Piano</ButtonLabel>
+      </Button>
+      <Button id="instrument-drums" variant="secondary" class="tile">
+        <ButtonIcon><Drum></Drum></ButtonIcon>
+        <ButtonLabel class="tile-label">Drums</ButtonLabel>
+      </Button>
+    </div>
+    <div class="tiles">
+      <Button id="instrument-cymbals" variant="secondary" class="tile">
+        <ButtonIcon><Disc3></Disc3></ButtonIcon>
+        <ButtonLabel class="tile-label">Cymbals</ButtonLabel>
+      </Button>
+      <Button id="instrument-triangle" variant="secondary" class="tile">
+        <ButtonIcon><Triangle></Triangle></ButtonIcon>
+        <ButtonLabel class="tile-label">Triangle</ButtonLabel>
+      </Button>
+      <Button id="instrument-trumpet" variant="secondary" class="tile">
+        <ButtonIcon><Megaphone></Megaphone></ButtonIcon>
+        <ButtonLabel class="tile-label">Trumpet</ButtonLabel>
+      </Button>
+      <Button id="instrument-trombone" variant="secondary" class="tile">
+        <ButtonIcon><MoveHorizontal></MoveHorizontal></ButtonIcon>
+        <ButtonLabel class="tile-label">Trombone</ButtonLabel>
+      </Button>
+      <Button id="instrument-horn" variant="secondary" class="tile">
+        <ButtonIcon><Shell></Shell></ButtonIcon>
+        <ButtonLabel class="tile-label">Horn</ButtonLabel>
+      </Button>
+    </div>
+
+    <div class="controls">
+      <div class="group">
+        <Button id="volume-down" variant="secondary" class="icon-button">
+          <ButtonIcon><Volume1></Volume1></ButtonIcon>
+        </Button>
+        <Button id="volume-up" variant="secondary" class="icon-button">
+          <ButtonIcon><Volume2></Volume2></ButtonIcon>
+        </Button>
+      </div>
+      <div id="tone-group" class="group">
+        <Button id="tone-clean" variant="primary" class="icon-button">
+          <ButtonIcon><AudioWaveform></AudioWaveform></ButtonIcon>
+        </Button>
+        <Button id="tone-drive" variant="secondary" class="icon-button">
+          <ButtonIcon><Zap></Zap></ButtonIcon>
+        </Button>
+      </div>
+      <div class="spacer"></div>
+      <Button id="reset-guitar" variant="secondary" class="icon-button">
+        <ButtonIcon><LocateFixed></LocateFixed></ButtonIcon>
+      </Button>
+    </div>
+
+    <div class="controls">
+      <Button id="scene-prev" variant="secondary" class="icon-button">
+        <ButtonIcon><ChevronLeft></ChevronLeft></ButtonIcon>
+      </Button>
+      <div id="scene-name" class="scene-name">Theatre</div>
+      <Button id="scene-next" variant="secondary" class="icon-button">
+        <ButtonIcon><ChevronRight></ChevronRight></ButtonIcon>
+      </Button>
+    </div>
+
+    <Button id="xr-button" class="xr">
+      <ButtonIcon><RectangleGoggles></RectangleGoggles></ButtonIcon>
+      <ButtonLabel>Enter XR</ButtonLabel>
     </Button>
-    <Button id="tone-drive" variant="secondary">
-      <ButtonLabel>Overdrive</ButtonLabel>
-    </Button>
-    <Button id="volume-down" variant="secondary">
-      <ButtonLabel>Vol -</ButtonLabel>
-    </Button>
-    <Button id="volume-up" variant="secondary">
-      <ButtonLabel>Vol +</ButtonLabel>
-    </Button>
-    <Button id="reset-guitar" variant="secondary">
-      <ButtonLabel>Reset position</ButtonLabel>
+    <Button id="exit-button" class="xr" style="display: none">
+      <ButtonIcon><LogIn></LogIn></ButtonIcon>
+      <ButtonLabel>Exit</ButtonLabel>
     </Button>
   </div>
-  <div class="scene-row">
-    <Button id="scene-prev" variant="secondary">
-      <ButtonLabel>Prev scene</ButtonLabel>
-    </Button>
-    <div id="scene-name" class="scene-name">Theatre</div>
-    <Button id="scene-next" variant="secondary">
-      <ButtonLabel>Next scene</ButtonLabel>
-    </Button>
+
+  <div id="hint" class="hint" style="display: none">
+    <div id="hint-guitar" class="steps">
+      <div class="step">
+        <div class="step-icon"><Hand class="glyph"></Hand></div>
+        <div class="step-text">Press frets</div>
+        <div class="side">LEFT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><AudioWaveform class="glyph"></AudioWaveform></div>
+        <div class="step-text">Strum</div>
+        <div class="side">RIGHT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><Grab class="glyph"></Grab></div>
+        <div class="step-text">Pinch to move</div>
+        <div class="side">BOTH</div>
+      </div>
+    </div>
+    <div id="hint-violin" class="steps">
+      <div class="step">
+        <div class="step-icon"><Hand class="glyph"></Hand></div>
+        <div class="step-text">Press strings</div>
+        <div class="side">LEFT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><MoveHorizontal class="glyph"></MoveHorizontal></div>
+        <div class="step-text">Bow</div>
+        <div class="side">RIGHT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><RotateCw class="glyph"></RotateCw></div>
+        <div class="step-text">Tilt for string</div>
+        <div class="side">RIGHT</div>
+      </div>
+    </div>
+    <div id="hint-cello" class="steps">
+      <div class="step">
+        <div class="step-icon"><Hand class="glyph"></Hand></div>
+        <div class="step-text">Press strings</div>
+        <div class="side">LEFT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><MoveHorizontal class="glyph"></MoveHorizontal></div>
+        <div class="step-text">Bow</div>
+        <div class="side">RIGHT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><RotateCw class="glyph"></RotateCw></div>
+        <div class="step-text">Tilt for string</div>
+        <div class="side">RIGHT</div>
+      </div>
+    </div>
+    <div id="hint-piano" class="steps">
+      <div class="step">
+        <div class="step-icon"><Pointer class="glyph"></Pointer></div>
+        <div class="step-text">Press keys</div>
+        <div class="side">ANY FINGER</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><Gauge class="glyph"></Gauge></div>
+        <div class="step-text">Faster is louder</div>
+        <div class="side">ANY FINGER</div>
+      </div>
+    </div>
+    <div id="hint-drums" class="steps">
+      <div class="step">
+        <div class="step-icon"><Grab class="glyph"></Grab></div>
+        <div class="step-text">Make fists</div>
+        <div class="side">BOTH</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><ArrowDown class="glyph"></ArrowDown></div>
+        <div class="step-text">Hit drums</div>
+        <div class="side">BOTH</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><Footprints class="glyph"></Footprints></div>
+        <div class="step-text">Kick pad</div>
+        <div class="side">RIGHT KNEE</div>
+      </div>
+    </div>
+    <div id="hint-cymbals" class="steps">
+      <div class="step">
+        <div class="step-icon"><ArrowLeftRight class="glyph"></ArrowLeftRight></div>
+        <div class="step-text">Clash</div>
+        <div class="side">BOTH</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><VolumeX class="glyph"></VolumeX></div>
+        <div class="step-text">Hold to stop</div>
+        <div class="side">BOTH</div>
+      </div>
+    </div>
+    <div id="hint-triangle" class="steps">
+      <div class="step">
+        <div class="step-icon"><Grab class="glyph"></Grab></div>
+        <div class="step-text">Pinch clip</div>
+        <div class="side">LEFT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><Hammer class="glyph"></Hammer></div>
+        <div class="step-text">Strike</div>
+        <div class="side">RIGHT FIST</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><VolumeX class="glyph"></VolumeX></div>
+        <div class="step-text">Touch to stop</div>
+        <div class="side">LEFT</div>
+      </div>
+    </div>
+    <div id="hint-trumpet" class="steps">
+      <div class="step">
+        <div class="step-icon"><Pointer class="glyph"></Pointer></div>
+        <div class="step-text">Valves</div>
+        <div class="side">RIGHT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><Wind class="glyph"></Wind></div>
+        <div class="step-text">Pinch to blow</div>
+        <div class="side">LEFT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><ArrowUp class="glyph"></ArrowUp></div>
+        <div class="step-text">Tilt up = higher</div>
+        <div class="side">BELL</div>
+      </div>
+    </div>
+    <div id="hint-trombone" class="steps">
+      <div class="step">
+        <div class="step-icon"><Wind class="glyph"></Wind></div>
+        <div class="step-text">Pinch to blow</div>
+        <div class="side">LEFT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><MoveHorizontal class="glyph"></MoveHorizontal></div>
+        <div class="step-text">Slide</div>
+        <div class="side">RIGHT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><ArrowUp class="glyph"></ArrowUp></div>
+        <div class="step-text">Tilt up = higher</div>
+        <div class="side">BELL</div>
+      </div>
+    </div>
+    <div id="hint-horn" class="steps">
+      <div class="step">
+        <div class="step-icon"><Pointer class="glyph"></Pointer></div>
+        <div class="step-text">Valves</div>
+        <div class="side">LEFT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><Wind class="glyph"></Wind></div>
+        <div class="step-text">Pinch in bell</div>
+        <div class="side">RIGHT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><ArrowUp class="glyph"></ArrowUp></div>
+        <div class="step-text">Tilt up = higher</div>
+        <div class="side">BELL</div>
+      </div>
+    </div>
   </div>
-  <Button id="xr-button" class="button">
-    <ButtonIcon>
-      <RectangleGoggles></RectangleGoggles>
-    </ButtonIcon>
-    <ButtonLabel class="button-label">Enter XR</ButtonLabel>
-  </Button>
-  <Button id="exit-button" class="button" style="display: none">
-    <ButtonIcon>
-      <LogIn></LogIn>
-    </ButtonIcon>
-    <ButtonLabel class="button-label">Exit to Browser</ButtonLabel>
-  </Button>
 </Panel>

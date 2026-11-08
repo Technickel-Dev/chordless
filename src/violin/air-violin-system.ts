@@ -14,7 +14,6 @@ const DEG = Math.PI / 180;
  */
 export const AirViolinSystem = createBowedSystem({
   instrument: 'violin',
-  title: 'Violin',
   component: AirViolin,
   geometry: VIOLIN_GEOMETRY,
   bow: BOW,

@@ -1,4 +1,5 @@
 import { makeRoomImpulse } from '../guitar/synth.js';
+import { makeNoise, playKnock } from '../smash/knock.js';
 import type { Articulation } from './strokes.js';
 
 /**
@@ -263,6 +264,8 @@ export class DrumSynth {
   private readonly samples = new Map<Articulation, AudioBuffer[]>();
   private readonly dry: GainNode;
   private voices: Voice[] = [];
+  /** White noise for knocks and cracks when the kit hits the floor. */
+  private readonly noise: AudioBuffer;
 
   constructor(context?: AudioContext) {
     this.ctx = context ?? new AudioContext({ latencyHint: 'interactive' });
@@ -285,6 +288,7 @@ export class DrumSynth {
     this.dry.connect(limiter);
     wet.connect(limiter);
     limiter.connect(ctx.destination);
+    this.noise = makeNoise(ctx);
 
     const names = Object.keys(SPECS) as Articulation[];
     this.warm = Promise.all(
@@ -293,6 +297,11 @@ export class DrumSynth {
         this.samples.set(name, layers);
       }),
     ).then(() => {});
+  }
+
+  /** Something of the kit hitting the floor: a knock, or a crack when it breaks. */
+  knock(intensity: number, crack: boolean): void {
+    playKnock(this.ctx, this.dry, this.noise, intensity, crack, 0.8);
   }
 
   /** Sounds a stroke at `at` (audio clock). */

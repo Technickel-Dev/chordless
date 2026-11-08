@@ -10,12 +10,13 @@ import { TrumpetSynth, type BrassVoice } from '../trumpet/synth.js';
 export const HORN_VOICE: BrassVoice = {
   harmonics: 40,
   spectra: [
-    { peak: 1, rise: 0, fall: 8 },
-    { peak: 2, rise: 3, fall: 4.2 },
-    { peak: 3.5, rise: 2.5, fall: 2.3 },
+    { peak: 2, rise: 2, fall: 5 },
+    { peak: 3, rise: 2.5, fall: 3.5 },
+    { peak: 4, rise: 2.5, fall: 2.3 },
   ],
-  cupHz: 420,
-  cupGain: 3,
+  cupHz: 600,
+  cupGain: 5,
+  gain: 2.2,
   brillianceHz: 1300,
   bellHz: 60,
   toneLow: 4,

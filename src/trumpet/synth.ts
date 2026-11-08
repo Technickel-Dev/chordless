@@ -97,6 +97,8 @@ export interface BrassVoice {
   vibratoCents: number;
   scoopCents: number;
   breathHz: number;
+  /** Output multiplier for low instruments, whose pitch small speakers barely reproduce (default 1). */
+  gain?: number;
 }
 
 /** The trumpet's voice. */
@@ -158,7 +160,7 @@ export class TrumpetSynth {
     this.ctx = context ?? new AudioContext({ latencyHint: 'interactive' });
     const ctx = this.ctx;
     this.master = ctx.createGain();
-    this.master.gain.value = 0.8;
+    this.master.gain.value = 0.8 * (voice.gain ?? 1);
     const noise = noiseBuffer(ctx, 3);
     /** Slow random wander, its own for each use: about 0.05 rms below `hz`. */
     const slowNoise = (rate: number, hz: number, offset: number) => {
@@ -299,7 +301,7 @@ export class TrumpetSynth {
   }
 
   setVolume(volume: number): void {
-    this.master.gain.setTargetAtTime(volume, this.ctx.currentTime, 0.03);
+    this.master.gain.setTargetAtTime(volume * (this.voice.gain ?? 1), this.ctx.currentTime, 0.03);
   }
 
   /**

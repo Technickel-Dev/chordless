@@ -75,4 +75,22 @@ describe('holdHorn', () => {
     holdHorn(lips, [0.3, 1.0, 0], fwd, 1, pose);
     expect(pose.atLips).toBe(false);
   });
+
+  it('keeps the grip where the hand closed, so it can range from there', () => {
+    const pose = createHornPose();
+    const lips = [0, 1.5, 0];
+    const fwd = [0, 0, -1];
+    // Closed 6 cm farther out than the rest spot.
+    holdHorn(lips, [0, 1.5, -HOLD_REACH - 0.06], fwd, 1, pose);
+    expect(pose.atLips).toBe(true);
+    expect(pose.grip).toBeCloseTo(0.06, 6);
+    // 12 cm out is past the usual reach, but within range of where it was gripped.
+    holdHorn(lips, [0, 1.5, -HOLD_REACH - 0.12], fwd, 1, pose);
+    expect(pose.atLips).toBe(true);
+    // Taking the hand away lets go and the grip eases back.
+    holdHorn(lips, [0.3, 1.0, 0], fwd, 1, pose);
+    expect(pose.atLips).toBe(false);
+    for (let i = 0; i < 20; i++) holdHorn(lips, [0.3, 1.0, 0], fwd, 0.1, pose);
+    expect(pose.grip).toBeCloseTo(0, 3);
+  });
 });

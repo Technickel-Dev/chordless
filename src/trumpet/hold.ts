@@ -32,6 +32,13 @@ export interface HornPose {
   blend: number;
   /** How much farther the knuckle is from the lips than the trumpet holds it (m). */
   reachError: number;
+  /**
+   * Where along the horn the hand took hold (m): how far the knuckle was from
+   * where the trumpet rests it, when the mouthpiece met the lips. The hand may
+   * then move this way and that from where it closed, not from one fixed spot.
+   * Eases back to 0 once the horn leaves the lips.
+   */
+  grip: number;
   /** The bell's elevation, degrees above level. */
   elevation: number;
 }
@@ -45,6 +52,7 @@ export function createHornPose(): HornPose {
     atLips: false,
     blend: 0,
     reachError: 0,
+    grip: 0,
     elevation: 0,
   };
 }
@@ -64,6 +72,7 @@ const wb: Vec = [0, 0, 0];
 const wc: Vec = [0, 0, 0];
 const d: Vec = [0, 0, 0];
 const atHand: Vec = [0, 0, 0];
+const held: Vec = [0, 0, 0];
 const atMouth: Vec = [0, 0, 0];
 const UP: Vec = [0, 1, 0];
 
@@ -124,21 +133,33 @@ export function createHornHold(
     const inFront =
       d[0] * forward[0] + d[1] * forward[1] + d[2] * forward[2] >=
       LIPS_IN_FRONT;
-    const slack = out.atLips ? LIPS_RELEASE : 0;
-    out.atLips =
+    if (out.atLips) {
+      // Held at the lips: the hand may range from where it closed, not from the rest spot.
+      const rel = out.reachError - out.grip;
+      out.atLips =
+        inFront &&
+        rel >= -LIPS_NEARER - LIPS_RELEASE &&
+        rel <= LIPS_FARTHER + LIPS_RELEASE;
+    } else if (
       inFront &&
-      out.reachError >= -LIPS_NEARER - slack &&
-      out.reachError <= LIPS_FARTHER + slack;
+      out.reachError >= -LIPS_NEARER &&
+      out.reachError <= LIPS_FARTHER
+    ) {
+      // The mouthpiece just met the lips: the grip is wherever the hand is now.
+      out.atLips = true;
+      out.grip = out.reachError;
+    }
+    // Off the lips the horn settles back to its usual place in the hand.
+    if (!out.atLips) out.grip *= Math.exp(-dt / SLIDE_TAU);
     out.blend +=
       ((out.atLips ? 1 : 0) - out.blend) * (1 - Math.exp(-dt / SLIDE_TAU));
 
     // Carried, the knuckle is where the hand is; at the lips, the mouthpiece is on them.
+    for (let k = 0; k < 3; k++) held[k] = knuckleAt[k] + ta[k] * out.grip;
     for (let k = 0; k < 3; k++) {
       atHand[k] =
         knuckle[k] -
-        (out.x[k] * knuckleAt[0] +
-          out.y[k] * knuckleAt[1] +
-          out.z[k] * knuckleAt[2]);
+        (out.x[k] * held[0] + out.y[k] * held[1] + out.z[k] * held[2]);
       atMouth[k] =
         lips[k] -
         (out.x[k] * mouthpiece[0] +

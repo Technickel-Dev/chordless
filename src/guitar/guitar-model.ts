@@ -344,13 +344,20 @@ export const ACCENT = { idle: '#8a8f99', playing: '#85b7eb', placing: '#3dff8f',
 /** The hint colour shared with the panel's pictograms: a sky-blue disc, a navy glyph. */
 const HINT_DISC = '#85b7eb';
 const HINT_GLYPH = '#042c53';
+/** Smashing hints: a red disc, a dark red glyph, and the chevrons that join them. */
+const SMASH_DISC = '#ff6a5c';
+const SMASH_GLYPH = '#3a0703';
+const SMASH_LINK = '#ff9a90';
+const HINT_LINK = '#a9cdf2';
 
-/** One pictogram on a sign: an icon in a disc over a one- or two-word caption. */
+/** One pictogram on a sign: an icon in a disc, over a one- or two-word caption if it needs one. */
 export interface HudStep {
   icon: HudIcon;
-  caption: string;
+  caption?: string;
   /** A reminder rather than the next thing to do, drawn faded. */
   faint?: boolean;
+  /** About smashing the instrument: drawn red. */
+  smash?: boolean;
 }
 
 /**
@@ -365,6 +372,8 @@ export interface HudSign {
   /** Valves held down as a fingering name ('0', '1-3'), drawn as three dots. */
   valves?: string;
   steps?: readonly HudStep[];
+  /** The steps are a sequence, read left to right: chevrons join them (a faint step stands apart). */
+  chain?: boolean;
 }
 
 /** Path2D needs the DOM, so the icons are built on first use. */
@@ -402,8 +411,8 @@ export class LabelSprite {
    */
   draw(sign: HudSign, accent = ACCENT.idle): void {
     const steps = sign.steps ?? [];
-    let key = `${sign.headline}|${sign.detail}|${sign.valves}|${accent}`;
-    for (const step of steps) key += `|${step.icon}:${step.caption}:${step.faint === true}`;
+    let key = `${sign.headline}|${sign.detail}|${sign.valves}|${accent}|${sign.chain === true}`;
+    for (const step of steps) key += `|${step.icon}:${step.caption}:${step.faint === true}:${step.smash === true}`;
     if (key === this.lastKey) return;
     this.lastKey = key;
 
@@ -418,16 +427,48 @@ export class LabelSprite {
     g.stroke();
 
     const pad = height * 0.1;
-    const stepWidth = steps.length === 0 ? 0 : Math.min(height * 0.7, (width - 2 * pad) / steps.length);
     const hasText = sign.headline != null || sign.detail != null || sign.valves != null;
+    // Pictograms with no words say it all, so they are drawn bigger.
+    const bare = steps.length > 0 && steps.every((s) => s.caption == null);
+    const most = bare ? height * (hasText ? 0.66 : 0.86) : height * 0.7;
+    // A readout keeps at least a third of the sign.
+    const room = hasText ? width * 0.66 - pad : width - 2 * pad;
+    const stepWidth = steps.length === 0 ? 0 : Math.min(most, room / steps.length);
     const textRight = width - pad - stepWidth * steps.length;
     if (hasText) this.drawReadout(g, sign, pad, steps.length === 0 ? width - pad : textRight - pad * 0.5);
     let x = hasText ? textRight : (width - stepWidth * steps.length) / 2;
-    for (const step of steps) {
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      if (sign.chain === true && i > 0) this.drawLink(g, x, stepWidth, step.faint === true, step.smash === true);
       this.drawStep(g, step, x + stepWidth / 2, stepWidth);
       x += stepWidth;
     }
     this.texture.needsUpdate = true;
+  }
+
+  /** Between two steps at `x`: a chevron (then) or, before a faint step, a dot (or). */
+  private drawLink(g: CanvasRenderingContext2D, x: number, room: number, faint: boolean, smash: boolean): void {
+    const { height } = this.canvas;
+    const cy = height * 0.5;
+    const size = Math.min(room * 0.07, height * 0.05);
+    g.save();
+    g.strokeStyle = g.fillStyle = smash ? SMASH_LINK : HINT_LINK;
+    if (faint) {
+      g.globalAlpha = 0.6;
+      g.beginPath();
+      g.arc(x, cy, size * 0.45, 0, Math.PI * 2);
+      g.fill();
+    } else {
+      g.lineWidth = size * 0.55;
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      g.beginPath();
+      g.moveTo(x - size * 0.45, cy - size);
+      g.lineTo(x + size * 0.55, cy);
+      g.lineTo(x - size * 0.45, cy + size);
+      g.stroke();
+    }
+    g.restore();
   }
 
   /** The headline, valve dots and detail line, stacked and centred between `left` and `right`. */
@@ -476,16 +517,18 @@ export class LabelSprite {
     }
   }
 
-  /** A sky-blue disc with the icon in it and the caption under it, centred on `cx`. */
+  /** A disc with the icon in it and the caption, if any, under it, centred on `cx`. */
   private drawStep(g: CanvasRenderingContext2D, step: HudStep, cx: number, room: number): void {
     const { height } = this.canvas;
-    const radius = height * 0.2;
-    const cy = height * 0.42;
+    const captioned = step.caption != null;
+    const radius = captioned ? height * 0.2 : Math.min(height * 0.3, room * 0.38);
+    const cy = captioned ? height * 0.42 : height * 0.5;
+    const smash = step.smash === true;
     g.save();
     g.globalAlpha = step.faint === true ? 0.45 : 1;
     g.beginPath();
     g.arc(cx, cy, radius, 0, Math.PI * 2);
-    g.fillStyle = HINT_DISC;
+    g.fillStyle = smash ? SMASH_DISC : HINT_DISC;
     g.fill();
 
     const glyph = radius * 1.15;
@@ -495,10 +538,14 @@ export class LabelSprite {
     g.lineWidth = 2.2;
     g.lineCap = 'round';
     g.lineJoin = 'round';
-    g.strokeStyle = HINT_GLYPH;
+    g.strokeStyle = smash ? SMASH_GLYPH : HINT_GLYPH;
     for (const path of iconPath(step.icon)) g.stroke(path);
     g.restore();
 
+    if (step.caption == null) {
+      g.restore();
+      return;
+    }
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.font = `700 ${height * 0.095}px system-ui, sans-serif`;

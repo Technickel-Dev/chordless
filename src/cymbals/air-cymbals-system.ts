@@ -7,6 +7,7 @@ import { createCymbalsModel, type CymbalsModel } from './cymbals-model.js';
 import { CymbalSynth } from './synth.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
 import { Smashable, SmashHold } from '../smash/smashable-component.js';
+import { SMASH_CARD, SmashHints } from '../smash/smash-hints.js';
 
 /** The sign's pictograms: how to play between clashes, how to stop while ringing. */
 const SHOW_HANDS: readonly HudStep[] = [{ icon: 'hand', caption: 'BOTH HANDS' }];
@@ -50,6 +51,7 @@ export class AirCymbalsSystem extends createSystem({
   private synth!: CymbalSynth;
   /** Each plate is smashed on its own, left then right, each on its own entity. */
   private readonly smash: PropSmasher[] = [];
+  private readonly hints = new SmashHints(SMASH_CARD.swing, SMASH_CARD.reset);
   private readonly entities: Entity[] = [];
   private debris!: Group;
   private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
@@ -245,6 +247,9 @@ export class AirCymbalsSystem extends createSystem({
     hud.sprite.position.x += this.fwd.z * HUD_LEFT;
     hud.sprite.position.z -= this.fwd.x * HUD_LEFT;
     hud.sprite.position.y -= HUD_BELOW;
+    // Whichever plate is broken or out of the hand says what to do next.
+    const [first, second] = this.smash;
+    if (this.hints.drawSmashing(hud, first.hold !== SmashHold.Worn || first.holding ? first : second)) return;
     const [left, right] = this.hands;
     if (!left.tracked || !right.tracked) {
       hud.draw({ steps: SHOW_HANDS }, ACCENT.idle);
@@ -260,6 +265,6 @@ export class AirCymbalsSystem extends createSystem({
       );
       return;
     }
-    hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
+    this.hints.drawHowTo(hud, HOW_TO_PLAY);
   }
 }

@@ -20,11 +20,12 @@ import {
   stringSpan,
   stringY,
 } from './geometry.js';
-import { ACCENT, createGuitarModel, GuitarModel, type HudSign, type HudStep, placeString } from './guitar-model.js';
+import { ACCENT, createGuitarModel, GuitarModel, type HudStep, placeString } from './guitar-model.js';
 import { JOINT, TrackedHand } from './hands.js';
 import { PLUCK_ZONE, PluckDetector } from './pluck-detector.js';
 import { intactStrings } from './smash.js';
 import { GuitarSmasher } from './smashing.js';
+import { SMASH_CARD, SmashHints, type SmashState } from '../smash/smash-hints.js';
 import { decaySeconds, GuitarSynth, midiToHz } from './synth.js';
 
 /** The sign's pictograms: until the first pluck, how to play; while moving it, the pinch to keep. */
@@ -108,6 +109,8 @@ export class AirGuitarSystem extends createSystem({
   private entity!: Entity;
   private synth!: GuitarSynth;
   private smash!: GuitarSmasher;
+  private readonly hints = new SmashHints(SMASH_CARD.grabAndSwing);
+  private readonly smashState: SmashState = { hold: GuitarHold.Worn, holding: false, wrecked: false, health: 1 };
   private debris!: Group;
   private syncedVersion = -1;
 
@@ -585,13 +588,15 @@ export class AirGuitarSystem extends createSystem({
     return left < STRING_COUNT ? ` · ${left} strings` : '';
   }
 
+  /** Picked up, thrown or wrecked: what to do next, and how much is left. */
   private drawSmashHud(): void {
     const smash = this.smash;
-    const d = smash.damage;
-    this.model.hud.draw(
-      smashHudSign(smash.hold, d.wrecked, d.health, intactStrings(d), smash.impacts),
-      ACCENT.smash,
-    );
+    const state = this.smashState;
+    state.hold = smash.hold;
+    state.holding = smash.hold === GuitarHold.Held;
+    state.wrecked = smash.damage.wrecked;
+    state.health = smash.damage.health;
+    this.hints.drawSmashing(this.model.hud, state);
   }
 
   private updateHud(placing: number, tone: string): void {
@@ -621,7 +626,7 @@ export class AirGuitarSystem extends createSystem({
       this.entity.setValue(AirGuitar, 'chord', chord);
     }
     if ((this.entity.getValue(AirGuitar, 'plucks') ?? 0) === 0) {
-      hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
+      this.hints.drawHowTo(hud, HOW_TO_PLAY);
       return;
     }
     const volume = Math.round((this.entity.getValue(AirGuitar, 'volume') ?? 0.8) * 100);
@@ -633,23 +638,6 @@ export class AirGuitarSystem extends createSystem({
       playing ? ACCENT.playing : ACCENT.idle,
     );
   }
-}
-
-const SMASH_IT: readonly HudStep[] = [
-  { icon: 'hammer', caption: 'SMASH IT' },
-  { icon: 'hand', caption: 'OPEN TO THROW', faint: true },
-];
-const PICK_IT_UP: readonly HudStep[] = [{ icon: 'grab', caption: 'FIST ON NECK' }];
-const NEW_GUITAR: readonly HudStep[] = [{ icon: 'grab', caption: 'PINCH BOTH HANDS' }];
-
-/** How much is left of the guitar, and what to do next. */
-function smashHudSign(hold: string, wrecked: boolean, health: number, strings: number, hits: number): HudSign {
-  if (wrecked) return { headline: 'WRECKED', detail: `${hits} hits`, steps: NEW_GUITAR };
-  return {
-    headline: `${Math.round(health * 100)}%`,
-    detail: `${strings} string${strings === 1 ? '' : 's'} left`,
-    steps: hold === GuitarHold.Held ? SMASH_IT : PICK_IT_UP,
-  };
 }
 
 function wrapAngle(a: number): number {

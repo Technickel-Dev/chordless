@@ -10,6 +10,7 @@ import { createPianoModel, type PianoModel } from './piano-model.js';
 import { PianoSynth } from './synth.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
 import { Smashable, SmashHold } from '../smash/smashable-component.js';
+import { SMASH_CARD, SmashHints } from '../smash/smash-hints.js';
 import { seededRandom } from '../guitar/smash.js';
 
 /** The sign's pictograms while no key is down. */
@@ -60,6 +61,7 @@ export class AirPianoSystem extends createSystem({
   private entity!: Entity;
   private synth!: PianoSynth;
   private smash!: PropSmasher;
+  private readonly hints = new SmashHints(SMASH_CARD.topple, SMASH_CARD.reset);
   private debris!: Group;
   private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
   private readonly crashNotes: number[] = [];
@@ -327,6 +329,7 @@ export class AirPianoSystem extends createSystem({
 
   private updateHud(handsTracked: boolean): void {
     const hud = this.model.hud;
+    if (this.hints.drawSmashing(hud, this.smash)) return;
     if (!handsTracked) {
       hud.draw({ steps: SHOW_HANDS }, ACCENT.idle);
       return;
@@ -338,6 +341,6 @@ export class AirPianoSystem extends createSystem({
       hud.draw({ headline: chord, detail: `${dynamicMark(e.getValue(AirPiano, 'lastVelocity') ?? 0)} · ${volume}%` }, ACCENT.playing);
       return;
     }
-    hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
+    this.hints.drawHowTo(hud, HOW_TO_PLAY);
   }
 }

@@ -397,6 +397,11 @@ export class PropSmasher {
     return this.health <= 0;
   }
 
+  /** Something of it, the whole or a part, is in a hand. */
+  get holding(): boolean {
+    return this.held != null;
+  }
+
   /** True once after a repair, so the system can put the instrument back in place. */
   takeRepaired(): boolean {
     const was = this.repaired;

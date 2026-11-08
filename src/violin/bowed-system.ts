@@ -12,6 +12,7 @@ import { BowedSynth, type BowedVoice } from './synth.js';
 import { placeString, ViolinModel } from './violin-model.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
 import { Smashable, SmashHold } from '../smash/smashable-component.js';
+import { SMASH_CARD, SmashHints } from '../smash/smash-hints.js';
 
 /** The sign's pictograms until the bow first sounds. */
 const SHOW_HANDS: readonly HudStep[] = [{ icon: 'hand', caption: 'SHOW HANDS' }];
@@ -111,6 +112,7 @@ export function createBowedSystem(config: BowedConfig) {
     private entity!: Entity;
     private synth!: BowedSynth;
     private smash!: PropSmasher;
+    private readonly hints = new SmashHints(SMASH_CARD.grabAndSwing);
     private debris!: Group;
     private readonly hands: TrackedHand[] = [];
     private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
@@ -485,12 +487,14 @@ export function createBowedSystem(config: BowedConfig) {
 
     private updateHud(): void {
       const hud = this.model.hud;
+      if (this.hints.drawSmashing(hud, this.smash)) return;
       if (!this.left.tracked && !this.right.tracked) {
         hud.draw({ steps: SHOW_HANDS }, ACCENT.idle);
         return;
       }
       if (this.shownBowing === '') {
-        hud.draw({ steps: this.right.tracked ? HOW_TO_BOW : SHOW_BOW_HAND }, ACCENT.idle);
+        if (this.right.tracked) this.hints.drawHowTo(hud, HOW_TO_BOW);
+        else hud.draw({ steps: SHOW_BOW_HAND }, ACCENT.idle);
         return;
       }
       const volume = Math.round((this.entity.getValue(AirViolin, 'volume') ?? 0.8) * 100);

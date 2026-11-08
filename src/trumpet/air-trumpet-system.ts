@@ -4,6 +4,7 @@ import { TrackedHand } from '../guitar/hands.js';
 import { AirTrumpet } from './air-trumpet-component.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
 import { Smashable, SmashHold } from '../smash/smashable-component.js';
+import { SMASH_CARD, SmashHints } from '../smash/smash-hints.js';
 import { BELL, TRUMPET } from './geometry.js';
 import { createHornPose, holdHorn, LIPS, toTrumpet } from './hold.js';
 import {
@@ -57,6 +58,7 @@ export class AirTrumpetSystem extends createSystem({
   private entity!: Entity;
   private synth!: TrumpetSynth;
   private smash!: PropSmasher;
+  private readonly hints = new SmashHints(SMASH_CARD.swing, SMASH_CARD.reset);
   private debris!: Group;
   private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
   /** Smashed out of the hand: it lies where it fell, silent. */
@@ -306,13 +308,14 @@ export class AirTrumpetSystem extends createSystem({
     hud.sprite.position.x += this.level.z * HUD_LEFT;
     hud.sprite.position.z -= this.level.x * HUD_LEFT;
     hud.sprite.position.y -= HUD_BELOW;
+    if (this.hints.drawSmashing(hud, this.smash)) return;
     const [left, right] = this.hands;
     if (!right.tracked) {
       hud.draw({ steps: SHOW_RIGHT_HAND }, ACCENT.idle);
       return;
     }
     if (!this.pose.atLips) {
-      hud.draw({ steps: HOW_TO_HOLD }, ACCENT.idle);
+      this.hints.drawHowTo(hud, HOW_TO_HOLD);
       return;
     }
     if (this.breath.blowing && left.tracked) {

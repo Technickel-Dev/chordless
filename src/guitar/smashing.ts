@@ -23,6 +23,7 @@ import {
 } from './smash.js';
 import { GuitarSynth } from './synth.js';
 import { Scars } from '../smash/scars.js';
+import { Splinters } from '../smash/splinter.js';
 import { STAGE_FLOOR } from '../smash/tumble.js';
 import {
   BREAK_X,
@@ -60,6 +61,8 @@ const REARM_HEIGHT = 0.03;
 const IMPACT_COOLDOWN = 0.08;
 /** Different points of a swung guitar reach the floor over several frames: that is one blow. */
 const SWING_COOLDOWN = 0.25;
+/** A shard broken off by a hit this hard (m/s) bursts into fragments rather than coming off whole. */
+const SPLINTER_SPEED = 4;
 /** Debris clatters at most this often. */
 const CLATTER_INTERVAL = 0.05;
 const TOP_FRET = 19;
@@ -78,6 +81,8 @@ export class GuitarSmasher {
   private readonly wreck: GuitarWreck;
   /** The dents, cracks and chips each hit leaves where it lands. */
   readonly scars: Scars;
+  /** The fragments of shards a hard hit burst. */
+  readonly splinters: Splinters;
   /** The body is in its shards, still in place. */
   private cracked = false;
   /** The contact points still on the guitar: where in it, and what part of it. */
@@ -138,6 +143,7 @@ export class GuitarSmasher {
     this.wreck.guitar.floor = STAGE_FLOOR;
     this.damage = freshDamage(STRING_COUNT, this.wreck.shards.length);
     this.scars = new Scars(debrisRoot);
+    this.splinters = new Splinters(debrisRoot);
     const count = this.wreck.points.length / 3;
     this.prevY = new Float32Array(count);
     this.armed = new Uint8Array(count);
@@ -164,6 +170,7 @@ export class GuitarSmasher {
     if (this.hold === GuitarHold.Thrown && !this.damage.wrecked) this.updateThrown(dt);
     this.updateDebris(dt);
     this.scars.update(dt);
+    this.splinters.update(dt);
   }
 
   /** Back on the player's body. A wrecked guitar comes back new. */
@@ -186,6 +193,7 @@ export class GuitarSmasher {
     this.debris.length = 0;
     repairDamage(this.damage);
     this.scars.restore();
+    this.splinters.clear();
     this.cracked = false;
     this.rebuildPoints();
     this.letGo();
@@ -477,7 +485,16 @@ export class GuitarSmasher {
     this.centre.copy(this.wreck.centre).applyMatrix4(root.matrixWorld);
     for (let i = 0; i < shardsOff.length; i++) {
       const shard = shardsOff[i];
-      this.launch(this.wreck.shards[shard], this.vel, this.spin, speed, this.centre);
+      const piece = this.wreck.shards[shard];
+      if (speed >= SPLINTER_SPEED) {
+        // Hit hard, it bursts where it was struck rather than coming away whole.
+        this.detach(piece);
+        this.splinters.burst(piece.pivot, this.hit, Math.min(9, Math.max(2, Math.round((speed - 3) * 1.3))), this.vel, this.spin, this.centre, speed * 0.5);
+        // Its fragments are all that is left of it; a repair brings it back.
+        piece.pivot.removeFromParent();
+      } else {
+        this.launch(piece, this.vel, this.spin, speed, this.centre);
+      }
       if (shard === this.wreck.holeShard) showHoleGone(this.model);
       if (shard === this.wreck.bridgeShard) {
         // Nothing holds the strings at this end now.

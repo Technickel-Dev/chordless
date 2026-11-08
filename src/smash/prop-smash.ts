@@ -22,6 +22,7 @@ import { Smashable, SmashCondition, SmashHold } from './smashable-component.js';
 import { breakableMeshes, fractureMeshes } from './fracture.js';
 import { Hull, hullOf, HULL_SIZE } from './hull.js';
 import { Scars } from './scars.js';
+import { Splinters } from './splinter.js';
 import { RigidBody, STAGE_FLOOR } from './tumble.js';
 
 export type SmashHoldValue = (typeof SmashHold)[keyof typeof SmashHold];
@@ -112,8 +113,14 @@ const REACH = 0.4;
 const CHUNK_SHOCK = 0.06;
 /** How readily a chunk breaks off, as `breakAt` is for a part. */
 const CHUNK_BREAK_AT = 0.75;
+/** A body's chunks give way this much more readily than its parts. */
+const CHUNK_WEAR = 1.5;
 /** With this share of a structural body gone, the instrument is wrecked. */
 const COLLAPSE = 0.65;
+/** What a hit does goes with its energy, the square of its speed above `tap`, over this. */
+const ENERGY_SCALE = 6;
+/** A chunk broken off by a hit this hard (m/s) bursts into fragments rather than coming off whole. */
+const SPLINTER_SPEED = 4;
 const FIST_TIPS = [JOINT.indexTip, JOINT.middleTip, JOINT.ringTip] as const;
 /** No part or the whole: what a hand is not about to grab. */
 const NOTHING = -2;
@@ -170,6 +177,8 @@ export class PropSmasher {
   version = 0;
   /** The dents, cracks and chips each hit leaves where it lands. */
   readonly scars: Scars;
+  /** The fragments of chunks a hard hit burst. */
+  readonly splinters: Splinters;
 
   private readonly parts: Part[] = [];
   private readonly fractures: Fracture[] = [];
@@ -278,6 +287,7 @@ export class PropSmasher {
     const size = this.wholeBox.getSize(new Vector3()).length();
     this.reach = Math.max(0.08, size * REACH);
     this.scars = new Scars(debrisRoot, Math.min(1, Math.max(0.25, size)));
+    this.splinters = new Splinters(debrisRoot);
   }
 
   /**
@@ -408,6 +418,7 @@ export class PropSmasher {
       if (this.hold === SmashHold.Thrown) this.updateLoose(dt);
       this.updateDebris(dt);
       this.scars.update(dt);
+      this.splinters.update(dt);
       if (this.pointsStale) this.rebuildPoints();
       this.updateReturn(dt, hands);
     }
@@ -435,6 +446,7 @@ export class PropSmasher {
       for (const chunk of fracture.chunks) for (const o of chunk.spec.objects) o.visible = false;
     }
     this.scars.restore();
+    this.splinters.clear();
     this.loose.length = 0;
     this.letGo();
     this.hold = SmashHold.Worn;
@@ -676,7 +688,7 @@ export class PropSmasher {
     const landed = speed > tap;
     if (landed) this.crackNear(part, at);
     this.scars.hit(part.pivot, at, speed);
-    if (landed) this.breakChunks(part, at, (speed - tap) * this.config.wear, speed, v, w, part.pivot.position);
+    if (landed) this.breakChunks(part, at, this.energy(speed) * this.config.wear, speed, v, w, part.pivot.position);
     part.pivot.updateMatrixWorld(true);
     this.inverse.copy(part.pivot.matrixWorld).invert();
     part.hull.reset();
@@ -741,7 +753,7 @@ export class PropSmasher {
     }
     this.impacts++;
     this.lastImpact = speed;
-    const loss = (speed - tap) * this.config.wear;
+    const loss = this.energy(speed) * this.config.wear;
     this.root.updateMatrixWorld(true);
     this.inverse.copy(this.root.matrixWorld).invert();
     const local = this.hitLocal.copy(this.hit).applyMatrix4(this.inverse);
@@ -775,6 +787,12 @@ export class PropSmasher {
     if (this.held === this.root) this.letGo();
     this.refit();
     if (this.hold !== SmashHold.Thrown) this.loosen(this.vel, this.spin);
+  }
+
+  /** The energy of a hit at `speed`: the square of its speed above `tap`, scaled. */
+  private energy(speed: number): number {
+    const force = Math.max(0, speed - (this.config.tap ?? 1.2));
+    return (force * force) / ENERGY_SCALE;
   }
 
   /** The first blow near a body shows it in its chunks, still in place. */
@@ -817,16 +835,26 @@ export class PropSmasher {
     for (const fracture of this.fractures) {
       if (fracture.owner !== owner) continue;
       if (fracture.structural) structure += fracture.chunks.length;
+      // A harder hit carries further across the body.
+      const reach = fracture.reach * (0.7 + 0.05 * speed);
       for (const chunk of fracture.chunks) {
         if (!chunk.attached) {
           if (fracture.structural) gone++;
           continue;
         }
-        const near = Math.max(CHUNK_SHOCK, 1 - this.chunkDistance(chunk, at) / fracture.reach);
-        chunk.integrity -= (loss * near * PART_WEAR) / (1.15 - CHUNK_BREAK_AT);
+        const near = Math.max(CHUNK_SHOCK, 1 - this.chunkDistance(chunk, at) / reach);
+        chunk.integrity -= (loss * near * PART_WEAR * CHUNK_WEAR) / (1.15 - CHUNK_BREAK_AT);
         if (chunk.integrity > 0 && this.health > 0) continue;
         if (!fracture.cracked) this.crack(fracture);
-        this.launch(chunk, v, w, speed, centre);
+        if (speed >= SPLINTER_SPEED) {
+          // Hit hard, it bursts where it was struck rather than coming away whole.
+          this.detach(chunk);
+          this.splinters.burst(chunk.pivot, at, Math.min(9, Math.max(2, Math.round((speed - 3) * 1.3))), v, w, centre, speed * 0.5);
+          // Its fragments are all that is left of it; a repair brings it back.
+          chunk.pivot.removeFromParent();
+        } else {
+          this.launch(chunk, v, w, speed, centre);
+        }
         if (fracture.structural) gone++;
         broke = true;
       }

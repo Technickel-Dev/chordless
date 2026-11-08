@@ -93,7 +93,8 @@ export class AirPianoSystem extends createSystem({
     this.world.createTransformEntity(this.debris, { persistent: true });
     this.smash = new PropSmasher(this.model.root, this.debris, {
       mass: 120,
-      wear: 0.13,
+      // Heavy: going over at only 3 m/s still lands with a great deal of energy.
+      wear: 0.45,
       friction: 1.2,
       pushBox: PUSH_BOX,
       parts: this.breakableParts(),

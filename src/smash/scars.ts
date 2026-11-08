@@ -23,10 +23,12 @@ import { STAGE_FLOOR } from './tumble.js';
 
 /** Slower hits leave no mark. */
 const SCAR_SPEED = 1.2;
-const DENT_PER_SPEED = 0.004;
-const MAX_DENT = 0.035;
+/** Dent depth per (m/s above SCAR_SPEED) squared: it goes with the energy of the hit. */
+const DENT_PER_ENERGY = 0.002;
+/** A hard hit caves the surface in this far, at most, for something a metre long. */
+const MAX_DENT = 0.07;
 const CRACK_POOL = 24;
-const CHIP_POOL = 16;
+const CHIP_POOL = 28;
 const GRAVITY = 9.81;
 
 const raycaster = new Raycaster();
@@ -140,8 +142,9 @@ export class Scars {
   hit(within: Object3D, at: Vector3, speed: number): void {
     if (speed < SCAR_SPEED) return;
     const excess = speed - SCAR_SPEED;
-    const depth = Math.min(MAX_DENT, excess * DENT_PER_SPEED) * this.scale;
-    const radius = (0.05 + 0.007 * speed) * this.scale;
+    // Crumpled in, deep and wide, as energy goes: a hard hit caves a whole area.
+    const depth = Math.min(MAX_DENT, excess * excess * DENT_PER_ENERGY) * this.scale;
+    const radius = (0.06 + 0.012 * speed) * this.scale;
     within.updateMatrixWorld(true);
     this.at.copy(at);
     // The floor pushes up, and a little in toward the middle of what hit it.
@@ -335,7 +338,8 @@ export class Scars {
   }
 
   private throwChips(material: Material | null, speed: number): void {
-    const count = Math.min(CHIP_POOL, 2 + Math.floor(speed));
+    const excess = Math.max(0, speed - SCAR_SPEED);
+    const count = Math.min(CHIP_POOL, 2 + Math.floor((excess * excess) / 3));
     const s = this.chipState;
     for (let n = 0; n < count; n++) {
       const i = this.nextChip;
@@ -344,13 +348,13 @@ export class Scars {
       chip.visible = true;
       if (material != null) chip.material = material;
       const angle = Math.random() * Math.PI * 2;
-      const out = speed * (0.08 + Math.random() * 0.22);
+      const out = speed * (0.12 + Math.random() * 0.3);
       const k = i * 6;
       s[k] = this.at.x;
       s[k + 1] = this.at.y + 0.02;
       s[k + 2] = this.at.z;
       s[k + 3] = Math.cos(angle) * out;
-      s[k + 4] = speed * (0.15 + Math.random() * 0.3);
+      s[k + 4] = speed * (0.2 + Math.random() * 0.4);
       s[k + 5] = Math.sin(angle) * out;
       chip.position.set(s[k], s[k + 1], s[k + 2]);
       chip.scale.setScalar(0.5 + Math.random());

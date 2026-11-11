@@ -220,6 +220,10 @@ export class PropSmasher {
   private readonly grabTime = [0, 0];
   private readonly pushPalm = [new Vector3(), new Vector3()];
   private readonly pushValid = [false, false];
+  /** The face of the push box each palm came in through (axis * 2 + 1 if the far face), or -1 while it is outside. */
+  private readonly pushFace = [-1, -1];
+  /** That face's outward normal in the world: its own vector, as loosen() uses the scratch ones. */
+  private readonly pushNormal = new Vector3();
   /** The lowest point of a part in the hand last frame, and whether it has lifted clear to strike again. */
   private heldPrev = Infinity;
   private heldArmed = true;
@@ -1026,6 +1030,7 @@ export class PropSmasher {
       const hand = hands[i];
       if (!hand.tracked) {
         this.pushValid[i] = false;
+        this.pushFace[i] = -1;
         continue;
       }
       const palm = this.palmOf(hand);
@@ -1036,20 +1041,28 @@ export class PropSmasher {
       this.pushValid[i] = true;
       if (!wasValid) continue;
       const l = this.tmp2.copy(palm).applyMatrix4(this.inverse);
-      if (l.x < box[0] || l.y < box[1] || l.z < box[2] || l.x > box[3] || l.y > box[4] || l.z > box[5]) continue;
-      // Out through the nearest face.
-      let best = l.x - box[0];
-      let axis = 0;
-      let sign = -1;
-      const faces = [box[3] - l.x, l.y - box[1], box[4] - l.y, l.z - box[2], box[5] - l.z];
-      for (let f = 0; f < faces.length; f++) {
-        if (faces[f] < best) {
-          best = faces[f];
-          axis = (f + 1) >> 1;
-          sign = f % 2 === 0 ? 1 : -1;
-        }
+      if (l.x < box[0] || l.y < box[1] || l.z < box[2] || l.x > box[3] || l.y > box[4] || l.z > box[5]) {
+        this.pushFace[i] = -1;
+        continue;
       }
-      const n = this.tmp.set(0, 0, 0).setComponent(axis, sign).transformDirection(this.root.matrixWorld);
+      // Pushed through the face the palm came in by, the nearest one when it
+      // entered, for as long as it stays in: once the instrument starts to
+      // tip, another face may come nearer, and pushing on that one would
+      // stop the shove after a single frame.
+      if (this.pushFace[i] < 0) {
+        let best = l.x - box[0];
+        let face = 0;
+        const faces = [box[3] - l.x, l.y - box[1], box[4] - l.y, l.z - box[2], box[5] - l.z];
+        for (let f = 0; f < faces.length; f++) {
+          if (faces[f] < best) {
+            best = faces[f];
+            face = f + 1;
+          }
+        }
+        this.pushFace[i] = face;
+      }
+      const face = this.pushFace[i];
+      const n = this.pushNormal.set(0, 0, 0).setComponent(face >> 1, face % 2 === 1 ? 1 : -1).transformDirection(this.root.matrixWorld);
       const speed = -this.vel.dot(n);
       if (speed < PUSH_MIN_SPEED || this.vel.length() > PUSH_MAX_SPEED) continue;
       if (this.hold === SmashHold.Worn) this.loosen(this.vel.set(0, 0, 0), this.spin.set(0, 0, 0));

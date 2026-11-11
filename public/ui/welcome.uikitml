@@ -29,6 +29,7 @@
   .icon-button {
     width: 64px;
     height: 64px;
+    min-width: 64px;
     justify-content: center;
     padding-left: 0px;
     padding-right: 0px;

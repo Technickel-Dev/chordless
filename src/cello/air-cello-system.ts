@@ -26,7 +26,9 @@ export const AirCelloSystem = createBowedSystem({
       bowName: 'AirCelloBow',
       instrument: createCello,
       bow: () => createBow(CELLO_BOW),
-      hud: [CELLO.nutX + 0.22, 0.12, 0.12],
+      // Out past the bow-arm side of the body and a little ahead of it, so the
+      // strip floats in the gap between the cello and the main panel.
+      hud: [CELLO.nutX - 0.32, 0.5, 0.35],
       hudWidth: 0.2,
     }),
   placement: {

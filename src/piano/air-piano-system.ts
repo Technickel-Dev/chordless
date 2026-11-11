@@ -25,9 +25,9 @@ const PLACEMENT = {
   /** The keyboard's front edge, this far ahead of the eyes. */
   forward: 0.3,
   /** The white keys' tops, this far below the eyes: about elbow height. */
-  below: 0.58,
+  below: 0.72,
   /** But never lower than this above the floor. */
-  lowest: 0.45,
+  lowest: 0.35,
 };
 /** The stage the player stands on. */
 const FLOOR_Y = 0.035;

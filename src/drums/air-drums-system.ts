@@ -10,6 +10,7 @@ import { createStickPose, restOn, type StickPose, stickPose, StrokeDetector, typ
 import { DrumSynth } from './synth.js';
 import { PropSmasher } from '../smash/prop-smash.js';
 import { Smashable } from '../smash/smashable-component.js';
+import { SMASH_CARD, SmashHints } from '../smash/smash-hints.js';
 import type { Articulation } from './strokes.js';
 
 /** The sign's pictograms between hits. */
@@ -72,6 +73,7 @@ export class AirDrumsSystem extends createSystem({
   private synth!: DrumSynth;
   private detector!: StrokeDetector;
   private smash!: PropSmasher;
+  private readonly hints = new SmashHints(SMASH_CARD.grabAndThrow);
   private debris!: Group;
   private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
   private readonly hands = [new TrackedHand(), new TrackedHand()] as const;
@@ -307,6 +309,7 @@ export class AirDrumsSystem extends createSystem({
 
   private updateHud(): void {
     const hud = this.model.hud;
+    if (this.hints.drawSmashing(hud, this.smash)) return;
     const [left, right] = this.hands;
     if (!left.tracked || !right.tracked) {
       hud.draw({ steps: SHOW_FISTS }, ACCENT.idle);
@@ -323,6 +326,6 @@ export class AirDrumsSystem extends createSystem({
       );
       return;
     }
-    hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
+    this.hints.drawHowTo(hud, HOW_TO_PLAY);
   }
 }

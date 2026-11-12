@@ -10,6 +10,7 @@ import { createPianoModel, type PianoModel } from './piano-model.js';
 import { PianoSynth } from './synth.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
 import { Smashable, SmashHold } from '../smash/smashable-component.js';
+import { SMASH_CARD, SmashHints } from '../smash/smash-hints.js';
 import { seededRandom } from '../guitar/smash.js';
 
 /** The sign's pictograms while no key is down. */
@@ -24,9 +25,9 @@ const PLACEMENT = {
   /** The keyboard's front edge, this far ahead of the eyes. */
   forward: 0.3,
   /** The white keys' tops, this far below the eyes: about elbow height. */
-  below: 0.58,
+  below: 0.72,
   /** But never lower than this above the floor. */
-  lowest: 0.45,
+  lowest: 0.35,
 };
 /** The stage the player stands on. */
 const FLOOR_Y = 0.035;
@@ -60,6 +61,7 @@ export class AirPianoSystem extends createSystem({
   private entity!: Entity;
   private synth!: PianoSynth;
   private smash!: PropSmasher;
+  private readonly hints = new SmashHints(SMASH_CARD.topple, SMASH_CARD.reset);
   private debris!: Group;
   private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
   private readonly crashNotes: number[] = [];
@@ -93,7 +95,10 @@ export class AirPianoSystem extends createSystem({
     this.world.createTransformEntity(this.debris, { persistent: true });
     this.smash = new PropSmasher(this.model.root, this.debris, {
       mass: 120,
-      wear: 0.13,
+      // Heavy: going over at only 3 m/s still lands with a great deal of energy.
+      wear: 0.45,
+      // So heavy that even going over at walking pace splits its case apart.
+      splinterSpeed: 2.2,
       friction: 1.2,
       pushBox: PUSH_BOX,
       parts: this.breakableParts(),
@@ -101,6 +106,9 @@ export class AirPianoSystem extends createSystem({
         {
           sources: ['Body', 'Keybed', 'KeySlip', 'KeyWell'].map((name) => this.model.root.getObjectByName(name)!),
           pieces: 12,
+          // A heavy case going over: the jolt runs right through it.
+          reach: 1.8,
+          fragility: 1.5,
         },
       ],
       sound: (speed, part, broke) => this.crash(speed, part, broke),
@@ -321,6 +329,7 @@ export class AirPianoSystem extends createSystem({
 
   private updateHud(handsTracked: boolean): void {
     const hud = this.model.hud;
+    if (this.hints.drawSmashing(hud, this.smash)) return;
     if (!handsTracked) {
       hud.draw({ steps: SHOW_HANDS }, ACCENT.idle);
       return;
@@ -332,6 +341,6 @@ export class AirPianoSystem extends createSystem({
       hud.draw({ headline: chord, detail: `${dynamicMark(e.getValue(AirPiano, 'lastVelocity') ?? 0)} · ${volume}%` }, ACCENT.playing);
       return;
     }
-    hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
+    this.hints.drawHowTo(hud, HOW_TO_PLAY);
   }
 }

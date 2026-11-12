@@ -22,6 +22,7 @@ import { Smashable, SmashCondition, SmashHold } from './smashable-component.js';
 import { breakableMeshes, fractureMeshes } from './fracture.js';
 import { Hull, hullOf, HULL_SIZE } from './hull.js';
 import { Scars } from './scars.js';
+import { Splinters } from './splinter.js';
 import { RigidBody, STAGE_FLOOR } from './tumble.js';
 
 export type SmashHoldValue = (typeof SmashHold)[keyof typeof SmashHold];
@@ -48,6 +49,9 @@ export interface PropFracture {
   owner?: number;
   /** With most of it gone there is nothing left to hold the instrument together. */
   structural?: boolean;
+  /** How far a blow carries across it, and how readily its chunks give, against the usual 1. */
+  reach?: number;
+  fragility?: number;
 }
 
 export interface PropSmashConfig {
@@ -57,6 +61,8 @@ export interface PropSmashConfig {
   wear: number;
   /** Slower hits only knock. */
   tap?: number;
+  /** A chunk broken off by a hit this hard (m/s) bursts into fragments; heavy things burst at less. */
+  splinterSpeed?: number;
   /** Grip of the whole instrument on the floor: rubber feet grip hard, so a shove tips it rather than sliding it. */
   friction?: number;
   /** A fist on the instrument picks the whole of it up. */
@@ -112,8 +118,14 @@ const REACH = 0.4;
 const CHUNK_SHOCK = 0.06;
 /** How readily a chunk breaks off, as `breakAt` is for a part. */
 const CHUNK_BREAK_AT = 0.75;
+/** A body's chunks give way this much more readily than its parts. */
+const CHUNK_WEAR = 1.5;
 /** With this share of a structural body gone, the instrument is wrecked. */
 const COLLAPSE = 0.65;
+/** What a hit does goes with its energy, the square of its speed above `tap`, over this. */
+const ENERGY_SCALE = 6;
+/** A chunk broken off by a hit this hard (m/s) bursts into fragments rather than coming off whole, unless the instrument says otherwise. */
+const SPLINTER_SPEED = 4;
 const FIST_TIPS = [JOINT.indexTip, JOINT.middleTip, JOINT.ringTip] as const;
 /** No part or the whole: what a hand is not about to grab. */
 const NOTHING = -2;
@@ -136,6 +148,7 @@ interface Fracture {
   structural: boolean;
   /** How far a blow reaches across it (m). */
   reach: number;
+  fragility: number;
   /** The chunks are showing in place of the sources. */
   cracked: boolean;
 }
@@ -170,6 +183,8 @@ export class PropSmasher {
   version = 0;
   /** The dents, cracks and chips each hit leaves where it lands. */
   readonly scars: Scars;
+  /** The fragments of chunks a hard hit burst. */
+  readonly splinters: Splinters;
 
   private readonly parts: Part[] = [];
   private readonly fractures: Fracture[] = [];
@@ -205,6 +220,10 @@ export class PropSmasher {
   private readonly grabTime = [0, 0];
   private readonly pushPalm = [new Vector3(), new Vector3()];
   private readonly pushValid = [false, false];
+  /** The face of the push box each palm came in through (axis * 2 + 1 if the far face), or -1 while it is outside. */
+  private readonly pushFace = [-1, -1];
+  /** That face's outward normal in the world: its own vector, as loosen() uses the scratch ones. */
+  private readonly pushNormal = new Vector3();
   /** The lowest point of a part in the hand last frame, and whether it has lifted clear to strike again. */
   private heldPrev = Infinity;
   private heldArmed = true;
@@ -278,6 +297,7 @@ export class PropSmasher {
     const size = this.wholeBox.getSize(new Vector3()).length();
     this.reach = Math.max(0.08, size * REACH);
     this.scars = new Scars(debrisRoot, Math.min(1, Math.max(0.25, size)));
+    this.splinters = new Splinters(debrisRoot);
   }
 
   /**
@@ -336,7 +356,8 @@ export class PropSmasher {
         chunks: [],
         owner,
         structural: config.structural ?? false,
-        reach: diagonal / Math.sqrt(config.pieces),
+        reach: (diagonal / Math.sqrt(config.pieces)) * (config.reach ?? 1),
+        fragility: config.fragility ?? 1,
         cracked: false,
       };
       if (owner == null) for (const source of sources) this.owned.add(source);
@@ -380,6 +401,11 @@ export class PropSmasher {
     return this.health <= 0;
   }
 
+  /** Something of it, the whole or a part, is in a hand. */
+  get holding(): boolean {
+    return this.held != null;
+  }
+
   /** True once after a repair, so the system can put the instrument back in place. */
   takeRepaired(): boolean {
     const was = this.repaired;
@@ -408,6 +434,7 @@ export class PropSmasher {
       if (this.hold === SmashHold.Thrown) this.updateLoose(dt);
       this.updateDebris(dt);
       this.scars.update(dt);
+      this.splinters.update(dt);
       if (this.pointsStale) this.rebuildPoints();
       this.updateReturn(dt, hands);
     }
@@ -435,6 +462,7 @@ export class PropSmasher {
       for (const chunk of fracture.chunks) for (const o of chunk.spec.objects) o.visible = false;
     }
     this.scars.restore();
+    this.splinters.clear();
     this.loose.length = 0;
     this.letGo();
     this.hold = SmashHold.Worn;
@@ -676,7 +704,7 @@ export class PropSmasher {
     const landed = speed > tap;
     if (landed) this.crackNear(part, at);
     this.scars.hit(part.pivot, at, speed);
-    if (landed) this.breakChunks(part, at, (speed - tap) * this.config.wear, speed, v, w, part.pivot.position);
+    if (landed) this.breakChunks(part, at, this.energy(speed) * this.config.wear, speed, v, w, part.pivot.position);
     part.pivot.updateMatrixWorld(true);
     this.inverse.copy(part.pivot.matrixWorld).invert();
     part.hull.reset();
@@ -741,7 +769,7 @@ export class PropSmasher {
     }
     this.impacts++;
     this.lastImpact = speed;
-    const loss = (speed - tap) * this.config.wear;
+    const loss = this.energy(speed) * this.config.wear;
     this.root.updateMatrixWorld(true);
     this.inverse.copy(this.root.matrixWorld).invert();
     const local = this.hitLocal.copy(this.hit).applyMatrix4(this.inverse);
@@ -775,6 +803,12 @@ export class PropSmasher {
     if (this.held === this.root) this.letGo();
     this.refit();
     if (this.hold !== SmashHold.Thrown) this.loosen(this.vel, this.spin);
+  }
+
+  /** The energy of a hit at `speed`: the square of its speed above `tap`, scaled. */
+  private energy(speed: number): number {
+    const force = Math.max(0, speed - (this.config.tap ?? 1.2));
+    return (force * force) / ENERGY_SCALE;
   }
 
   /** The first blow near a body shows it in its chunks, still in place. */
@@ -817,16 +851,27 @@ export class PropSmasher {
     for (const fracture of this.fractures) {
       if (fracture.owner !== owner) continue;
       if (fracture.structural) structure += fracture.chunks.length;
+      // A harder hit carries further across the body.
+      const reach = fracture.reach * (0.7 + 0.05 * speed);
       for (const chunk of fracture.chunks) {
         if (!chunk.attached) {
           if (fracture.structural) gone++;
           continue;
         }
-        const near = Math.max(CHUNK_SHOCK, 1 - this.chunkDistance(chunk, at) / fracture.reach);
-        chunk.integrity -= (loss * near * PART_WEAR) / (1.15 - CHUNK_BREAK_AT);
+        const near = Math.max(CHUNK_SHOCK, 1 - this.chunkDistance(chunk, at) / reach);
+        chunk.integrity -= (loss * near * PART_WEAR * CHUNK_WEAR * fracture.fragility) / (1.15 - CHUNK_BREAK_AT);
         if (chunk.integrity > 0 && this.health > 0) continue;
         if (!fracture.cracked) this.crack(fracture);
-        this.launch(chunk, v, w, speed, centre);
+        const burstAt = this.config.splinterSpeed ?? SPLINTER_SPEED;
+        if (speed >= burstAt) {
+          // Hit hard, it bursts where it was struck rather than coming away whole.
+          this.detach(chunk);
+          this.splinters.burst(chunk.pivot, at, Math.min(9, Math.max(2, Math.round((speed - burstAt) * 1.3) + 2)), v, w, centre, Math.max(1.5, speed * 0.5));
+          // Its fragments are all that is left of it; a repair brings it back.
+          chunk.pivot.removeFromParent();
+        } else {
+          this.launch(chunk, v, w, speed, centre);
+        }
         if (fracture.structural) gone++;
         broke = true;
       }
@@ -985,6 +1030,7 @@ export class PropSmasher {
       const hand = hands[i];
       if (!hand.tracked) {
         this.pushValid[i] = false;
+        this.pushFace[i] = -1;
         continue;
       }
       const palm = this.palmOf(hand);
@@ -995,20 +1041,28 @@ export class PropSmasher {
       this.pushValid[i] = true;
       if (!wasValid) continue;
       const l = this.tmp2.copy(palm).applyMatrix4(this.inverse);
-      if (l.x < box[0] || l.y < box[1] || l.z < box[2] || l.x > box[3] || l.y > box[4] || l.z > box[5]) continue;
-      // Out through the nearest face.
-      let best = l.x - box[0];
-      let axis = 0;
-      let sign = -1;
-      const faces = [box[3] - l.x, l.y - box[1], box[4] - l.y, l.z - box[2], box[5] - l.z];
-      for (let f = 0; f < faces.length; f++) {
-        if (faces[f] < best) {
-          best = faces[f];
-          axis = (f + 1) >> 1;
-          sign = f % 2 === 0 ? 1 : -1;
-        }
+      if (l.x < box[0] || l.y < box[1] || l.z < box[2] || l.x > box[3] || l.y > box[4] || l.z > box[5]) {
+        this.pushFace[i] = -1;
+        continue;
       }
-      const n = this.tmp.set(0, 0, 0).setComponent(axis, sign).transformDirection(this.root.matrixWorld);
+      // Pushed through the face the palm came in by, the nearest one when it
+      // entered, for as long as it stays in: once the instrument starts to
+      // tip, another face may come nearer, and pushing on that one would
+      // stop the shove after a single frame.
+      if (this.pushFace[i] < 0) {
+        let best = l.x - box[0];
+        let face = 0;
+        const faces = [box[3] - l.x, l.y - box[1], box[4] - l.y, l.z - box[2], box[5] - l.z];
+        for (let f = 0; f < faces.length; f++) {
+          if (faces[f] < best) {
+            best = faces[f];
+            face = f + 1;
+          }
+        }
+        this.pushFace[i] = face;
+      }
+      const face = this.pushFace[i];
+      const n = this.pushNormal.set(0, 0, 0).setComponent(face >> 1, face % 2 === 1 ? 1 : -1).transformDirection(this.root.matrixWorld);
       const speed = -this.vel.dot(n);
       if (speed < PUSH_MIN_SPEED || this.vel.length() > PUSH_MAX_SPEED) continue;
       if (this.hold === SmashHold.Worn) this.loosen(this.vel.set(0, 0, 0), this.spin.set(0, 0, 0));

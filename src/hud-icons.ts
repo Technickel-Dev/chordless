@@ -19,6 +19,18 @@ export const HUD_ICONS = {
   smile: ['M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0', 'M8 14s1.5 2 4 2 4-2 4-2', 'M9 9L9.01 9', 'M15 9L15.01 9'],
   arrowLeftRight: ['M8 3 4 7l4 4', 'M4 7h16', 'm16 21 4-4-4-4', 'M20 17H4'],
   rotateCw: ['M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8', 'M21 3v5h-5'],
+  /** The panel's reset button. */
+  locateFixed: ['M2 12h3', 'M19 12h3', 'M12 2v3', 'M12 19v3', 'M5 12a7 7 0 1 0 14 0a7 7 0 1 0 -14 0', 'M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0'],
+
+  // Drawn for smashing, in the same style; Lucide has nothing for these.
+  /** An impact: a jagged star. */
+  burst: ['M12 2L13.61 8.12L19.07 4.93L16.99 9.93L22 12L15.88 13.61L19.07 19.07L14.07 16.99L12 22L10.39 15.88L4.93 19.07L7.01 14.07L2 12L8.12 10.39L4.93 4.93L9.93 7.01Z'],
+  /** Swung down in an arc onto the floor. */
+  swingDown: ['M4 3a14 14 0 0 1 12.5 13', 'M16.5 16l2.2-2.7', 'M16.5 16l-2.4-2.4', 'M3 21h18', 'M10.5 21l-1.5-2', 'M19.5 21l1.5-2'],
+  /** Thrown, up and away. */
+  throwArc: ['M3 20Q8 4 21 9', 'M21 9l-1.65-2.74', 'M21 9l-3.06.93', 'M3 22h5'],
+  /** Tipped over its foot. */
+  topple: ['M7.01 18.38L13.5 21L18.37 8.95L11.88 6.32Z', 'M2 21h20', 'M9 4Q20 3 21.5 11', 'M21.5 11l1.29-2.49', 'M21.5 11l-2.1-1.85'],
 } as const;
 
 export type HudIcon = keyof typeof HUD_ICONS;

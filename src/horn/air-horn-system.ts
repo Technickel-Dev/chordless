@@ -5,6 +5,7 @@ import { AIR_STOP } from '../trumpet/playing.js';
 import { AirHorn } from './air-horn-component.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
 import { Smashable, SmashHold } from '../smash/smashable-component.js';
+import { SMASH_CARD, SmashHints } from '../smash/smash-hints.js';
 import { BELL, BELL_AXIS, HORN } from './geometry.js';
 import { createHornPose, holdFrenchHorn, LIPS, toHorn } from './hold.js';
 import { Breath, fingeringName, handCover, noteName, PARTIALS, PartialSelector, soundingNote, ValveReader, WRITTEN_ABOVE } from './playing.js';
@@ -49,6 +50,7 @@ export class AirHornSystem extends createSystem({
   private entity!: Entity;
   private synth!: HornSynth;
   private smash!: PropSmasher;
+  private readonly hints = new SmashHints(SMASH_CARD.swing, SMASH_CARD.reset);
   private debris!: Group;
   private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
   /** Smashed out of the hand: it lies where it fell, silent. */
@@ -300,13 +302,14 @@ export class AirHornSystem extends createSystem({
     hud.sprite.position.x += this.level.z * HUD_LEFT;
     hud.sprite.position.z -= this.level.x * HUD_LEFT;
     hud.sprite.position.y -= HUD_BELOW;
+    if (this.hints.drawSmashing(hud, this.smash)) return;
     const [left, right] = this.hands;
     if (!left.tracked) {
       hud.draw({ steps: SHOW_LEFT_HAND }, ACCENT.idle);
       return;
     }
     if (!this.pose.atLips) {
-      hud.draw({ steps: HOW_TO_HOLD }, ACCENT.idle);
+      this.hints.drawHowTo(hud, HOW_TO_HOLD);
       return;
     }
     if (!right.tracked) {

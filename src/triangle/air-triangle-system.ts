@@ -17,6 +17,7 @@ import {
 import { TriangleSynth } from './synth.js';
 import { PropSmasher, type PropPart } from '../smash/prop-smash.js';
 import { Smashable, SmashHold } from '../smash/smashable-component.js';
+import { SMASH_CARD, SmashHints } from '../smash/smash-hints.js';
 import { createTriangleModel, type TriangleModel } from './triangle-model.js';
 
 /** The sign's pictograms: how to hold it, how to play, how to stop it ringing. */
@@ -58,6 +59,7 @@ export class AirTriangleSystem extends createSystem({
   private readonly hands: TrackedHand[] = [];
   private readonly grips: Object3D[] = [new Object3D(), new Object3D()];
   private smash!: PropSmasher;
+  private readonly hints = new SmashHints(SMASH_CARD.swing, SMASH_CARD.reset);
   private debris!: Group;
   private readonly pose = createTrianglePose();
   private readonly beater = createBeaterPose();
@@ -266,6 +268,7 @@ export class AirTriangleSystem extends createSystem({
     hud.sprite.position.x += this.fwd.z * HUD_LEFT;
     hud.sprite.position.z -= this.fwd.x * HUD_LEFT;
     hud.sprite.position.y -= HUD_BELOW;
+    if (this.hints.drawSmashing(hud, this.smash)) return;
     if (!this.left.tracked || !this.right.tracked) {
       hud.draw({ steps: HOW_TO_HOLD }, ACCENT.idle);
       return;
@@ -283,6 +286,6 @@ export class AirTriangleSystem extends createSystem({
       );
       return;
     }
-    hud.draw({ steps: HOW_TO_PLAY }, ACCENT.idle);
+    this.hints.drawHowTo(hud, HOW_TO_PLAY);
   }
 }

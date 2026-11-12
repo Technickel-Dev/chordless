@@ -9,23 +9,37 @@ import { GUITAR, stringY } from './geometry.js';
 export const Region = { Body: 0, Neck: 1, Head: 2 } as const;
 export type Region = (typeof Region)[keyof typeof Region];
 
-/** Impact speeds are in metres per second, at the point that hit. */
+/**
+ * Impact speeds are in metres per second, at the point that hit. What a hit
+ * does goes with its energy, the square of its speed above `tap`: a knock
+ * barely marks the guitar, a good smack takes a piece out of it, and a full
+ * swing wrecks it. One unit of energy is a hit about 3.7 m/s.
+ */
+export const ENERGY_SCALE = 6;
+
+/** The energy of a hit at `speed` m/s, in the units the wear rates below are per. */
+export function impactEnergy(speed: number, tap: number): number {
+  const force = Math.max(0, speed - tap);
+  return (force * force) / ENERGY_SCALE;
+}
+
 export const SMASH = {
   /** Slower hits only knock. */
   tap: 1.2,
   /** Hits this hard snap the string nearest them, and one more for each `snapStep` faster. */
   snap: 2.5,
   snapStep: 1.6,
-  /** What a neck hit takes off the neck, per m/s above `tap`: two hard hits snap it. */
-  neckWear: 1 / 8,
+  /** What a neck hit takes off the neck per unit of energy: two good hits snap it, or one hard one. */
+  neckWear: 1 / 5,
   /** The headstock passes on less of a blow to the neck than the neck takes itself. */
   headShare: 0.8,
-  /** What a body hit takes off a shard right beside it, per m/s above `tap`. */
-  shardWear: 1 / 5,
-  /** How far from a hit (m) the shards of the body feel it. */
-  shardReach: 0.16,
+  /** What a body hit takes off a shard right beside it, per unit of energy: a good 6 m/s smack takes out a few. */
+  shardWear: 0.45,
+  /** How far from a hit (m) the shards of the body feel it, and how much further per m/s. */
+  shardReach: 0.14,
+  shardReachGrowth: 0.012,
   /** Every hit also shakes the whole body by this share of its force, wherever it landed. */
-  shake: 0.15,
+  shake: 0.1,
   /** With this share of its shards gone, the rest of the body falls apart. */
   collapse: 0.65,
   /** A body hit this hard shatters it outright. */
@@ -111,10 +125,12 @@ export function applyImpact(
   out.shattered = false;
   if (d.wrecked || speed < SMASH.tap) return out;
   const force = speed - SMASH.tap;
-  out.loss = force * SMASH.shardWear;
+  const energy = impactEnergy(speed, SMASH.tap);
+  const reach = SMASH.shardReach + SMASH.shardReachGrowth * force;
+  out.loss = energy * SMASH.shardWear;
 
   if (region !== Region.Body) {
-    d.neck = Math.max(0, d.neck - force * SMASH.neckWear * (region === Region.Head ? SMASH.headShare : 1));
+    d.neck = Math.max(0, d.neck - energy * SMASH.neckWear * (region === Region.Head ? SMASH.headShare : 1));
     if (d.neck <= 0 && !d.neckBroken) {
       d.neckBroken = true;
       out.neckBroke = true;
@@ -128,10 +144,10 @@ export function applyImpact(
       gone++;
       continue;
     }
-    let wear = force * SMASH.shardWear * SMASH.shake;
+    let wear = energy * SMASH.shardWear * SMASH.shake;
     if (region === Region.Body) {
       const distance = Math.hypot(shardCentres[i * 2] - x, shardCentres[i * 2 + 1] - y);
-      wear += force * SMASH.shardWear * Math.max(0, 1 - distance / SMASH.shardReach);
+      wear += energy * SMASH.shardWear * Math.max(0, 1 - distance / reach);
     }
     d.shards[i] = shatter ? 0 : Math.max(0, d.shards[i] - wear);
     if (d.shards[i] <= 0) {

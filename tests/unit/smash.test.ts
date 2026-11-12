@@ -3,6 +3,7 @@ import {
   applyImpact,
   fractureCells,
   freshDamage,
+  impactEnergy,
   intactStrings,
   newOutcome,
   pointInPolygon,
@@ -73,6 +74,22 @@ describe('applyImpact', () => {
   const SHARDS = [-0.2, 0, 0, 0, 0.15, 0];
   const hit = (d: ReturnType<typeof freshDamage>, speed: number, region: Region, x = -0.2, y = 0, out = newOutcome()) =>
     applyImpact(d, speed, region, x, y, SHARDS, always, out);
+
+  it('does damage as the energy of the hit: twice as hard is four times the damage', () => {
+    const soft = hit(freshDamage(6, 3), SMASH.tap + 2, Region.Body);
+    const hard = hit(freshDamage(6, 3), SMASH.tap + 4, Region.Body);
+    expect(hard.loss / soft.loss).toBeCloseTo(4, 5);
+    expect(impactEnergy(SMASH.tap + 4, SMASH.tap) / impactEnergy(SMASH.tap + 2, SMASH.tap)).toBeCloseTo(4, 5);
+  });
+
+  it('takes a piece out with one good smack, where a knock barely marks it', () => {
+    const knocked = freshDamage(6, 3);
+    hit(knocked, 2.5, Region.Body);
+    expect(knocked.shards[0]).toBeGreaterThan(0.85);
+    const smacked = freshDamage(6, 3);
+    const out = hit(smacked, 8, Region.Body);
+    expect(out.shardsOff).toContain(0);
+  });
 
   it('only knocks below the tap speed', () => {
     const d = freshDamage(6, 3);

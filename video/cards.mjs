@@ -89,9 +89,76 @@ function html(card) {
       return `<div class="end"><h1>CHORDLESS</h1><h2>Built with IWSDK, Meta's Immersive Web SDK, for Meta Quest</h2><p>https://technickel-dev.github.io/chordless/ (placeholder URL) · Meta VR Start Developer Competition 2026</p><p>Music: Beethoven, Ode to Joy (1824), and Rossini, William Tell Overture, Finale (1829), both public domain. William Tell arranged from the full score typeset by Max Wilkinson (2008), IMSLP #22579, CC BY 3.0. All music is in-app capture: every note is played and synthesized live by Chordless. Built with IWSDK and WebXR. Conductor scenes are AI-generated; all gameplay is real.</p></div>`;
     case 'white':
       return `<div class="white"></div>`;
+    case 'redvig':
+      // Red creeping in from the edges of the view; the builder fades it in over seconds.
+      return `<div style="position:absolute;inset:0;background:radial-gradient(ellipse 62% 66% at 50% 50%,rgba(140,0,0,0) 30%,rgba(170,10,0,.5) 62%,rgba(95,0,0,.96) 100%)"></div>`;
+    case 'redflash':
+      return `<div style="position:absolute;inset:0;background:rgba(220,10,0,.55)"></div>`;
     default:
       throw new Error(`unknown card kind ${card.kind}`);
   }
+}
+
+/**
+ * Steam: soft white puffs rising from the lower corners and edges of the view,
+ * as a looping PNG sequence with alpha (dir/steam_0001.png ...). Deterministic,
+ * and periodic over `seconds`, so the builder can loop it.
+ */
+export async function renderSteam(dir, { seconds = 4, fps = 30 } = {}) {
+  await mkdir(dir, { recursive: true });
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: W, height: H } });
+  await page.setContent(`<style>html,body{margin:0;background:transparent}canvas{display:block}</style><canvas id=c width=${W} height=${H}></canvas>`);
+  await page.evaluate(([W, H, loop]) => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const puffs = [];
+    for (let i = 0; i < 46; i++) {
+      const side = i % 3; // 0 left edge, 1 right edge, 2 low centre-ish
+      puffs.push({
+        born: rnd() * loop,
+        life: 2.4 + rnd() * 1.4,
+        x: side === 0 ? -10 + rnd() * 120 : side === 1 ? W - 110 + rnd() * 120 : W * (0.3 + rnd() * 0.4),
+        y: side === 2 ? H + 30 : H * (0.55 + rnd() * 0.45),
+        dx: (side === 0 ? 1 : side === 1 ? -1 : rnd() - 0.5) * (30 + rnd() * 60),
+        dy: -(150 + rnd() * 170),
+        r0: 38 + rnd() * 30,
+        r1: 170 + rnd() * 120,
+        a: 0.2 + rnd() * 0.2,
+      });
+    }
+    const ctx = document.getElementById('c').getContext('2d');
+    window.draw = (t) => {
+      ctx.clearRect(0, 0, W, H);
+      ctx.filter = 'blur(18px)';
+      for (const p of puffs) {
+        for (const k of [-1, 0]) {
+          const age = ((t - p.born) % loop + loop) % loop + (k === -1 ? 0 : 0);
+          if (age > p.life) continue;
+          const u = age / p.life;
+          const x = p.x + p.dx * age;
+          const y = p.y + p.dy * age;
+          const r = p.r0 + (p.r1 - p.r0) * u;
+          const alpha = p.a * Math.sin(Math.PI * Math.min(1, u * 1.05)) ** 0.8;
+          const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+          g.addColorStop(0, `rgba(245,245,250,${alpha})`);
+          g.addColorStop(1, 'rgba(245,245,250,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+          break;
+        }
+      }
+    };
+  }, [W, H, seconds]);
+  const frames = Math.round(seconds * fps);
+  for (let i = 0; i < frames; i++) {
+    await page.evaluate((t) => window.draw(t), i / fps);
+    await page.screenshot({ path: path.join(dir, `steam_${String(i + 1).padStart(4, '0')}.png`), omitBackground: true });
+  }
+  await browser.close();
+  return path.join(dir, 'steam_%04d.png');
 }
 
 /** Renders every card to `dir`/<id>.png; returns the paths by id. */

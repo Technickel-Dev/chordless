@@ -16,7 +16,7 @@ if (!def) {
 }
 const limit = Number(secondsArg) || def.seconds || null;
 
-const app = await openApp({ name, query: def.scene ? `scene=${def.scene}` : '' });
+const app = await openApp({ name, query: def.scene ? `scene=${def.scene}` : '', capture: def.capture });
 const { page, frame } = app;
 const started = Date.now();
 let meta;

@@ -1,5 +1,9 @@
 /** The takes video/build.mjs cuts from. Each is recorded by `node video/capture/take.mjs <name>`. */
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { startApp } from '../../tests/app-start.js';
+import { meltdown, swingtest } from './meltdown.mjs';
+import { CLIPS } from './clips.mjs';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -29,6 +33,8 @@ async function tune({ page, frame }, app, song = 'ODE_TO_JOY_FLUB') {
 const wt = (script, scene, env = {}) => ({ script, scene, env, seconds: 185 });
 
 export const TAKE_LIST = {
+  meltdown: { scene: 'stage', run: meltdown, seconds: 220, capture: 'canvas' },
+  swingtest: { scene: 'stage', run: swingtest, seconds: 90 },
   'tune-ode': { scene: 'cliffside', run: tune, seconds: 70 },
   'wt-guitar': wt('tests/william-tell.mjs', 'cliffside'),
   'wt-trumpet': wt('tests/trumpet-william-tell.mjs', 'pirate-ship'),
@@ -66,3 +72,5 @@ Object.assign(TAKE_LIST, {
 for (const scene of ['space-station', 'volcano-rim', 'pinball', 'bouncy-castle', 'snow-globe', 'lava-lamp', 'giant-turtle', 'upside-down-room', 'stadium', 'desert-canyon', 'ice-cave', 'record-player', 'stage', 'cliffside']) {
   TAKE_LIST[`env-${scene}`] = environment(scene);
 }
+
+Object.assign(TAKE_LIST, CLIPS);

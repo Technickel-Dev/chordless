@@ -314,6 +314,8 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
           wall = now;
           if (step > MAX_STEP) stalls++;
           clock += Math.min(step, MAX_STEP);
+          // For video capture: where the performance clock is against the wall clock.
+          window.__performTick?.(performance.now(), clock);
           place(at(clock));
           frames++;
           while (shown + 1 < plan.strokes.length && plan.strokes[shown + 1].time <= clock) onEvent(++shown);

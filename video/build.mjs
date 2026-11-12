@@ -17,7 +17,9 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { renderCards, W, H } from './cards.mjs';
+import { renderCards, renderSteam, W, H } from './cards.mjs';
+import { barTime, ENTRANCES, MONTAGE, SCENE_RUN, END_BAR } from './score.mjs';
+import { beatMap, readTake, onsets, interp } from './sync.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const B = path.join(HERE, 'build');
@@ -51,8 +53,53 @@ function analyse(name) {
     const lead = /silence_start: ([\d.-]+)/.exec(r.stderr);
     onset = m && lead && Number(lead[1]) <= 0.05 ? Number(m[1]) : 0;
   }
-  return { ...meta, audioFile: audio, videoFile: path.join(TAKES, `${name}.webm`), onset, offset: meta.audioStart && meta.videoStart ? (meta.audioStart - meta.videoStart) / 1000 : 0 };
+  const videoFile = path.join(TAKES, `${name}.webm`);
+  return { ...meta, audioFile: audio, videoFile, onset, videoLen: probe(videoFile), audioLen: existsSync(audio) ? probe(audio) : 0, offset: meta.audioStart && meta.videoStart ? (meta.audioStart - meta.videoStart) / 1000 : 0 };
 }
+
+/** Where, in a take's audio, sound first starts after `aT` seconds. */
+function soundAfter(k, aT) {
+  const r = run('ffmpeg', ['-hide_banner', '-ss', String(Math.max(0, aT)), '-i', k.audioFile, '-af', 'silencedetect=n=-42dB:d=0.3', '-f', 'null', '-'], { soft: true });
+  const end = /silence_end: ([\d.]+)/.exec(r.stderr);
+  const start = /silence_start: ([\d.-]+)/.exec(r.stderr);
+  return end && start && Number(start[1]) <= 0.15 ? aT + Number(end[1]) : aT;
+}
+
+/** The meltdown take's moments (seconds into the take), from its marks and the performers' clocks. */
+function meltdownMarks() {
+  const take = readTake('meltdown');
+  const sec = (w) => take.marks.find((m) => m.what === w).t / 1000;
+  const ode = take.marks.filter((m) => m.what === 'perform')[0];
+  const ticks = take.ticks[0].map(([ms, clock]) => [clock, ms / 1000]);
+  const ofClock = (clock) => interp(ticks, clock);
+  const spb = 60 / ode.tempo;
+  const wt = beatMap(take, 1);
+  const md = {
+    vTune: ofClock(ode.leadIn),
+    vFlub: ofClock(ode.leadIn + (ode.flubBeat - ode.firstBeat) * spb),
+    vGrip: sec('grip'),
+    vShakeEnd: sec('shakingDone'),
+    hits: take.marks.filter((m) => m.what === 'impact').map((m) => m.t / 1000),
+    vWreck: sec('wrecked'),
+    vMenu: sec('menuStart'),
+    vChosen: sec('trumpetChosen'),
+    vWt: wt.at(0),
+    wt,
+  };
+  console.log('meltdown', JSON.stringify({ ...md, wt: undefined }));
+  return md;
+}
+
+/** A piecewise-linear expression through [time, value] keys, in the variable `tv`. */
+const kf = (keys, tv) => {
+  let e = String(keys.at(-1)[1]);
+  for (let i = keys.length - 2; i >= 0; i--) {
+    const [t0, a0] = keys[i];
+    const [t1, a1] = keys[i + 1];
+    e = `if(lt(${tv},${t1.toFixed(3)}),${a0}+(${a1}-${a0})*(${tv}-${t0.toFixed(3)})/${Math.max(0.001, t1 - t0).toFixed(3)},${e})`;
+  }
+  return `if(lt(${tv},${keys[0][0].toFixed(3)}),${keys[0][1]},${e})`;
+};
 
 /** Each instrument's first beat in the finale (beat 0 = bar 244), from its song. */
 async function firstBeats() {
@@ -75,7 +122,14 @@ const have = (name) => existsSync(path.join(TAKES, `${name}.webm`));
 const takes = {};
 const beats = await firstBeats();
 for (const name of Object.keys(beats)) if (have(name)) takes[name] = { ...analyse(name), firstBeat: beats[name] };
-for (const name of ['tune-ode']) if (have(name)) takes[name] = analyse(name);
+for (const name of ['meltdown']) if (have(name)) takes[name] = { ...analyse(name), firstBeat: beats['wt-trumpet'] };
+/** Seconds after the finale's first bar that a take's first note sounds. */
+const firstNoteOffset = (name) => (takes[name] ? (takes[name].firstBeat - beats['wt-guitar']) * 60 / 152 : 0);
+for (const f of (existsSync(TAKES) ? (await import('node:fs')).readdirSync(TAKES) : []))
+  if (/^(orch|crash|scn)-.*\.json$/.test(f)) {
+    const name = f.slice(0, -5);
+    if (existsSync(path.join(TAKES, `${name}.webm`))) takes[name] = { name, videoFile: path.join(TAKES, `${name}.webm`), audioFile: path.join(TAKES, `${name}.audio.wav`) };
+  }
 for (const f of (existsSync(TAKES) ? (await import('node:fs')).readdirSync(TAKES) : []))
   if (/^(smash|env)-.*\.json$/.test(f)) takes[f.replace('.json', '')] = analyse(f.replace('.json', ''));
 
@@ -119,10 +173,13 @@ for (const [shot, id] of [['1-3', 'vo-1-3'], ['1-4', 'vo-1-4'], ['1-5', 'vo-1-5'
   voAt('vo-1-7', t0 + 0.8);
   sub('vo-1-7', t0 + 0.8);
 }
-const tune = takes['tune-ode'];
+const md = takes.meltdown ? meltdownMarks() : null;
+/** A canvas take's sound runs this far behind its picture (measured with video/sync.mjs). */
+const AUDIO_LAG = 0.055;
 {
-  // The title card, over the tune take darkened.
-  const t0 = seg({ kind: 'take', take: 'tune-ode', at: tune ? takeAtAudio(tune, tune.onset + 1) : 0, dur: 2.4, grade: 'eq=brightness=-0.35', label: 'title card, over guitar' });
+  // The title card, over the idle theatre just before the tune.
+  const v = md ? Math.max(0, md.vTune - 2.9) : 0;
+  const t0 = seg({ kind: 'take', take: 'meltdown', at: v, dur: 2.4, grade: 'eq=brightness=-0.35', label: 'title card, over the theatre' });
   overlays.push({ id: card({ id: 'title-chordless', kind: 'title', text: ['CHORDLESS', 'Air instruments for Meta Quest. Played with your bare hands.'] }), t0, t1: t0 + 2.4 });
   voAt('vo-1-8', t0 + 0.3);
   sub('vo-1-8', t0 + 0.3);
@@ -131,135 +188,157 @@ const tapT = T + 0.0;
 ai('1-9', 3.0);
 for (const k of [0, 1, 2]) audio.push({ kind: 'tap', at: tapT + 1.2 + k * 0.6, dur: 0.08, vol: 0.9 });
 
-// ---- beats 2 and 3: the tune and the flub
+// ---- one unbroken take in the theatre. The tune's first phrase (no voiceover),
+// its last note wrong, a short fury (shake, red, steam), the guitar smashed in
+// overhead swings, then the menu, and the trumpet picked from it.
 const TUNE_START = T;
-const FLUB = 23 * 0.6; // the wrong note, in the tune
-if (tune) {
-  const v0 = takeAtAudio(tune, tune.onset - 0.15);
-  const len = FLUB + 1.3;
-  seg({ kind: 'take', take: 'tune-ode', at: v0, dur: len, label: 'the tune', fade: 0 });
-  audio.push({ file: tune.audioFile, ss: tune.onset - 0.15, dur: len - 0.2, at: T - len + 0.0, vol: 1, kind: 'stem', fadeOut: 0.12 });
-  overlays.push({ id: card({ id: 'lower-guitar', kind: 'lower', text: ['GUITAR · Cliffside Sunset'] }), t0: TUNE_START + 0.9, t1: TUNE_START + 3.9 });
-  voAt('vo-a', TUNE_START + 0.9, 0.9);
-  sub('vo-a', TUNE_START + 0.9);
+let T0 = 0; // the score clock: bar 226, the trumpet's first note
+let tW = 0;
+let tWreck = 0;
+const mseg = (v0, v1, extra = {}) => seg({ kind: 'take', take: 'meltdown', at: v0, dur: v1 - v0, ...extra });
+if (md) {
+  const a0 = md.vTune - 0.5;
+  const tA = mseg(a0, md.vFlub - 0.05, { label: 'the tune, in the theatre' });
+  overlays.push({ id: card({ id: 'lower-guitar', kind: 'lower', text: ['GUITAR · Theatre'] }), t0: tA + 0.4, t1: tA + 3.4 });
+  // The wrong note: a punch, a red flash. The rage starts here and not before.
+  const tFlub = T + 0.05;
+  const spike = (t, amp, len = 0.5) => [[t - 0.001, 0], [t, amp], [t + len, 0]];
+  mseg(md.vFlub - 0.05, md.vFlub + 0.8, { label: 'the wrong note', shake: [[0, 0], ...spike(tFlub, 46, 0.6)] });
+  overlays.push({ id: card({ id: 'red-flash', kind: 'redflash' }), t0: tFlub, t1: tFlub + 0.5, fade: { out: 0.45 } });
+  const tRageStart = tFlub;
+  const gripV = md.vGrip - 0.45;
+  mseg(md.vFlub + 0.8, gripV, { label: 'silence; the red begins', rageKeys: true });
+  const tD = mseg(gripV, md.vShakeEnd, { label: 'the fist shakes', rageKeys: true });
+  const tE = mseg(md.vShakeEnd, md.vWreck, { label: 'the overhead swings', rageKeys: true });
+  tWreck = T;
+  // The wreck, the menu, the trumpet chosen: all one clip, to the trumpet's first note.
+  mseg(md.vWreck, md.vWt, { label: 'the wreck; the menu; the trumpet' });
+  tW = T;
+  overlays.push({ id: card({ id: 'slam-destruction', kind: 'slam', text: 'FULL DESTRUCTION' }), t0: tWreck - 0.3, t1: tWreck + 2.6 });
+  const keys = {
+    rage: [[tRageStart, 0], [tD, 0.6], [tE, 1], [tWreck, 1], [tWreck + 1.4, 0]],
+    shake: [[tRageStart, 0], [tD, 3], [tE, 20], [tWreck, 22], [tWreck + 0.4, 0]],
+    spikes: md.hits.map((h) => tE + (h - md.vShakeEnd)).filter((t) => t >= tE && t <= tWreck),
+  };
+  for (const s of timeline) if (s.rageKeys) Object.assign(s, { rage: keys.rage, shake: keys.shake.map((p) => [...p]), spikes: keys.spikes });
+  overlays.push({ id: card({ id: 'red-vig', kind: 'redvig' }), t0: tRageStart, t1: tWreck + 1.6, fade: { in: tE - tRageStart, out: 1.4 } });
+  overlays.push({ id: 'STEAM', steam: true, t0: tD - 0.4, t1: tWreck + 0.6, fade: { in: 1.6, out: 0.6 } });
+  T0 = tW;
 } else {
-  ai('c-1', FLUB + 1.3);
+  ai('c-1', 17);
+  tW = T;
+  T0 = T;
 }
-const SILENCE_AT = T;
-ai('c-1', 1.6);
+/** Timeline time of a trailer bar. */
+const at = (bar) => T0 + barTime(bar);
+const PEAK = at(226);
+const CHORD = barTime(END_BAR);
 
-// ---- beat 4: the rage (T0 = the score's first note)
-const T0 = T;
-const at = (bar) => T0 + (bar - 226) * BAR;
-const PEAK = at(260);
-const SCORE_END = at(360);
-const rage = (t) => ({ from: T0, to: PEAK, t }); // marks a segment that belongs to the rage ramp
+// ---- where each take is at a trailer time, drift and all (video/sync.mjs)
+const maps = {};
+const mapOf = (name) => (name === 'meltdown' ? md.wt : (maps[name] ??= beatMap(readTake(name), 0)));
+/** A take's picture covering trailer times [s0, s1]: where to start, how much, how fast. */
+const source = (name, s0, s1) => {
+  const m = mapOf(name);
+  const c0 = m.at(s0);
+  const c1 = m.at(s1);
+  return { file: takes[name].videoFile, at: c0, len: c1 - c0, rate: (c1 - c0) / (s1 - s0) };
+};
+/** The next cut: a take covering trailer times [s0, s1], conformed to the score's tempo. */
+const tseg = (name, s0, s1, extra = {}) => {
+  const src = source(name, s0, s1);
+  return seg({ kind: 'take', take: name, at: src.at, dur: s1 - s0, slow: src.rate, ...extra });
+};
+const NAMES = { trumpet: 'TRUMPET', guitar: 'GUITAR', violin: 'VIOLIN', cello: 'CELLO', piano: 'PIANO', drums: 'DRUMS', triangle: 'TRIANGLE', cymbals: 'CYMBALS' };
+const takeOf = (inst) => (inst === 'trumpet' && md ? 'meltdown' : `orch-${inst}`);
+const hasTake = (name) => (name === 'meltdown' ? !!md : !!takes[name]);
+const ORDER = ENTRANCES.map(([inst]) => inst);
+const centerCard = card({ id: 'ai-c-grid', kind: 'ai', shot: 'c-grid' });
 
-/** A take's picture on the score clock, from timeline time `t` for `d` seconds. */
-function scoreSeg(name, t, d, extra = {}) {
-  const k = takes[name];
-  if (!k) return seg({ kind: 'png', id: card({ id: `ai-missing-${name}`, kind: 'ai', shot: 'missing-trombone' }), dur: d, label: `missing ${name}` });
-  const audioT = k.onset + ((t - T0) - (k.firstBeat - beats['wt-guitar']) * 60 / 152);
-  return seg({ kind: 'take', take: name, at: takeAtAudio(k, audioT), dur: d, label: `${name} @ bar ${(226 + (t - T0) / BAR).toFixed(1)}`, ...extra });
-}
-// Fanfare: the trumpet, with the fist and the face cutting in.
+// ---- William Tell. The trumpet alone in the theatre; then, four bars apart,
+// the rest of the orchestra comes in on the same stage, each in a tile.
+const joins = ENTRANCES.map(([, bar]) => at(bar) - 0.3);
+joins[0] = tW;
 {
-  const r = { rage: [T0, PEAK] };
-  scoreSeg('wt-trumpet', at(226), 3.2, r);
-  ai('c-2', 1.8); // covers the trumpet for 1.8 s; its audio carries on
-  scoreSeg('wt-trumpet', at(226) + 5.0, at(243) - at(226) - 5.0, r);
-  overlays.push({ id: card({ id: 'lower-trumpet', kind: 'lower', text: ['TRUMPET · Pirate Ship'] }), t0: T0 + 0.3, t1: T0 + 3.5 });
-  // Galop, quiet: the guitar, tighter and tighter.
-  const pieces = [[243, 247], [247, 250], [250, 252.4], [252.4, 254.4], [254.4, 256.4], [256.4, 258], [258, 260]];
-  let t = at(243);
-  let cut = 0;
-  for (const [a, b] of pieces) {
-    const d = (b - a) * BAR;
-    if (Math.abs(a - 250) < 0.01) {
-      ai('c-3', d); // the face
-    } else if (Math.abs(a - 254.4) < 0.01) {
-      ai('c-4', d); // the podium
-    } else {
-      scoreSeg('wt-guitar', t, d, { ...r, zoom: 1 + cut * 0.08 });
-      cut++;
-    }
-    t += d;
-  }
-  // The tutti begins in white.
-  seg({ kind: 'white', dur: 0.3, label: 'white flash' });
-}
-overlays.push({ id: card({ id: 'lower-guitar-2', kind: 'lower', text: ['GUITAR · Cliffside Sunset'] }), t0: at(243) + 0.3, t1: at(243) + 3.5 });
-
-// ---- beat 5: the high point (bar 260), then the cards
-const smashOrder = ['smash-guitar', 'smash-drums', 'smash-piano', 'smash-trumpet', 'smash-violin', 'smash-cymbals'];
-{
-  let t = PEAK;
-  const lens = [4, 2, 2, 2, 2, 2];
-  smashOrder.forEach((name, i) => {
-    const d = lens[i] * BAR - (i === 0 ? 0.3 : 0);
-    const c = cuts[name]?.[0] ?? cuts[name];
-    if (takes[name] && c != null) seg({ kind: 'take', take: name, at: c, dur: d, label: name, slow: i === 0 ? 0.5 : 1 });
-    else seg({ kind: 'png', id: card({ id: `ai-missing-${name}`, kind: 'ai', shot: 'missing-trombone' }), dur: d, label: `missing ${name}` });
-    t += d;
+  const gridStart = joins[1] - 0.4;
+  const gridEnd = at(MONTAGE.from);
+  if (md) tseg('meltdown', 0, gridStart - T0, { label: 'William Tell: the trumpet alone' });
+  else ai('c-1', gridStart - T);
+  overlays.push({ id: card({ id: 'lower-trumpet', kind: 'lower', text: ['TRUMPET · Theatre', 'chosen from the menu, live'] }), t0: tW + 0.4, t1: tW + 3.6 });
+  const sources = ORDER.map((inst, i) => {
+    if (inst === 'CENTER') return { card: centerCard };
+    const name = takeOf(inst);
+    return hasTake(name) ? source(name, Math.max(joins[i], gridStart) - T0, gridEnd - T0) : null;
   });
-  overlays.push({ id: card({ id: 'slam-destruction', kind: 'slam', text: 'FULL DESTRUCTION' }), t0: at(264), t1: at(264) + 3.2 });
+  seg({ kind: 'dyngrid', start: gridStart, dur: gridEnd - gridStart, joins, order: ORDER, sources, expandFirst: false, label: 'the orchestra builds: tiles' });
+  overlays.push({ id: card({ id: 'slam-instruments', kind: 'slam', text: 'MULTIPLE INSTRUMENTS', sub: 'TEN OF THEM' }), t0: joins[1] + 0.2, t1: joins[1] + 2.9 });
+  ORDER.forEach((inst, i) => {
+    if (!NAMES[inst] || i === 0) return;
+    overlays.push({ id: card({ id: `lower-${inst}`, kind: 'lower', text: [NAMES[inst], 'Theatre'] }), t0: joins[i] + 0.45, t1: joins[i] + 2.95 });
+  });
+  // The voice over the quiet theme, done before the tutti.
+  const tVo = at(244) + 0.2;
+  voAt('vo-b', tVo, 0.9);
+  sub('vo-b', tVo);
+  overlays.push({ id: card({ id: 'slam-hands', kind: 'slam', text: 'BARE HANDS', sub: 'NO CONTROLLERS · NO INSTALL' }), t0: tVo + 6.2, t1: tVo + 8.8 });
 }
 
-// ---- beat 6: instruments, environments, the grid, the coda
-{
-  // Multiple instruments: one per 2 bars from bar 276.
-  const roll = ['wt-violin', 'wt-cello', 'missing', 'missing', 'wt-trumpet', 'wt-piano', 'wt-triangle', 'wt-drums'];
-  let t = at(276);
-  const t0 = t;
-  for (const name of roll) {
-    const d = 2 * BAR;
-    if (name === 'missing') {
-      seg({ kind: 'png', id: card({ id: `ai-missing-${t.toFixed(0)}`, kind: 'ai', shot: roll.indexOf(name) === 2 ? 'missing-trombone' : 'missing-horn' }), dur: d, label: 'missing instrument' });
-    } else {
-      scoreSeg(name, t, d);
-    }
-    t += d;
+// ---- The tutti: the instruments smashed, each blow on a cymbal crash.
+const CRASHES = ['crash-violin', 'crash-trumpet', 'crash-cello', 'crash-cymbals', 'crash-drums', 'crash-piano'];
+/** Punch-ins for the smashes that happen small in the frame: [zoom, x, y]. */
+const CRASH_ZOOM = { 'crash-violin': [1.7, 0.6, 0.55], 'crash-trumpet': [1.6, 0.5, 0.42], 'crash-cello': [1.3, 0.62, 0.5], 'crash-cymbals': [1.5, 0.5, 0.55] };
+/** When, in a smash take, its biggest blow lands: the loudest sound near any marked blow. */
+function impactOf(name) {
+  const take = readTake(name);
+  const sec = (m) => m.t / 1000;
+  const hits = take.marks.filter((m) => m.what === 'impact').map(sec);
+  const cueMark = take.marks.find((m) => m.what === 'throw') ?? take.marks.filter((m) => m.what === 'shove').at(-1);
+  const windows = hits.length ? hits.map((h) => [h - 0.25, h + 0.45]) : [[cueMark ? sec(cueMark) : 3, (cueMark ? sec(cueMark) : 3) + 2.5]];
+  let best = null;
+  for (const [lo, hi] of windows) for (const o of onsets(name, lo + AUDIO_LAG, hi + AUDIO_LAG)) if (!best || o.db > best.db) best = o;
+  const fallback = hits[0] ?? windows[0][0];
+  console.log('impact', name, best ? (best.t - AUDIO_LAG).toFixed(2) : `none (${fallback.toFixed(2)})`);
+  return best ? best.t - AUDIO_LAG : fallback;
+}
+for (let k = 0, bar = MONTAGE.from; bar < MONTAGE.to; bar += MONTAGE.every, k++) {
+  const name = CRASHES[k % CRASHES.length];
+  const d = at(bar + MONTAGE.every) - at(bar);
+  const accent = at(bar + 1); // the blow lands on the downbeat of the shot's second bar
+  if (!takes[name]) {
+    ai('c-1', d);
+    continue;
   }
-  overlays.push({ id: card({ id: 'slam-instruments', kind: 'slam', text: 'MULTIPLE INSTRUMENTS', sub: 'TEN OF THEM' }), t0: t0 + 0.2, t1: t0 + 3.4 });
-  voAt('vo-b', t0 + 3.6, 0.9);
-  sub('vo-b', t0 + 3.6);
-  // Environments: one scene per bar from bar 292.
-  const envs = ['space-station', 'volcano-rim', 'pinball', 'bouncy-castle', 'snow-globe', 'lava-lamp', 'giant-turtle', 'upside-down-room', 'stadium', 'desert-canyon', 'ice-cave', 'record-player'];
-  const e0 = t;
-  let n = 0;
-  while (t < at(312) - 0.001) {
-    const name = `env-${envs[n % envs.length]}`;
-    const d = Math.min(BAR, at(312) - t);
-    const c = cuts[name] ?? 4;
-    if (takes[name]) seg({ kind: 'take', take: name, at: c, dur: d, label: name });
-    else seg({ kind: 'png', id: card({ id: `ai-missing-${name}`, kind: 'ai', shot: 'missing-horn' }), dur: d, label: `missing ${name}` });
-    t += d;
-    n++;
-  }
-  overlays.push({ id: card({ id: 'slam-environments', kind: 'slam', text: 'CHANGING ENVIRONMENTS', sub: 'MORE THAN SIXTY' }), t0: e0 + 0.2, t1: e0 + 3.4 });
-  // The grid: eight takes and the conductor, bars 312-330.
-  const gridNames = ['wt-trumpet', 'wt-guitar', 'wt-cello', 'wt-violin', 'CENTER', 'wt-piano', 'wt-triangle', 'wt-drums', 'wt-cymbals'];
-  const gd = at(330) - t;
-  seg({ kind: 'grid', names: gridNames, center: card({ id: 'ai-c-grid', kind: 'ai', shot: 'c-grid' }), at: t, dur: gd, label: '3x3 grid' });
-  overlays.push({ id: card({ id: 'slam-hands', kind: 'slam', text: 'BARE HANDS', sub: 'NO CONTROLLERS · NO INSTALL' }), t0: t + 0.2, t1: t + 3.0 });
-  t += gd;
-  // The coda: one bar each, the smashes and the scenes, until the final chord.
-  const coda = [...smashOrder, ...envs.map((e) => `env-${e}`)];
-  let c = 0;
-  while (t < SCORE_END - 0.001) {
-    const name = coda[c % coda.length];
-    const d = Math.min(BAR, SCORE_END - t);
-    const cc = cuts[name]?.[1] ?? cuts[name]?.[0] ?? cuts[name] ?? 4;
-    if (takes[name]) seg({ kind: 'take', take: name, at: typeof cc === 'number' ? cc : 4, dur: d, label: `coda ${name}` });
-    else seg({ kind: 'png', id: card({ id: `ai-missing-${name}`, kind: 'ai', shot: 'missing-horn' }), dur: d, label: `missing ${name}` });
-    t += d;
-    c++;
-  }
+  const cI = impactOf(name);
+  const [zoom, zx, zy] = CRASH_ZOOM[name] ?? [1, 0.5, 0.5];
+  seg({ kind: 'take', take: name, at: Math.max(0, cI - (accent - at(bar))), dur: d, zoom, zoomAt: [zx, zy], shake: [[0, 0], [1e6, 0]], spikes: [accent], label: `smash: ${name}` });
+  audio.push({ file: takes[name].audioFile, ss: cI - 0.08 + AUDIO_LAG, dur: 1.1, at: accent - 0.08, vol: 0.9, kind: 'sfx', fadeOut: 0.6 });
 }
 
-// ---- beat 7: the bow
+// ---- The tutti again: two bars in each place, a different instrument in each.
+const SCENE_NAMES = { 'space-station': 'SPACE STATION', 'volcano-rim': 'VOLCANO RIM', 'bouncy-castle': 'BOUNCY CASTLE', 'snow-globe': 'SNOW GLOBE', 'giant-turtle': 'GIANT TURTLE', 'upside-down-room': 'UPSIDE-DOWN ROOM', 'ice-cave': 'ICE CAVE', stadium: 'STADIUM' };
 {
-  const ENDS = T;
+  const tScenes = T;
+  for (const [scene, inst, bar] of SCENE_RUN) {
+    const name = `scn-${scene}`;
+    const s0 = barTime(bar);
+    const s1 = barTime(bar + 2);
+    const t0 = takes[name] ? tseg(name, s0, s1, { label: `${scene}: ${inst}` }) : ai('c-1', s1 - s0);
+    overlays.push({ id: card({ id: `lower-scene-${scene}`, kind: 'lower', text: [SCENE_NAMES[scene] ?? scene, NAMES[inst]] }), t0: t0 + 0.12, t1: t0 + 1.45 });
+  }
+  overlays.push({ id: card({ id: 'slam-environments', kind: 'slam', text: 'CHANGING ENVIRONMENTS', sub: 'MORE THAN SIXTY' }), t0: tScenes, t1: tScenes + 1.5 });
+}
+
+// ---- The closing chord: everyone at once, back on the stage.
+{
+  const s0 = CHORD;
+  const s1 = CHORD + 2.6;
+  const sources = ORDER.map((inst) => (inst === 'CENTER' ? { card: centerCard } : hasTake(takeOf(inst)) ? source(takeOf(inst), s0, s1) : null));
+  seg({ kind: 'dyngrid', start: T, dur: s1 - s0, joins: ORDER.map(() => T), order: ORDER, sources, instant: true, expandFirst: false, label: 'the closing chord: everyone' });
+}
+const SCORE_END = T;
+
+// ---- the bow
+{
   ai('7-1', 3.0);
   const t1 = ai('real-quest', dur('vo-7-2') + 0.8);
   voAt('vo-7-2', t1 + 0.4);
@@ -267,48 +346,55 @@ const smashOrder = ['smash-guitar', 'smash-drums', 'smash-piano', 'smash-trumpet
   const t2 = seg({ kind: 'png', id: card({ id: 'end', kind: 'end' }), dur: 5.5, label: 'end card' });
   voAt('vo-7-3', t2 + 0.5);
   sub('vo-7-3', t2 + 0.5);
-  void ENDS;
 }
 const TOTAL = T;
 
-// IN-APP CAPTURE bug and the credits, from the tune to the bow.
-overlays.push({ id: card({ id: 'bug', kind: 'bug' }), t0: TUNE_START, t1: at(360) });
-overlays.push({ id: card({ id: 'credit-ode', kind: 'credit', text: 'Ludwig van Beethoven · Ode to Joy (1824) · Public domain', style: 'left:20px;top:16px' }), t0: TUNE_START, t1: TUNE_START + 6 });
-overlays.push({ id: card({ id: 'credit-wt', kind: 'credit', text: 'Gioachino Rossini · William Tell Overture, Finale (1829) · Public domain', style: 'left:20px;top:16px' }), t0: T0, t1: T0 + 6 });
-overlays.push({ id: card({ id: 'credit-capture', kind: 'credit', text: 'In-app capture. Every note is played and synthesized live in Chordless.', style: 'left:20px;bottom:120px' }), t0: TUNE_START, t1: TUNE_START + 6 });
+// IN-APP CAPTURE bug and the credits.
+overlays.push({ id: card({ id: 'bug', kind: 'bug' }), t0: TUNE_START, t1: SCORE_END });
+overlays.push({ id: card({ id: 'credit-ode', kind: 'credit', text: 'Ludwig van Beethoven · Ode to Joy (1824) · Public domain', style: 'left:20px;top:16px' }), t0: TUNE_START, t1: TUNE_START + 5 });
+overlays.push({ id: card({ id: 'credit-wt', kind: 'credit', text: 'Gioachino Rossini · William Tell Overture, Finale (1829) · Public domain', style: 'left:20px;top:16px' }), t0: tW, t1: tW + 6 });
+overlays.push({ id: card({ id: 'credit-capture', kind: 'credit', text: 'In-app capture. Every note is played and synthesized live in Chordless.', style: 'left:20px;bottom:120px' }), t0: TUNE_START, t1: TUNE_START + 5 });
 
-// ------------------------------------------------------------------ audio plan for the score
+// ------------------------------------------------------------------ audio plan
 {
-  const joins = [
-    ['wt-trumpet', 226],
-    ['wt-guitar', 243],
-    ['wt-cello', 260],
-    ['wt-violin', 276],
-    ['wt-piano', 296],
-    ['wt-triangle', 296],
-    ['wt-drums', 312],
-    ['wt-cymbals', 342],
-  ];
-  for (const [name, bar] of joins) {
-    const k = takes[name];
-    if (!k) continue;
-    const t = at(bar);
-    const audioT = k.onset + ((t - T0) - (k.firstBeat - beats['wt-guitar']) * 60 / 152);
-    audio.push({ file: k.audioFile, ss: Math.max(0, audioT), dur: SCORE_END + 2.5 - t, at: t + (audioT < 0 ? -audioT : 0), vol: 0.75, kind: 'stem', fadeOut: 2.5, fadeIn: 0.05 });
+  /** A take's sound for trailer times [s0, s1], conformed to the score eight bars at a time. */
+  const stem = (name, s0, s1, vol, { fadeIn = 0.04, fadeOut = 0 } = {}) => {
+    const m = mapOf(name);
+    const CH = 8 * BAR;
+    for (let a = s0; a < s1 - 1e-6; a += CH) {
+      const b = Math.min(s1, a + CH);
+      const ca = m.at(a) + AUDIO_LAG;
+      const cb = m.at(b) + AUDIO_LAG;
+      audio.push({ file: takes[name].audioFile, ss: ca, dur: cb - ca, at: T0 + a, vol, kind: 'stem', tempo: (cb - ca) / (b - a), fadeIn: a === s0 ? fadeIn : 0, fadeOut: b >= s1 - 1e-6 ? fadeOut : 0 });
+    }
+  };
+  const MUSIC_END = CHORD + 4.4;
+  if (md) {
+    // The tune, the silence, the smash and the menu, as they sounded; then the trumpet, on the score's clock.
+    const a0 = md.vTune - 0.5;
+    const aEnd = md.wt.at(-0.3);
+    // The tune and its wrong note brought up to sit near the orchestra; the rest as recorded.
+    const aSplit = md.vFlub + 1.6;
+    audio.push({ file: takes.meltdown.audioFile, ss: a0 + AUDIO_LAG, dur: aSplit - a0, at: TUNE_START, vol: 2.8, kind: 'stem', fadeOut: 0.6 });
+    audio.push({ file: takes.meltdown.audioFile, ss: aSplit + AUDIO_LAG, dur: aEnd - aSplit, at: TUNE_START + (aSplit - a0), vol: 1, kind: 'stem' });
+    stem('meltdown', -0.3, MUSIC_END, 0.8, { fadeIn: 0, fadeOut: 3 });
   }
-  // The smashes' own sound, under the tutti.
-  let t = PEAK;
-  const lens = [4, 2, 2, 2, 2, 2];
-  smashOrder.forEach((name, i) => {
-    const k = takes[name];
-    const c = cuts[name]?.[0] ?? cuts[name];
-    if (k && c != null) audio.push({ file: k.audioFile, ss: Math.max(0, c - k.offset), dur: lens[i] * BAR, at: t + (i === 0 ? 0.3 : 0), vol: 0.9, kind: 'stem', fadeOut: 0.1 });
-    t += lens[i] * BAR;
+  const VOL = { guitar: 0.6, violin: 0.55, cello: 0.6, piano: 0.55, drums: 0.6, triangle: 0.5, cymbals: 0.55, trumpet: 0.8 };
+  ENTRANCES.forEach(([inst, bar]) => {
+    if (inst === 'CENTER' || takeOf(inst) === 'meltdown' || !hasTake(takeOf(inst))) return;
+    stem(takeOf(inst), barTime(bar) - 0.35, MUSIC_END, VOL[inst], { fadeOut: 3 });
   });
 }
 
 // ------------------------------------------------------------------ run
+if (process.argv.includes('--plan')) {
+  writeFileSync(path.join(B, 'timeline.json'), JSON.stringify({ total: TOTAL, T0, timeline, overlays, audio: audio.map((a) => ({ ...a, file: a.file && path.basename(a.file) })) }, null, 1));
+  console.log(timeline.map((s) => `${s.t.toFixed(2)} +${s.dur.toFixed(2)} ${s.label}${s.slow ? ' x' + s.slow.toFixed(4) : ''}`).join(String.fromCharCode(10)));
+  process.exit(0);
+}
 const cardFiles = await renderCards(cardList, CARDS);
+const steamDir = path.join(B, 'steam');
+const steamPattern = overlays.some((o) => o.steam) ? (existsSync(path.join(steamDir, 'steam_0120.png')) ? path.join(steamDir, 'steam_%04d.png') : await renderSteam(steamDir)) : null;
 writeFileSync(path.join(B, 'timeline.json'), JSON.stringify({ total: TOTAL, T0, PEAK, SCORE_END, timeline, overlays, audio: audio.map((a) => ({ ...a, file: a.file && path.basename(a.file) })) }, null, 1));
 
 const scaleFilter = `scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=${FPS},format=yuv420p`;
@@ -329,16 +415,89 @@ timeline.forEach((s, i) => {
     const speed = s.slow ?? 1;
     args.push('-ss', Math.max(0, s.at).toFixed(3), '-t', (s.dur * speed).toFixed(3), '-i', k.videoFile);
     vf = scaleFilter;
-    if (s.zoom && s.zoom > 1) vf = `crop=iw/${s.zoom}:ih/${s.zoom},${vf}`;
+    if (s.zoom && s.zoom > 1) {
+      // A punch-in, centred where the action is (zoomAt: [x, y] as fractions of the frame).
+      const [cx, cy] = s.zoomAt ?? [0.5, 0.5];
+      vf = `crop=iw/${s.zoom}:ih/${s.zoom}:'max(0,min(iw-ow,iw*${cx}-ow/2))':'max(0,min(ih-oh,ih*${cy}-oh/2))',${vf}`;
+    }
     if (speed !== 1) vf = `setpts=${(1 / speed).toFixed(3)}*PTS,${vf}`;
+    const tv = `(t+${s.t.toFixed(3)})`; // timeline time, inside the segment's filters
+    if (s.shake) {
+      // Camera shake: a tremor that grows, with a sharp kick at each impact.
+      const spikes = (s.spikes ?? []).map((ts) => `if(between(${tv},${ts.toFixed(3)},${(ts + 0.35).toFixed(3)}),34*(1-(${tv}-${ts.toFixed(3)})/0.35),0)`);
+      const A = `(${[kf(s.shake, tv), ...spikes].join('+')})`;
+      const sw = Math.round(W * 1.15);
+      const sh = Math.round(H * 1.15);
+      vf = `${vf},scale=${sw}:${sh},crop=${W}:${H}:x='(in_w-${W})/2+${A}*sin(t*57)+0.5*${A}*sin(t*23+1)':y='(in_h-${H})/2+${A}*sin(t*49+2)+0.5*${A}*sin(t*31)',setsar=1`;
+    }
     if (s.rage) {
-      const [r0, r1] = s.rage;
-      const o = s.t - r0;
-      const span = r1 - r0;
-      const p = `clip((t+${o.toFixed(3)})/${span.toFixed(3)},0,1)`;
-      vf = `${vf},eq=gamma_r='1+0.7*${p}':gamma_b='1-0.45*${p}':saturation='1+0.5*${p}':brightness='0.85*pow(clip((t+${o.toFixed(3)}-${(span - 5).toFixed(3)})/5,0,1),2)':eval=frame,vignette=angle=PI/3.2`;
+      // The rage grade: reds up, blues and greens down, saturation and contrast up.
+      const p = `(${kf(s.rage, tv)})`;
+      vf = `${vf},eq=gamma_r='1+0.5*${p}':gamma_g='1-0.12*${p}':gamma_b='1-0.35*${p}':saturation='1+0.5*${p}':contrast='1+0.12*${p}':eval=frame`;
     }
     if (s.grade) vf = `${vf},${s.grade}`;
+  } else if (s.kind === 'dyngrid') {
+    // A grid that builds out: each instrument's tile appears as it joins and the
+    // tiles already there make room (a smooth move and resize), up to 3x3; at
+    // the end the first tile grows to fill the frame.
+    const D = 0.5;
+    const layout = (n) => {
+      const [cols, cw, ch, offy] = n <= 1 ? [1, 1280, 720, 0] : n === 2 ? [2, 640, 360, 180] : n <= 4 ? [2, 640, 360, 0] : n <= 6 ? [3, 426, 240, 120] : [3, 426, 240, 0];
+      const offx = Math.round((W - cols * cw) / 2);
+      return (i) => ({ x: offx + (i % cols) * cw, y: offy + Math.floor(i / cols) * ch, w: cw, h: ch });
+    };
+    const smooth = (t0) => `pow(clip((t-${t0.toFixed(3)})/${D},0,1),2)*(3-2*clip((t-${t0.toFixed(3)})/${D},0,1))`;
+    const sum = (init, trans) => `${init}${trans.map(([t0, a, b]) => `+(${(b - a).toFixed(2)})*${smooth(t0)}`).join('')}`;
+    const n = s.order.length;
+    const local = s.joins.map((j) => Math.max(0, j - s.t));
+    const filters = [];
+    const lastIndex = n; // the black base is the last input
+    s.order.forEach((name, i) => {
+      const lj = local[i];
+      const left = (s.dur - lj).toFixed(3);
+      const src = s.sources?.[i];
+      if (src?.card) args.push('-loop', '1', '-framerate', String(FPS), '-t', left, '-i', cardFiles[src.card]);
+      else if (src?.file) args.push('-ss', Math.max(0, src.at).toFixed(3), '-t', (src.len + 0.3).toFixed(3), '-i', src.file);
+      else args.push('-f', 'lavfi', '-t', left, '-i', `color=c=0x222233:s=${W}x${H}:r=${FPS}`);
+    });
+    args.push('-f', 'lavfi', '-t', s.dur.toFixed(3), '-i', `color=c=black:s=${W}x${H}:r=${FPS}`);
+    // Where each tile is over time: appears at its join, moves as others join.
+    const geometry = s.order.map((_, i) => {
+      if (s.instant) {
+        const c = layout(n)(i);
+        return { x: [[0, c.x, c.x]], y: [[0, c.y, c.y]], w: [[0, c.w, c.w]], h: [[0, c.h, c.h]] };
+      }
+      const cell = layout(i + 1)(i);
+      const trans = { x: [[local[i], cell.x + cell.w / 2 - 1, cell.x]], y: [[local[i], cell.y + cell.h / 2 - 1, cell.y]], w: [[local[i], 2, cell.w]], h: [[local[i], 2, cell.h]] };
+      for (let m = i + 1; m < n; m++) {
+        const a = layout(m)(i);
+        const b = layout(m + 1)(i);
+        for (const key of ['x', 'y', 'w', 'h']) trans[key].push([local[m], a[key], b[key]]);
+      }
+      if (i === 0 && s.expandFirst !== false) {
+        const a = layout(n)(0);
+        for (const [key, to] of [['x', 0], ['y', 0], ['w', W], ['h', H]]) trans[key].push([s.dur - 0.7, a[key], to]);
+      }
+      return trans;
+    });
+    // Draw the later tiles first and the first tile last, so it can grow over the rest.
+    const drawOrder = [...s.order.keys()].slice(1).concat([0]);
+    let prev = `${lastIndex}:v`;
+    drawOrder.forEach((i, q) => {
+      const g = geometry[i];
+      const init = (key) => g[key][0][1];
+      const trans = (key) => g[key].slice(1);
+      const first = g.w[0];
+      // The first transition is the appearance: it runs from the 2 px dot to the cell.
+      const ex = (key) => sum(init(key), [[first[0], first[1], g[key][0][2]], ...trans(key).map(([t0, a, b]) => [t0, a, b])].map(([t0, a, b], idx) => (idx === 0 ? [t0, init(key), b] : [t0, a, b])));
+      filters.push(`[${i}:v]setpts=(PTS-STARTPTS)/${(s.sources?.[i]?.rate ?? 1).toFixed(5)}+${local[i].toFixed(3)}/TB,fps=${FPS},scale=w='max(2,trunc((${ex('w')})/2)*2)':h='max(2,trunc((${ex('h')})/2)*2)':eval=frame,setsar=1[s${i}]`);
+      filters.push(`[${prev}][s${i}]overlay=x='${ex('x')}':y='${ex('y')}':enable='gte(t,${local[i].toFixed(3)})'[o${q}]`);
+      prev = `o${q}`;
+    });
+    const script = path.join(B, `dyngrid-${i}.txt`);
+    writeFileSync(script, `${filters.join(';\n')};\n[${prev}]format=yuv420p[v]`);
+    run('ffmpeg', [...args, '-filter_complex_script', script, '-map', '[v]', '-t', s.dur.toFixed(3), ...enc, '-r', String(FPS), out]);
+    return;
   } else if (s.kind === 'grid') {
     const ins = s.names.map((n) => (n === 'CENTER' ? null : takes[n]));
     const parts = [];
@@ -349,7 +508,8 @@ timeline.forEach((s, i) => {
         const k = takes[n];
         if (k) {
           const audioT = k.onset + ((s.at - T0) - (k.firstBeat - beats['wt-guitar']) * 60 / 152);
-          args.push('-ss', Math.max(0, takeAtAudio(k, audioT)).toFixed(3), '-t', s.dur.toFixed(3), '-i', k.videoFile);
+          const v = Math.min(Math.max(takeAtAudio(k, audioT), k.onset + k.offset - 1.5), k.videoLen - s.dur - 0.2);
+          args.push('-ss', Math.max(0, v).toFixed(3), '-t', s.dur.toFixed(3), '-i', k.videoFile);
         } else {
           args.push('-f', 'lavfi', '-t', s.dur.toFixed(3), '-i', `color=c=0x222233:s=${W}x${H}:r=${FPS}`);
         }
@@ -372,8 +532,13 @@ run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'concat', '-saf
   const args = ['-y', '-hide_banner', '-loglevel', 'error', '-i', path.join(B, 'picture.mp4')];
   const chain = [];
   overlays.forEach((o, i) => {
-    args.push('-loop', '1', '-framerate', String(FPS), '-t', (TOTAL + 1).toFixed(2), '-i', cardFiles[o.id]);
-    chain.push(`[${i === 0 ? 'base' : 'v' + (i - 1)}][${i + 1}:v]overlay=enable='between(t,${o.t0.toFixed(3)},${o.t1.toFixed(3)})':shortest=0[v${i}]`);
+    if (o.steam) args.push('-loop', '1', '-framerate', String(FPS), '-i', steamPattern);
+    else args.push('-loop', '1', '-framerate', String(FPS), '-t', (TOTAL + 1).toFixed(2), '-i', cardFiles[o.id]);
+    // Fades are alpha fades on the overlay's own clock, which matches the picture's.
+    let pre = `[${i + 1}:v]format=rgba`;
+    if (o.fade?.in) pre += `,fade=t=in:st=${o.t0.toFixed(3)}:d=${o.fade.in.toFixed(3)}:alpha=1`;
+    if (o.fade?.out) pre += `,fade=t=out:st=${(o.t1 - o.fade.out).toFixed(3)}:d=${o.fade.out.toFixed(3)}:alpha=1`;
+    chain.push(`${pre}[o${i}];[${i === 0 ? 'base' : 'v' + (i - 1)}][o${i}]overlay=enable='between(t,${o.t0.toFixed(3)},${o.t1.toFixed(3)})':shortest=0[v${i}]`);
   });
   const fc = `[0:v]null[base];${chain.join(';')}`;
   const last = `v${overlays.length - 1}`;
@@ -403,9 +568,10 @@ run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'concat', '-saf
     let f = `[${n}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=start=${a.ss.toFixed(3)}:duration=${d.toFixed(3)},asetpts=PTS-STARTPTS,volume=${a.vol}`;
     if (a.fadeIn) f += `,afade=t=in:st=0:d=${a.fadeIn}`;
     if (a.fadeOut) f += `,afade=t=out:st=${Math.max(0, d - a.fadeOut).toFixed(3)}:d=${a.fadeOut}`;
+    if (a.tempo && Math.abs(a.tempo - 1) > 1e-4) f += `,atempo=${a.tempo.toFixed(5)}`;
     f += `,adelay=${Math.round(a.at * 1000)}|${Math.round(a.at * 1000)}[a${n}]`;
     filters.push(f);
-    (a.kind === 'vo' ? voices : music).push(`[a${n}]`);
+    (a.kind === 'vo' ? voices : a.kind === 'sfx' ? sfx : music).push(`[a${n}]`);
     n++;
   }
   const mixed = (list, name) => (list.length ? `${list.join('')}amix=inputs=${list.length}:normalize=0:duration=longest[${name}]` : `anullsrc=r=48000:cl=stereo[${name}]`);

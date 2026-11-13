@@ -12,9 +12,149 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#111111" />
     <title>chordless</title>
+    <style>
+      /* Title screen: covers the page until the player enters VR (src/title-screen.ts). */
+      .title-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding: 24px 16px;
+        box-sizing: border-box;
+        background:
+          radial-gradient(ellipse at 50% 40%, rgba(245, 158, 11, 0.16), transparent 60%),
+          rgba(17, 17, 17, 0.94);
+        color: #e7e5e4;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        text-align: center;
+        transition: opacity 0.4s ease, visibility 0.4s;
+      }
+
+      .title-screen.is-hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .title-logo {
+        width: min(560px, 84vw);
+        height: auto;
+        filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.5));
+      }
+
+      .title-tagline {
+        margin: 0;
+        color: #a8a29e;
+        font-size: clamp(15px, 2.4vw, 19px);
+        letter-spacing: 0.04em;
+      }
+
+      .title-tagline em {
+        color: #fbbf24;
+        font-style: italic;
+        font-weight: 700;
+      }
+
+      .title-enter {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 16px;
+        padding: 14px 32px;
+        border: none;
+        border-radius: 999px;
+        background: #f59e0b;
+        color: #1c1917;
+        font: inherit;
+        font-size: 18px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 8px 28px rgba(245, 158, 11, 0.35);
+        transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+      }
+
+      .title-enter:hover:not(:disabled) {
+        background: #fbbf24;
+        transform: translateY(-1px);
+        box-shadow: 0 10px 32px rgba(245, 158, 11, 0.45);
+      }
+
+      .title-enter:focus-visible,
+      .title-preview:focus-visible {
+        outline: 3px solid #fde68a;
+        outline-offset: 3px;
+      }
+
+      .title-enter:disabled {
+        background: #44403c;
+        color: #a8a29e;
+        box-shadow: none;
+        cursor: default;
+      }
+
+      .title-enter svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      .title-note {
+        margin: 0;
+        max-width: 32em;
+        color: #a8a29e;
+        font-size: 14px;
+      }
+
+      .title-preview {
+        padding: 6px 10px;
+        border: none;
+        background: none;
+        color: #78716c;
+        font: inherit;
+        font-size: 14px;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        cursor: pointer;
+      }
+
+      .title-preview:hover {
+        color: #d6d3d1;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .title-screen,
+        .title-enter {
+          transition: none;
+        }
+      }
+    </style>
   </head>
-  <body style="margin: 0">
+  <body style="margin: 0; background: #111111">
     <div id="scene-container"></div>
+
+    <main id="title-screen" class="title-screen">
+      <h1 style="margin: 0">
+        <img class="title-logo" src="/icons/logo.svg" alt="Chordless" />
+      </h1>
+      <p class="title-tagline"><em>Virtually</em> any instrument.</p>
+      <button id="title-enter" class="title-enter" type="button" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M2 10a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-3.6a2 2 0 0 1-1.8-1.1l-.9-1.8a1.9 1.9 0 0 0-3.4 0l-.9 1.8A2 2 0 0 1 7.6 18H4a2 2 0 0 1-2-2z" />
+        </svg>
+        <span id="title-enter-label">Loading…</span>
+      </button>
+      <p id="title-note" class="title-note" hidden>
+        VR isn't available in this browser. Open this page in the Meta Quest
+        browser to play.
+      </p>
+      <button id="title-preview" class="title-preview" type="button">
+        Look around in the browser
+      </button>
+    </main>
+
     <script type="module" src="/src/index.ts"></script>
   </body>
 </html>

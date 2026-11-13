@@ -8,6 +8,7 @@
 import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { AirGuitarSystem } from './guitar/air-guitar-system.js';
+import { AirBassSystem } from './bass/air-bass-system.js';
 import { PanelSystem } from './panel.js';
 import { AirViolinSystem } from './violin/air-violin-system.js';
 import { AirCelloSystem } from './cello/air-cello-system.js';
@@ -18,12 +19,14 @@ import { AirDrumsSystem } from './drums/air-drums-system.js';
 import { AirTrumpetSystem } from './trumpet/air-trumpet-system.js';
 import { AirTromboneSystem } from './trombone/air-trombone-system.js';
 import { AirHornSystem } from './horn/air-horn-system.js';
+import { mountTitleScreen } from './title-screen.js';
 
 World.create(
   document.getElementById('scene-container') as HTMLDivElement,
   projectOptions,
 ).then((world) => {
   world.registerSystem(AirGuitarSystem);
+  world.registerSystem(AirBassSystem);
   world.registerSystem(AirViolinSystem);
   world.registerSystem(AirCelloSystem);
   world.registerSystem(AirCymbalsSystem);
@@ -34,4 +37,5 @@ World.create(
   world.registerSystem(AirTromboneSystem);
   world.registerSystem(AirHornSystem);
   world.registerSystem(PanelSystem);
+  mountTitleScreen(world);
 });

@@ -1,6 +1,8 @@
 /**
- * Procedural steel-string guitar at real scale. See geometry.ts for the
- * local frame and dimensions.
+ * Procedural fretted instruments at real scale: the steel-string guitar
+ * here, and the parts every fretted instrument shares (neck, fretboard,
+ * frets, headstock, strings and the playing marks), so the bass can bring
+ * just its own body. See geometry.ts for the local frame and dimensions.
  */
 
 import {
@@ -22,12 +24,21 @@ import {
   Vector3,
 } from '@iwsdk/core';
 import { HUD_ICONS, HudIcon } from '../hud-icons.js';
-import { fretX, GUITAR, STRING_COUNT, stringSpan, stringY } from './geometry.js';
+import { type Fretboard, GUITAR_BOARD } from './geometry.js';
 
-const INLAY_FRETS = [3, 5, 7, 9, 15, 17];
+export interface GuitarMaterials {
+  top: MeshStandardMaterial;
+  side: MeshStandardMaterial;
+  neck: MeshStandardMaterial;
+  board: MeshStandardMaterial;
+}
 
 export interface GuitarModel {
   root: Group;
+  /** The fretboard it is built on. */
+  board: Fretboard;
+  /** Where the neck runs from, over the body. */
+  neckStart: number;
   /** Glowing overlay over each string's vibrating length. */
   vibrations: Mesh[];
   vibrationMaterials: MeshBasicMaterial[];
@@ -41,31 +52,67 @@ export interface GuitarModel {
   pickShadowMaterial: MeshBasicMaterial;
   hud: LabelSprite;
   // The parts that come apart when it is smashed (see wreck-model.ts).
-  /** Everything of the body: sides, top, rosette, bridge. Hidden once it shatters. */
+  /**
+   * Everything of the body: sides, top, bridge and saddle (by those names),
+   * and whatever sits over where it is picked (the hole parts). Hidden once
+   * it shatters.
+   */
   body: Group;
   /** The body's outline in the top face's plane, as x, y pairs. */
   outline: number[];
+  /** How deep the body is, from the top face down. */
+  bodyDepth: number;
+  /** Names of the body parts that go with the shard under the origin: the sound hole, or the pickup. */
+  holeParts: readonly string[];
   /** The whole neck and fretboard, hidden once the neck snaps. */
   neck: Mesh;
-  board: Mesh;
+  board3d: Mesh;
   head: Group;
   nut: Mesh;
   frets: Mesh[];
   inlays: Mesh[];
   strings: Mesh[];
-  materials: { top: MeshStandardMaterial; side: MeshStandardMaterial; neck: MeshStandardMaterial; board: MeshStandardMaterial };
+  materials: GuitarMaterials;
+  /** The whole instrument as a thrown body: mass (kg), box size for its inertia, centre of mass. */
+  physics: { mass: number; size: [number, number, number]; centre: [number, number, number] };
 }
 
-/** Where the neck runs from, over the body. */
+/** What a body builder hands back: the body's parts, outline and depth. */
+export interface GuitarBody {
+  group: Group;
+  outline: number[];
+  depth: number;
+  holeParts: readonly string[];
+}
+
+/** Everything that makes one fretted instrument's model its own. */
+export interface FrettedModelSpec {
+  /** The root's name, how tests and tools find it. */
+  name: string;
+  board: Fretboard;
+  neckStart: number;
+  colors: { top: number; side: number; neck: number; board: number };
+  /** Builds the body from the shared materials. */
+  body: (materials: GuitarMaterials & { dark: MeshStandardMaterial; metal: MeshStandardMaterial; bone: MeshStandardMaterial }) => GuitarBody;
+  inlayFrets: readonly number[];
+  /** Radius of string `s`, and whether it is wound. */
+  stringRadius: (s: number) => number;
+  wound: (s: number) => boolean;
+  /** Headstock plate length and width, and the tuner peg radius. */
+  head: { length: number; width: number; peg: number };
+  /** Where the sign floats, from the nut. */
+  hudFromNut: [number, number, number];
+  physics: GuitarModel['physics'];
+}
+
+/** Where the guitar's neck runs from, over the body. */
 export const NECK_START = 0.17;
 
 /** A slab of the tapered neck outline between x0 and x1. */
-export function neckShape(x0: number, x1: number): Shape {
+export function neckShape(x0: number, x1: number, board: Fretboard = GUITAR_BOARD): Shape {
+  const G = board.dims;
   const w = (x: number) =>
-    (GUITAR.neckWidthBody +
-      ((GUITAR.neckWidthNut - GUITAR.neckWidthBody) * (x - GUITAR.boardEndX)) /
-        (GUITAR.nutX - GUITAR.boardEndX)) /
-    2;
+    (G.neckWidthBody + ((G.neckWidthNut - G.neckWidthBody) * (x - G.boardEndX)) / (G.nutX - G.boardEndX)) / 2;
   const s = new Shape();
   s.moveTo(x0, w(x0));
   s.lineTo(x1, w(x1));
@@ -76,8 +123,8 @@ export function neckShape(x0: number, x1: number): Shape {
 }
 
 /** The neck's rounded back between x0 and x1. */
-export function neckGeometry(x0: number, x1: number): ExtrudeGeometry {
-  const neck = new ExtrudeGeometry(neckShape(x0, x1), {
+export function neckGeometry(x0: number, x1: number, board: Fretboard = GUITAR_BOARD): ExtrudeGeometry {
+  const neck = new ExtrudeGeometry(neckShape(x0, x1, board), {
     depth: 0.03,
     bevelEnabled: true,
     bevelThickness: 0.006,
@@ -89,26 +136,19 @@ export function neckGeometry(x0: number, x1: number): ExtrudeGeometry {
 }
 
 /** The fretboard between x0 and x1. */
-export function boardGeometry(x0: number, x1: number): ExtrudeGeometry {
-  const board = new ExtrudeGeometry(neckShape(x0, x1), { depth: 0.006, bevelEnabled: false });
-  board.translate(0, 0, GUITAR.boardTopZ - 0.006);
-  return board;
+export function boardGeometry(x0: number, x1: number, board: Fretboard = GUITAR_BOARD): ExtrudeGeometry {
+  const geometry = new ExtrudeGeometry(neckShape(x0, x1, board), { depth: 0.006, bevelEnabled: false });
+  geometry.translate(0, 0, board.dims.boardTopZ - 0.006);
+  return geometry;
 }
 
-export function createGuitarModel(): GuitarModel {
-  const root = new Group();
-  root.name = 'AirGuitar';
-
-  const topMat = new MeshStandardMaterial({ color: 0xd9a35b, roughness: 0.45 });
-  const sideMat = new MeshStandardMaterial({ color: 0x5a2e14, roughness: 0.5 });
-  const neckMat = new MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.6 });
-  const boardMat = new MeshStandardMaterial({ color: 0x2b1d14, roughness: 0.75 });
-  const darkMat = new MeshStandardMaterial({ color: 0x0d0907, roughness: 0.6 });
-  const metalMat = new MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.25, metalness: 0.9 });
-  const boneMat = new MeshStandardMaterial({ color: 0xf2e8d5, roughness: 0.4 });
-
-  // Body: the union of a lower and an upper bout gives the figure-of-eight
-  // outline. The top is a separate thin slab so it can be a lighter wood.
+/**
+ * The steel-string acoustic's body: the union of a lower and an upper bout
+ * gives the figure-of-eight outline. The top is a separate thin slab so it
+ * can be a lighter wood.
+ */
+function acousticBody({ top: topMat, side: sideMat, dark: darkMat, bone: boneMat }: Parameters<FrettedModelSpec['body']>[0]): GuitarBody {
+  const GUITAR = GUITAR_BOARD.dims;
   const lower = { c: -0.12, r: 0.185 };
   const upper = { c: 0.075, r: 0.135 };
   const halfWidth = (x: number) =>
@@ -128,13 +168,10 @@ export function createGuitarModel(): GuitarModel {
     const x = xMin + ((xMax - xMin) * i) / steps;
     outlinePoints.push(x, -halfWidth(x));
   }
-  const outline = new Shape();
-  outline.moveTo(outlinePoints[0], outlinePoints[1]);
-  for (let i = 2; i < outlinePoints.length; i += 2) outline.lineTo(outlinePoints[i], outlinePoints[i + 1]);
+  const outline = shapeOfOutline(outlinePoints);
 
   const body = new Group();
   body.name = 'Body';
-  root.add(body);
   const depth = 0.09;
   const sides = new ExtrudeGeometry(outline, { depth, bevelEnabled: false, curveSegments: 4 });
   sides.translate(0, 0, -depth - 0.003);
@@ -156,12 +193,59 @@ export function createGuitarModel(): GuitarModel {
   const saddle = named(new Mesh(new BoxGeometry(0.003, 0.075, 0.016), boneMat), 'Saddle');
   saddle.position.set(GUITAR.bridgeX, 0, 0.008);
   body.add(saddle);
+  // The 0.003 top sits on the sides: 0.093 deep in all.
+  return { group: body, outline: outlinePoints, depth: depth + 0.003, holeParts: ['Rosette', 'SoundHole'] };
+}
+
+/** A closed Shape through an outline's x, y pairs. */
+export function shapeOfOutline(points: readonly number[]): Shape {
+  const outline = new Shape();
+  outline.moveTo(points[0], points[1]);
+  for (let i = 2; i < points.length; i += 2) outline.lineTo(points[i], points[i + 1]);
+  return outline;
+}
+
+/** The steel-string acoustic guitar. */
+export const GUITAR_MODEL: FrettedModelSpec = {
+  name: 'AirGuitar',
+  board: GUITAR_BOARD,
+  neckStart: NECK_START,
+  colors: { top: 0xd9a35b, side: 0x5a2e14, neck: 0x8a5a2b, board: 0x2b1d14 },
+  body: acousticBody,
+  inlayFrets: [3, 5, 7, 9, 15, 17],
+  stringRadius: (s) => 0.0012 - s * 0.0001,
+  wound: (s) => s < 3,
+  head: { length: 0.19, width: 0.08, peg: 0.005 },
+  hudFromNut: [0.2, 0.07, 0.1],
+  physics: { mass: 2, size: [1.0, 0.38, 0.1], centre: [0.03, 0, -0.04] },
+};
+
+export function createGuitarModel(spec: FrettedModelSpec = GUITAR_MODEL): GuitarModel {
+  const board = spec.board;
+  const GUITAR = board.dims;
+  const STRING_COUNT = board.stringCount;
+  const { fretX, stringSpan } = board;
+  const root = new Group();
+  root.name = spec.name;
+
+  const topMat = new MeshStandardMaterial({ color: spec.colors.top, roughness: 0.45 });
+  const sideMat = new MeshStandardMaterial({ color: spec.colors.side, roughness: 0.5 });
+  const neckMat = new MeshStandardMaterial({ color: spec.colors.neck, roughness: 0.6 });
+  const boardMat = new MeshStandardMaterial({ color: spec.colors.board, roughness: 0.75 });
+  const darkMat = new MeshStandardMaterial({ color: 0x0d0907, roughness: 0.6 });
+  const metalMat = new MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.25, metalness: 0.9 });
+  const boneMat = new MeshStandardMaterial({ color: 0xf2e8d5, roughness: 0.4 });
+
+  const built = spec.body({ top: topMat, side: sideMat, neck: neckMat, board: boardMat, dark: darkMat, metal: metalMat, bone: boneMat });
+  const body = built.group;
+  body.name = 'Body';
+  root.add(body);
 
   // Neck and fretboard: tapered slabs from over the body to the nut.
-  const neck = named(new Mesh(neckGeometry(NECK_START, GUITAR.nutX + 0.004), neckMat), 'Neck');
+  const neck = named(new Mesh(neckGeometry(spec.neckStart, GUITAR.nutX + 0.004, board), neckMat), 'Neck');
   root.add(neck);
-  const board = named(new Mesh(boardGeometry(GUITAR.boardEndX, GUITAR.nutX), boardMat), 'Fretboard');
-  root.add(board);
+  const fretboardMesh = named(new Mesh(boardGeometry(GUITAR.boardEndX, GUITAR.nutX, board), boardMat), 'Fretboard');
+  root.add(fretboardMesh);
 
   const nut = named(new Mesh(new BoxGeometry(0.005, GUITAR.neckWidthNut, 0.008), boneMat), 'Nut');
   nut.position.set(GUITAR.nutX + 0.0025, 0, GUITAR.boardTopZ + 0.003);
@@ -186,29 +270,33 @@ export function createGuitarModel(): GuitarModel {
     root.add(dot);
     inlays.push(dot);
   };
-  for (const n of INLAY_FRETS) addInlay(n, 0);
+  for (const n of spec.inlayFrets) addInlay(n, 0);
   addInlay(12, 0.011);
   addInlay(12, -0.011);
 
-  // Headstock, tilted back like a real one, with tuners.
+  // Headstock, tilted back like a real one, with tuners: half the strings'
+  // on each side, the lower strings' on the +Y side.
   const head = new Group();
   head.name = 'Headstock';
   head.position.set(GUITAR.nutX + 0.005, 0, 0.002);
   head.rotation.y = (13 * Math.PI) / 180;
-  const plate = new Mesh(new BoxGeometry(0.19, 0.08, 0.016), neckMat);
-  plate.position.set(0.095, 0, 0);
+  const plate = new Mesh(new BoxGeometry(spec.head.length, spec.head.width, 0.016), neckMat);
+  plate.position.set(spec.head.length / 2, 0, 0);
   head.add(plate);
-  const pegGeo = new CylinderGeometry(0.005, 0.005, 0.03, 10);
-  const buttonGeo = new BoxGeometry(0.018, 0.012, 0.02);
+  const peg = spec.head.peg;
+  const pegGeo = new CylinderGeometry(peg, peg, 0.03, 10);
+  const buttonGeo = new BoxGeometry(peg * 3.6, peg * 2.4, 0.02);
+  const perSide = Math.ceil(STRING_COUNT / 2);
+  const pegStep = (spec.head.length - 0.09) / Math.max(1, perSide - 1);
   for (let i = 0; i < STRING_COUNT; i++) {
-    const side = i < 3 ? 1 : -1;
-    const x = 0.045 + (i % 3) * 0.05;
+    const side = i < perSide ? 1 : -1;
+    const x = 0.045 + (i % perSide) * pegStep;
     const post = new Mesh(pegGeo, metalMat);
     post.rotation.x = Math.PI / 2;
-    post.position.set(x, side * 0.026, 0.016);
+    post.position.set(x, side * (spec.head.width / 2 - 0.014), 0.016);
     head.add(post);
     const button = new Mesh(buttonGeo, metalMat);
-    button.position.set(x, side * 0.05, 0);
+    button.position.set(x, side * (spec.head.width / 2 + 0.01), 0);
     head.add(button);
   }
   root.add(head);
@@ -222,18 +310,17 @@ export function createGuitarModel(): GuitarModel {
   const dotGeo = new CylinderGeometry(0.0045, 0.0045, 0.003, 16);
   const dotMat = new MeshBasicMaterial({ color: 0x3dff8f });
   for (let s = 0; s < STRING_COUNT; s++) {
-    const wound = s < 3;
     const string = new Mesh(
       unit,
       new MeshStandardMaterial({
-        color: wound ? 0xc9a86a : 0xe6e6e6,
+        color: spec.wound(s) ? 0xc9a86a : 0xe6e6e6,
         roughness: 0.3,
         metalness: 0.85,
       }),
     );
     string.name = `String${s}`;
-    const radius = 0.0012 - s * 0.0001;
-    placeString(string, s, GUITAR.nutX, radius);
+    const radius = spec.stringRadius(s);
+    placeString(string, s, GUITAR.nutX, radius, board);
     root.add(string);
     strings.push(string);
 
@@ -244,7 +331,7 @@ export function createGuitarModel(): GuitarModel {
       depthWrite: false,
     });
     const glow = new Mesh(unit, mat);
-    placeString(glow, s, GUITAR.nutX, radius * 2.4);
+    placeString(glow, s, GUITAR.nutX, radius * 2.4, board);
     glow.visible = false;
     root.add(glow);
     vibrations.push(glow);
@@ -287,11 +374,13 @@ export function createGuitarModel(): GuitarModel {
   const hud = new LabelSprite(512, 256);
   hud.sprite.name = 'ChordDisplay';
   hud.sprite.scale.set(0.2, 0.1, 1);
-  hud.sprite.position.set(GUITAR.nutX + 0.2, 0.07, 0.1);
+  hud.sprite.position.set(GUITAR.nutX + spec.hudFromNut[0], spec.hudFromNut[1], spec.hudFromNut[2]);
   root.add(hud.sprite);
 
   return {
     root,
+    board,
+    neckStart: spec.neckStart,
     vibrations,
     vibrationMaterials,
     pressDots,
@@ -301,19 +390,22 @@ export function createGuitarModel(): GuitarModel {
     pickShadowMaterial,
     hud,
     body,
-    outline: outlinePoints,
+    outline: built.outline,
+    bodyDepth: built.depth,
+    holeParts: built.holeParts,
     neck,
-    board,
+    board3d: fretboardMesh,
     head,
     nut,
     frets,
     inlays,
     strings,
     materials: { top: topMat, side: sideMat, neck: neckMat, board: boardMat },
+    physics: spec.physics,
   };
 }
 
-function named<T extends Mesh>(mesh: T, name: string): T {
+export function named<T extends Mesh>(mesh: T, name: string): T {
   mesh.name = name;
   return mesh;
 }
@@ -326,11 +418,12 @@ const rotation = new Quaternion();
 
 /**
  * Stretches a unit cylinder along string `s` from the bridge to `stopX`
- * (the nut, or the fret a finger holds).
+ * (the nut, or the fret a finger holds), on `board` (the guitar's by default).
  */
-export function placeString(mesh: Mesh, s: number, stopX: number, radius?: number): void {
-  start.set(GUITAR.bridgeX, stringY(s, GUITAR.bridgeX), GUITAR.stringZ);
-  end.set(stopX, stringY(s, stopX), GUITAR.stringZ);
+export function placeString(mesh: Mesh, s: number, stopX: number, radius?: number, board: Fretboard = GUITAR_BOARD): void {
+  const G = board.dims;
+  start.set(G.bridgeX, board.stringY(s, G.bridgeX), G.stringZ);
+  end.set(stopX, board.stringY(s, stopX), G.stringZ);
   dir.subVectors(end, start);
   const r = radius ?? mesh.scale.x;
   mesh.scale.set(r, dir.length(), r);

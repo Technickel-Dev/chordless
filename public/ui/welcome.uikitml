@@ -6,7 +6,7 @@
   The panel is icon-first and has three parts that PanelSystem shows and hides:
   - the bar (always there): menu-open / menu-close and hint-toggle;
   - #menu: instrument tiles, the guitar tone, volume, reset, scene and XR controls;
-  - #hint: one strip of pictograms per instrument (hint-guitar, hint-violin, ...).
+  - #hint: one strip of pictograms per instrument (hint-guitar, hint-bass, ...).
   Choosing an instrument folds the menu away and shows that instrument's hint
   for a few seconds, so only the bar is left while playing.
 -->
@@ -69,7 +69,7 @@
 
   .tile {
     flex-direction: column;
-    width: 112px;
+    width: 91px;
     height: 104px;
     gap: 6px;
     justify-content: center;
@@ -197,6 +197,10 @@
         <ButtonIcon><Guitar></Guitar></ButtonIcon>
         <ButtonLabel class="tile-label">Guitar</ButtonLabel>
       </Button>
+      <Button id="instrument-bass" variant="secondary" class="tile">
+        <ButtonIcon><Speaker></Speaker></ButtonIcon>
+        <ButtonLabel class="tile-label">Bass</ButtonLabel>
+      </Button>
       <Button id="instrument-violin" variant="secondary" class="tile">
         <ButtonIcon><Music2></Music2></ButtonIcon>
         <ButtonLabel class="tile-label">Violin</ButtonLabel>
@@ -290,6 +294,23 @@
       <div class="step">
         <div class="step-icon"><AudioWaveform class="glyph"></AudioWaveform></div>
         <div class="step-text">Strum</div>
+        <div class="side">RIGHT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><Grab class="glyph"></Grab></div>
+        <div class="step-text">Pinch to move</div>
+        <div class="side">BOTH</div>
+      </div>
+    </div>
+    <div id="hint-bass" class="steps">
+      <div class="step">
+        <div class="step-icon"><Hand class="glyph"></Hand></div>
+        <div class="step-text">Press frets</div>
+        <div class="side">LEFT</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><Pointer class="glyph"></Pointer></div>
+        <div class="step-text">Pluck</div>
         <div class="side">RIGHT</div>
       </div>
       <div class="step">

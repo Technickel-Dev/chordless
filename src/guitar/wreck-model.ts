@@ -6,8 +6,8 @@
  */
 
 import { Box3, ExtrudeGeometry, Group, Matrix4, Mesh, Shape, Vector3 } from '@iwsdk/core';
-import { fretX, GUITAR, STRING_COUNT, stringY } from './geometry.js';
-import { boardGeometry, GuitarModel, NECK_START, neckGeometry } from './guitar-model.js';
+import { fretX } from './geometry.js';
+import { boardGeometry, GuitarModel, neckGeometry } from './guitar-model.js';
 import {
   fractureCells,
   pointInPolygon,
@@ -21,14 +21,13 @@ import {
 import { Hull, hullOf, HULL_SIZE } from '../smash/hull.js';
 import { RigidBody } from '../smash/tumble.js';
 
-/** Where the neck snaps: between the 5th and 6th frets, clear of the inlays. */
+/** Where the guitar's neck snaps: between the 5th and 6th frets, clear of the inlays. */
 export const BREAK_X = (fretX(5) + fretX(6)) / 2;
-const BODY_DEPTH = 0.093;
 const SHARD_COUNT = 9;
 /** Points round the body's rim, front and back, for the whole guitar. */
 const RIM_SAMPLES = 24;
-/** Mass per square metre of body outline, for a hollow body of about 1.2 kg. */
-const BODY_AREAL_MASS = 7;
+/** Mass per square metre of body outline per metre of depth: a hollow guitar body of about 1.2 kg. */
+const BODY_VOLUME_MASS = 7 / 0.093;
 
 /** A piece that flies off on its own. */
 export interface WreckPiece {
@@ -41,6 +40,8 @@ export interface WreckPiece {
 }
 
 export interface GuitarWreck {
+  /** Where the neck snaps, along it. */
+  breakX: number;
   /** The headstock end of the neck, from the break up. */
   upper: WreckPiece;
   /** The stub of neck left on the body. */
@@ -70,7 +71,14 @@ export interface GuitarWreck {
 }
 
 export function createGuitarWreck(model: GuitarModel): GuitarWreck {
-  const { root, materials } = model;
+  const { root, materials, board } = model;
+  const GUITAR = board.dims;
+  const { stringY } = board;
+  const STRING_COUNT = board.stringCount;
+  const NECK_START = model.neckStart;
+  const BODY_DEPTH = model.bodyDepth;
+  const BODY_AREAL_MASS = BODY_VOLUME_MASS * BODY_DEPTH;
+  const BREAK_X = (board.fretX(5) + board.fretX(6)) / 2;
 
   // Upper neck: headstock, nut, the first five frets and their inlays.
   const head = model.head;
@@ -109,17 +117,17 @@ export function createGuitarWreck(model: GuitarModel): GuitarWreck {
     new Vector3(BREAK_X, 0.027, -0.028),
     new Vector3(BREAK_X, -0.027, -0.028),
   ];
-  const lower = makePiece('NeckLower', new Vector3(0.22, 0, -0.006), 0.3, [0.26, 0.06, 0.04], lowerPoints);
+  const lower = makePiece('NeckLower', new Vector3(NECK_START + 0.05, 0, -0.006), 0.3, [0.26, 0.06, 0.04], lowerPoints);
   root.add(upper.pivot, lower.pivot);
 
   upper.inner.add(head, model.nut);
   model.frets.forEach((fret) => (fret.position.x > BREAK_X ? upper : lower).inner.add(fret));
   model.inlays.forEach((dot) => (dot.position.x > BREAK_X ? upper : lower).inner.add(dot));
   const halves = [
-    new Mesh(neckGeometry(BREAK_X, GUITAR.nutX + 0.004), materials.neck),
-    new Mesh(boardGeometry(BREAK_X, GUITAR.nutX), materials.board),
-    new Mesh(neckGeometry(NECK_START, BREAK_X), materials.neck),
-    new Mesh(boardGeometry(GUITAR.boardEndX, BREAK_X), materials.board),
+    new Mesh(neckGeometry(BREAK_X, GUITAR.nutX + 0.004, board), materials.neck),
+    new Mesh(boardGeometry(BREAK_X, GUITAR.nutX, board), materials.board),
+    new Mesh(neckGeometry(NECK_START, BREAK_X, board), materials.neck),
+    new Mesh(boardGeometry(GUITAR.boardEndX, BREAK_X, board), materials.board),
   ];
   ['NeckHalfUpper', 'BoardHalfUpper', 'NeckHalfLower', 'BoardHalfLower'].forEach((name, i) => {
     halves[i].name = name;
@@ -234,11 +242,13 @@ export function createGuitarWreck(model: GuitarModel): GuitarWreck {
     guitarPoints.push(upperPoints[i]);
     regions.push(upperRegions[i]);
   }
-  const centre = new Vector3(0.03, 0, -0.04);
+  const { mass, size } = model.physics;
+  const centre = new Vector3().fromArray(model.physics.centre);
   const points = flatten(guitarPoints, new Vector3());
-  const guitar = new RigidBody(flatten(guitarPoints, centre), 2, boxInertia(2, [1.0, 0.38, 0.1]));
+  const guitar = new RigidBody(flatten(guitarPoints, centre), mass, boxInertia(mass, size));
 
   return {
+    breakX: BREAK_X,
     upper,
     lower,
     halves,
@@ -260,7 +270,7 @@ export function createGuitarWreck(model: GuitarModel): GuitarWreck {
 /** The neck has snapped: swap the whole neck for its two halves. */
 export function showNeckSnapped(model: GuitarModel, wreck: GuitarWreck): void {
   model.neck.visible = false;
-  model.board.visible = false;
+  model.board3d.visible = false;
   for (const half of wreck.halves) half.visible = true;
   for (const stub of wreck.nutStubs) stub.visible = true;
 }
@@ -275,9 +285,12 @@ export function showCracked(model: GuitarModel, wreck: GuitarWreck): void {
   for (const shard of wreck.shards) shard.pivot.visible = true;
 }
 
-/** The shard under the sound hole has gone, and the hole with it. */
+/** The shard under the sound hole (or the pickup) has gone, and the hole with it. */
 export function showHoleGone(model: GuitarModel): void {
-  for (const name of ['Rosette', 'SoundHole']) model.body.getObjectByName(name)!.visible = false;
+  for (const name of model.holeParts) {
+    const part = model.body.getObjectByName(name);
+    if (part != null) part.visible = false;
+  }
 }
 
 /** The shard with the bridge on it has gone: nothing holds the strings' ends there. */
@@ -300,7 +313,7 @@ export function restoreGuitar(model: GuitarModel, wreck: GuitarWreck): void {
   for (const string of model.strings) string.visible = true;
   for (const part of model.body.children) part.visible = true;
   model.neck.visible = true;
-  model.board.visible = true;
+  model.board3d.visible = true;
 }
 
 function makePiece(

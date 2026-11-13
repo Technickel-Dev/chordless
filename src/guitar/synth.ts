@@ -10,12 +10,100 @@
 
 export type GuitarTone = 'clean' | 'drive';
 
+/** A string stopped outright (a new note plucked on it), in seconds. */
+const SNAP_SECONDS = 0.025;
+
+/**
+ * What makes one plucked instrument sound like itself: the clean chain's
+ * tone shaping, the drive's cabinet, and how its strings are plucked.
+ */
+export interface GuitarVoice {
+  /** Run the clean sound through the modelled acoustic body (the guitar), or straight to the filters (an electric). */
+  acousticBody: boolean;
+  /** Highpass on the clean sound: how low the instrument radiates. */
+  radiationHz: number;
+  /** Low shelf at `lowShelfHz`, dB. */
+  lowShelfHz: number;
+  lowShelfDb: number;
+  /** A peak at `presenceHz`, dB. */
+  presenceHz: number;
+  presenceDb: number;
+  /** High shelf from 1.5 kHz, dB. */
+  brightDb: number;
+  /** Lowpass on the clean sound. */
+  topHz: number;
+  cleanLevel: number;
+  /** The drive's mid peak and speaker-cabinet lowpass. */
+  driveMidHz: number;
+  cabinetHz: number;
+  driveLevel: number;
+  /** Per note: the pluck filter opens from `pluckToneHz` by up to `pluckToneRange` with velocity. */
+  pluckToneHz: number;
+  pluckToneRange: number;
+  /** Where the string is plucked, as a fraction of its length from the bridge. */
+  pluckPosition: number;
+  /** How round the plucking finger is: 0 a sharp pick, toward 1 a soft pad. */
+  softness: number;
+  /** Loop filter blend; 0.5 is the classic two-point average, lower is brighter. */
+  loopBlend: number;
+  /** Seconds each rendered note lasts. */
+  noteSeconds: number;
+  /**
+   * How long a damped string takes to fall silent: a finger lifting off it,
+   * or a fingertip resting on it. A steel string stops almost at once; a
+   * bass string's long, low wave dies away under the finger.
+   */
+  releaseSeconds: number;
+  /** A cut (or boost) at `mudHz`, dB, where low-mid mud builds up; 0 leaves the sound alone. */
+  mudHz: number;
+  mudDb: number;
+  /** How much of the room reverb is mixed in. */
+  roomWet: number;
+  /**
+   * The safety limiter before the speakers: where it starts (dBFS), its
+   * knee (dB), and how fast it grabs and lets go (seconds). A limiter that
+   * grabs within a cycle of a low note reshapes the wave, which a bass
+   * hears as distortion.
+   */
+  limiter: { threshold: number; knee: number; attack: number; release: number };
+}
+
+/** The steel-string acoustic. */
+export const ACOUSTIC_VOICE: GuitarVoice = {
+  acousticBody: true,
+  // A guitar top radiates high frequencies far better than low ones: it
+  // barely radiates below its air resonance (a real low E is heard mostly
+  // through its harmonics), stays light in the bass, and is strongest in
+  // the 1-3 kHz presence region.
+  radiationHz: 95,
+  lowShelfHz: 250,
+  lowShelfDb: -5,
+  presenceHz: 2200,
+  presenceDb: 4,
+  brightDb: 5,
+  topHz: 9000,
+  cleanLevel: 0.7,
+  driveMidHz: 850,
+  cabinetHz: 4200,
+  driveLevel: 0.22,
+  pluckToneHz: 3000,
+  pluckToneRange: 16000,
+  pluckPosition: 0.2,
+  softness: 0.15,
+  loopBlend: 0.4,
+  noteSeconds: 3.5,
+  releaseSeconds: SNAP_SECONDS,
+  mudHz: 250,
+  mudDb: 0,
+  roomWet: 0.25,
+  limiter: { threshold: -10, knee: 6, attack: 0.002, release: 0.15 },
+};
+
 interface Voice {
   source: AudioBufferSourceNode;
   gain: GainNode;
 }
 
-const NOTE_SECONDS = 3.5;
 const MUTED_SECONDS = 0.35;
 
 export class GuitarSynth {
@@ -28,53 +116,65 @@ export class GuitarSynth {
   private readonly voices: (Voice | null)[];
   /** White noise for knocks and cracks when the guitar hits something. */
   private readonly noise: AudioBuffer;
+  private readonly voice: GuitarVoice;
+  /** The end of the chain, just before the speakers: what a listener hears. */
+  readonly output: AudioNode;
 
   /**
    * Plays through a live AudioContext by default; pass an
    * OfflineAudioContext to render to a buffer instead (for listening tests).
    */
-  constructor(stringCount: number, context?: BaseAudioContext) {
+  constructor(stringCount: number, context?: BaseAudioContext, voice: GuitarVoice = ACOUSTIC_VOICE) {
     this.ctx = context ?? new AudioContext({ latencyHint: 'interactive' });
+    this.voice = voice;
     const ctx = this.ctx;
     this.voices = Array(stringCount).fill(null);
 
     this.input = ctx.createGain();
 
-    // Clean: the string through a model of an acoustic guitar body, with
-    // the very top rolled off as a real top plate and room do.
-    const body = ctx.createConvolver();
-    body.normalize = false;
-    body.buffer = makeBodyImpulse(ctx);
+    // Clean: the string through a model of an acoustic guitar body (or,
+    // for an electric, straight from the pickup), with the very top rolled
+    // off as a real top plate and room do (or as an amp's speaker does).
     const topRolloff = ctx.createBiquadFilter();
     topRolloff.type = 'lowpass';
-    topRolloff.frequency.value = 9000;
+    topRolloff.frequency.value = voice.topHz;
     topRolloff.Q.value = 0.5;
-    // A guitar top radiates high frequencies far better than low ones: it
-    // barely radiates below its air resonance (a real low E is heard mostly
-    // through its harmonics), stays light in the bass, and is strongest in
-    // the 1-3 kHz presence region.
     const radiation = ctx.createBiquadFilter();
     radiation.type = 'highpass';
-    radiation.frequency.value = 95;
+    radiation.frequency.value = voice.radiationHz;
     radiation.Q.value = 0.7;
     const lightBass = ctx.createBiquadFilter();
     lightBass.type = 'lowshelf';
-    lightBass.frequency.value = 250;
-    lightBass.gain.value = -5;
+    lightBass.frequency.value = voice.lowShelfHz;
+    lightBass.gain.value = voice.lowShelfDb;
     const presence = ctx.createBiquadFilter();
     presence.type = 'peaking';
-    presence.frequency.value = 2200;
+    presence.frequency.value = voice.presenceHz;
     presence.Q.value = 0.7;
-    presence.gain.value = 4;
+    presence.gain.value = voice.presenceDb;
     const steel = ctx.createBiquadFilter();
     steel.type = 'highshelf';
     steel.frequency.value = 1500;
-    steel.gain.value = 5;
+    steel.gain.value = voice.brightDb;
     const cleanLevel = ctx.createGain();
-    cleanLevel.gain.value = 0.7;
+    cleanLevel.gain.value = voice.cleanLevel;
     this.cleanBus = ctx.createGain();
-    this.input
-      .connect(body)
+    let pickup: AudioNode = this.input;
+    if (voice.acousticBody) {
+      const body = ctx.createConvolver();
+      body.normalize = false;
+      body.buffer = makeBodyImpulse(ctx);
+      pickup = this.input.connect(body);
+    }
+    if (voice.mudDb !== 0) {
+      const mud = ctx.createBiquadFilter();
+      mud.type = 'peaking';
+      mud.frequency.value = voice.mudHz;
+      mud.Q.value = 1;
+      mud.gain.value = voice.mudDb;
+      pickup = pickup.connect(mud);
+    }
+    pickup
       .connect(radiation)
       .connect(lightBass)
       .connect(presence)
@@ -91,15 +191,15 @@ export class GuitarSynth {
     clipper.oversample = '4x';
     const mid = ctx.createBiquadFilter();
     mid.type = 'peaking';
-    mid.frequency.value = 850;
+    mid.frequency.value = voice.driveMidHz;
     mid.Q.value = 0.8;
     mid.gain.value = 5;
     const cabinet = ctx.createBiquadFilter();
     cabinet.type = 'lowpass';
-    cabinet.frequency.value = 4200;
+    cabinet.frequency.value = voice.cabinetHz;
     cabinet.Q.value = 0.9;
     const driveLevel = ctx.createGain();
-    driveLevel.gain.value = 0.22;
+    driveLevel.gain.value = voice.driveLevel;
     this.driveBus = ctx.createGain();
     this.input
       .connect(preamp)
@@ -117,18 +217,19 @@ export class GuitarSynth {
     const reverb = ctx.createConvolver();
     reverb.buffer = makeRoomImpulse(ctx, 1.4);
     const wet = ctx.createGain();
-    wet.gain.value = 0.25;
+    wet.gain.value = voice.roomWet;
     this.master.connect(reverb).connect(wet);
 
     const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -10;
-    limiter.knee.value = 6;
+    limiter.threshold.value = voice.limiter.threshold;
+    limiter.knee.value = voice.limiter.knee;
     limiter.ratio.value = 12;
-    limiter.attack.value = 0.002;
-    limiter.release.value = 0.15;
+    limiter.attack.value = voice.limiter.attack;
+    limiter.release.value = voice.limiter.release;
     this.master.connect(limiter);
     wet.connect(limiter);
     limiter.connect(ctx.destination);
+    this.output = limiter;
 
     this.noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.6), ctx.sampleRate);
     const samples = this.noise.getChannelData(0);
@@ -203,13 +304,15 @@ export class GuitarSynth {
     // A live context plays nothing until a user gesture starts it; an
     // offline one is suspended until rendering, which is fine.
     if (this.ctx instanceof AudioContext && this.ctx.state !== 'running') return;
-    this.choke(stringIndex, when);
+    // The pick or finger stops the old note as it plucks the new one.
+    this.choke(stringIndex, when, SNAP_SECONDS);
 
     const source = this.ctx.createBufferSource();
     source.buffer = this.getBuffer(midi, muted);
     const tone = this.ctx.createBiquadFilter();
     tone.type = 'lowpass';
-    tone.frequency.value = (legato ? 2000 : 3000) + 16000 * velocity ** 1.5;
+    const v = this.voice;
+    tone.frequency.value = v.pluckToneHz * (legato ? 2 / 3 : 1) + v.pluckToneRange * velocity ** 1.5;
     tone.Q.value = 0.5;
     const gain = this.ctx.createGain();
     gain.gain.value = (muted ? 0.9 : 0.55) * velocity;
@@ -229,15 +332,27 @@ export class GuitarSynth {
     return this.voices[stringIndex] != null;
   }
 
-  /** Damps a string quickly, like resting a palm on it. */
-  choke(stringIndex: number, when = this.ctx.currentTime): void {
+  /**
+   * Damps a string, like resting a palm on it, falling silent over
+   * `release` seconds (the voice's release unless given). A short release
+   * ramps straight down; a longer one dies away exponentially, as a string
+   * does under a finger, so a low note ends without a click.
+   */
+  choke(stringIndex: number, when = this.ctx.currentTime, release = this.voice.releaseSeconds): void {
     const voice = this.voices[stringIndex];
     if (voice == null) return;
     const t = Math.max(when, this.ctx.currentTime);
-    voice.gain.gain.cancelScheduledValues(t);
-    voice.gain.gain.setValueAtTime(voice.gain.gain.value, t);
-    voice.gain.gain.linearRampToValueAtTime(0, t + 0.025);
-    voice.source.stop(t + 0.03);
+    const gain = voice.gain.gain;
+    gain.cancelScheduledValues(t);
+    gain.setValueAtTime(gain.value, t);
+    if (release <= SNAP_SECONDS) {
+      gain.linearRampToValueAtTime(0, t + release);
+      voice.source.stop(t + release + 0.005);
+    } else {
+      // Down 60 dB over the release.
+      gain.setTargetAtTime(0, t, release / 6.9);
+      voice.source.stop(t + release);
+    }
     this.voices[stringIndex] = null;
   }
 
@@ -277,7 +392,7 @@ export class GuitarSynth {
     const key = `${midi}:${muted ? 'm' : 'o'}`;
     let buffer = this.buffers.get(key);
     if (buffer == null) {
-      buffer = renderPluck(this.ctx, midiToHz(midi), muted);
+      buffer = renderPluck(this.ctx, midiToHz(midi), muted, this.voice);
       this.buffers.set(key, buffer);
     }
     return buffer;
@@ -296,14 +411,10 @@ export function midiToHz(midi: number): number {
   return 440 * 2 ** ((midi - 69) / 12);
 }
 
-/** Where the string is plucked, as a fraction of its length from the bridge. */
-const PLUCK_POSITION = 0.2;
 /** Detune of the second vibration direction, in cents. */
 const POLARIZATION_DETUNE = 0.8;
 /** Loudness every rendered note is matched to, over its attack. */
 const NOTE_RMS = 0.3;
-/** Loop filter blend; 0.5 is the classic two-point average. */
-const LOOP_BLEND = 0.4;
 
 /**
  * A plucked note: two Karplus-Strong strings, one per direction the real
@@ -316,16 +427,22 @@ const LOOP_BLEND = 0.4;
  * displacement's rate of change. That keeps a steel string's upper
  * harmonics (falling as 1/n, not 1/n^2) without the hiss of a noise burst.
  */
-export function renderPluck(ctx: BaseAudioContext, freq: number, muted: boolean): AudioBuffer {
+export function renderPluck(
+  ctx: BaseAudioContext,
+  freq: number,
+  muted: boolean,
+  voice: GuitarVoice = ACOUSTIC_VOICE,
+): AudioBuffer {
   const sr = ctx.sampleRate;
-  const length = Math.floor(sr * (muted ? MUTED_SECONDS : NOTE_SECONDS));
+  const length = Math.floor(sr * (muted ? MUTED_SECONDS : voice.noteSeconds));
   const buffer = ctx.createBuffer(1, length, sr);
   const out = buffer.getChannelData(0);
 
   const t60 = decaySeconds(freq, muted);
-  const softness = muted ? 0.75 : 0.15;
-  const across = renderString(sr, freq, length, t60 * 0.55, softness);
-  const along = renderString(sr, freq * 2 ** (POLARIZATION_DETUNE / 1200), length, t60 * 1.15, softness);
+  const softness = muted ? 0.75 : voice.softness;
+  const pluck = { position: voice.pluckPosition, blend: voice.loopBlend };
+  const across = renderString(sr, freq, length, t60 * 0.55, softness, pluck);
+  const along = renderString(sr, freq * 2 ** (POLARIZATION_DETUNE / 1200), length, t60 * 1.15, softness, pluck);
   let peak = 0;
   // Start the slope from the first sample, not from silence: the shape's
   // first value is not zero, and a step out of silence would be a click.
@@ -359,7 +476,7 @@ export function renderPluck(ctx: BaseAudioContext, freq: number, muted: boolean)
  *
  * It starts from the shape of a plucked string: pulled into a triangle at
  * the pluck point and let go, which gives harmonics that fall off like a
- * real string's (and vanish at multiples of 1/PLUCK_POSITION), rather than
+ * real string's (and vanish at multiples of one over the pluck position), rather than
  * the flat, hissy spectrum of a noise burst. A little noise adds the
  * finger's attack, and `softness` rounds the corner like a fingertip.
  */
@@ -369,7 +486,9 @@ function renderString(
   length: number,
   t60: number,
   softness: number,
+  pluck: { position: number; blend: number },
 ): Float32Array {
+  const LOOP_BLEND = pluck.blend;
   const out = new Float32Array(length);
   // The loop filter (1 - b) x[n] + b x[n-1] delays by b samples; b < 0.5
   // lets high harmonics ring longer, as on a steel string.
@@ -380,7 +499,7 @@ function renderString(
   const loss = 0.001 ** (1 / (t60 * freq));
 
   const shape = new Float32Array(n);
-  const apex = Math.max(1, Math.round(n * PLUCK_POSITION));
+  const apex = Math.max(1, Math.round(n * pluck.position));
   // The output is the shape's slope, so the attack noise is sized against
   // the triangle's slope (1 / apex), not its height, or it would be hiss.
   const noise = 0.25 / apex;

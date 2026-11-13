@@ -504,6 +504,8 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
           // app would miss.
           const advance = Math.min(step, MAX_STEP);
           clock += advance;
+          // For video capture: where the performance clock is against the wall clock.
+          window.__performTick?.(performance.now(), clock);
           const t = clock;
           pose(t, Math.max(0.001, advance));
           watch();

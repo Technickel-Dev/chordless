@@ -317,6 +317,8 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
           // How long frames run now (smoothed, so one stall does not jolt the hands).
           frameLength += (Math.max(LEAD, Math.min(0.05, step)) - frameLength) * 0.1;
           clock += Math.min(step, MAX_STEP);
+          // For video capture: where the performance clock is against the wall clock.
+          window.__performTick?.(performance.now(), clock);
           pose(clock);
           frameCount++;
           let index = -1;

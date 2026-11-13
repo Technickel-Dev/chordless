@@ -611,6 +611,8 @@ async function perform(song, { tempo = song.tempo, onEvent = () => {} } = {}) {
           wall = now;
           if (step > MAX_STEP) stalls++;
           clock += Math.min(step, MAX_STEP);
+          // For video capture: where the performance clock is against the wall clock.
+          window.__performTick?.(performance.now(), clock);
           // What the app plays this frame is recorded against this clock.
           current = { t: clock, amp: [0, 0, 0, 0], midi: [0, 0, 0, 0] };
           frames.push(current);

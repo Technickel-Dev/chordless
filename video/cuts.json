@@ -1,0 +1,38 @@
+{
+ "smash-guitar": [
+  38,
+  40
+ ],
+ "smash-drums": [
+  14,
+  22
+ ],
+ "smash-piano": [
+  20,
+  24
+ ],
+ "smash-trumpet": [
+  14,
+  18
+ ],
+ "smash-violin": [
+  15,
+  24
+ ],
+ "smash-cymbals": [
+  15,
+  19
+ ],
+ "env-space-station": 12,
+ "env-volcano-rim": 12,
+ "env-pinball": 12,
+ "env-bouncy-castle": 12,
+ "env-snow-globe": 12,
+ "env-lava-lamp": 12,
+ "env-giant-turtle": 12,
+ "env-upside-down-room": 12,
+ "env-stadium": 12,
+ "env-desert-canyon": 12,
+ "env-ice-cave": 12,
+ "env-record-player": 12
+}

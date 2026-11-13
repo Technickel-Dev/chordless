@@ -286,7 +286,7 @@ joins[0] = tW;
 // ---- The tutti: the instruments smashed, each blow on a cymbal crash.
 const CRASHES = ['crash-violin', 'crash-trumpet', 'crash-cello', 'crash-cymbals', 'crash-drums', 'crash-piano'];
 /** Punch-ins for the smashes that happen small in the frame: [zoom, x, y]. */
-const CRASH_ZOOM = { 'crash-violin': [1.7, 0.6, 0.55], 'crash-trumpet': [1.6, 0.5, 0.42], 'crash-cello': [1.3, 0.62, 0.5], 'crash-cymbals': [1.5, 0.5, 0.55] };
+const CRASH_ZOOM = { 'crash-violin': [1.3, 0.4, 0.6], 'crash-trumpet': [1.8, 0.52, 0.42], 'crash-cello': [1.25, 0.5, 0.42], 'crash-cymbals': [1.4, 0.55, 0.5], 'crash-piano': [1.5, 0.45, 0.5] };
 /** When, in a smash take, its biggest blow lands: the loudest sound near any marked blow. */
 function impactOf(name) {
   const take = readTake(name);

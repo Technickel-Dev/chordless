@@ -3,7 +3,7 @@
  * Three.js or IWSDK imports, so the rules can be unit tested in Node.
  */
 
-import { GUITAR, stringY } from './geometry.js';
+import { type Fretboard, GUITAR_BOARD } from './geometry.js';
 
 /** Which part of the guitar struck the floor. */
 export const Region = { Body: 0, Neck: 1, Head: 2 } as const;
@@ -106,7 +106,7 @@ export function intactStrings(d: GuitarDamage): number {
  * allocates nothing). (x, y) is where it landed on the guitar, and
  * `shardCentres` the x, y of each shard: what is near the hit is what gets
  * hurt, so hits in one spot break that spot first. `random` varies which of
- * the nearest strings snaps.
+ * the nearest strings snaps. `board` is the instrument's fretboard (the guitar's by default).
  */
 export function applyImpact(
   d: GuitarDamage,
@@ -117,6 +117,7 @@ export function applyImpact(
   shardCentres: readonly number[],
   random: () => number,
   out: ImpactOutcome,
+  board: Fretboard = GUITAR_BOARD,
 ): ImpactOutcome {
   out.loss = 0;
   out.snapped.length = 0;
@@ -183,7 +184,7 @@ export function applyImpact(
     let best = Infinity;
     for (let s = 0; s < d.strings.length; s++) {
       if (!d.strings[s]) continue;
-      const distance = Math.abs(stringY(s, Math.min(x, GUITAR.nutX)) - y) + random() * 0.012;
+      const distance = Math.abs(board.stringY(s, Math.min(x, board.dims.nutX)) - y) + random() * 0.012;
       if (distance < best) {
         best = distance;
         nearest = s;

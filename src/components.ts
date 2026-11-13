@@ -7,6 +7,7 @@
 
 import { defineComponents } from '@iwsdk/core';
 import { AirGuitar } from './guitar/air-guitar-component.js';
+import { AirBass } from './bass/air-bass-component.js';
 import { AirCello } from './cello/air-cello-component.js';
 import { AirCymbals } from './cymbals/air-cymbals-component.js';
 import { AirDrums } from './drums/air-drums-component.js';
@@ -18,4 +19,4 @@ import { AirTrumpet } from './trumpet/air-trumpet-component.js';
 import { AirViolin } from './violin/air-violin-component.js';
 import { Smashable } from './smash/smashable-component.js';
 
-export default defineComponents([AirGuitar, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums, AirTrumpet, AirTrombone, AirHorn, Smashable]);
+export default defineComponents([AirGuitar, AirBass, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums, AirTrumpet, AirTrombone, AirHorn, Smashable]);

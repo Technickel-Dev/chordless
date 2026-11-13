@@ -1,7 +1,8 @@
 /**
  * Anatomical hand rig for driving IWER's emulated hands frame by frame.
  * Loaded into the page through Vite, so it uses the app's own fretboard
- * geometry. Everything is laid out in guitar space (see
+ * geometry: the guitar's, or another fretted instrument's after
+ * useBoard(). Everything is laid out in guitar space (see
  * src/guitar/geometry.ts) and converted to IWER's wrist-relative hand pose.
  *
  * The hand is a real one: knuckles a fixed hand-width apart, fingers and
@@ -12,8 +13,20 @@
  * knuckles to reach frets further apart than the hand is wide.
  */
 
-import { fretAt, fretX, GUITAR, nearestString, STRING_COUNT, stringSpacing, stringSpan, stringY } from '/src/guitar/geometry.ts';
+import { GUITAR_BOARD } from '/src/guitar/geometry.ts';
 import { PRESS } from '/src/guitar/fretting.ts';
+
+/** The fretboard the hands play (one at a time); the guitar's unless useBoard() says otherwise. */
+let B = GUITAR_BOARD;
+export function useBoard(board) {
+  B = board;
+}
+const fretAt = (x) => B.fretAt(x);
+const fretX = (n) => B.fretX(n);
+const nearestString = (x, y, max) => B.nearestString(x, y, max);
+const stringSpacing = (x) => B.stringSpacing(x);
+const stringSpan = (x) => B.stringSpan(x);
+const stringY = (s, x) => B.stringY(s, x);
 
 export const FINGERS = ['index', 'middle', 'ring', 'pinky'];
 
@@ -51,8 +64,9 @@ const NECK_BACK_Z = -0.028;
 
 /** Half the fretboard's width at x (it widens from nut to body like the model's). */
 function neckHalfWidth(x) {
-  const t = (x - GUITAR.boardEndX) / (GUITAR.nutX - GUITAR.boardEndX);
-  return (GUITAR.neckWidthBody + (GUITAR.neckWidthNut - GUITAR.neckWidthBody) * t) / 2;
+  const G = B.dims;
+  const t = (x - G.boardEndX) / (G.nutX - G.boardEndX);
+  return (G.neckWidthBody + (G.neckWidthNut - G.neckWidthBody) * t) / 2;
 }
 
 /** Flexion limits in degrees: knuckle (MCP), middle joint (PIP), end joint (DIP). */
@@ -79,14 +93,15 @@ export function slotX(n, fraction = 0.35) {
 /** Where a fingertip presses string `s` at fret `n`. */
 export function pressPoint(s, n, fraction = 0.35, depth = 0.003) {
   const x = slotX(n, fraction);
-  return v(x, stringY(s, x), GUITAR.stringZ - depth);
+  return v(x, stringY(s, x), B.dims.stringZ - depth);
 }
 
 /** Midpoint between two strings (gap g lies between strings g-1 and g). */
 export function gapY(g, x = 0) {
-  const half = (stringSpan(x) / 5) * 0.5;
+  const last = B.stringCount - 1;
+  const half = (stringSpan(x) / last) * 0.5;
   if (g <= 0) return stringY(0, x) + half;
-  if (g >= 6) return stringY(5, x) - half;
+  if (g > last) return stringY(last, x) - half;
   return (stringY(g - 1, x) + stringY(g, x)) / 2;
 }
 
@@ -142,9 +157,11 @@ function violation(mcp, pip, dip) {
  */
 export function padStrays(tip, dip, pip) {
   const fret = fretAt(tip[0]);
-  if (fret === 0 || tip[2] - GUITAR.stringZ > PRESS.above) return 0;
+  const stringZ = B.dims.stringZ;
+  const STRING_COUNT = B.stringCount;
+  if (fret === 0 || tip[2] - stringZ > PRESS.above) return 0;
   const string = nearestString(tip[0], tip[1]);
-  const low = (p) => p[2] - GUITAR.stringZ <= PRESS.above;
+  const low = (p) => p[2] - stringZ <= PRESS.above;
   let strays = 0;
   for (const [a, b] of [[tip, dip], [dip, pip]]) {
     const flat = low(a) && low(b);
@@ -153,7 +170,7 @@ export function padStrays(tip, dip, pip) {
     for (let i = 1; i <= 4; i++) {
       const p = lerp(a, b, (i / 4) * reach);
       // Once a string is held it stays held up to the release height.
-      if (p[2] - GUITAR.stringZ > PRESS.release) break;
+      if (p[2] - stringZ > PRESS.release) break;
       // Leaning toward a neighbouring string strays; past the low or high E,
       // over the fretboard's edge, there is no string to touch.
       const signed = (p[1] - stringY(string, p[0])) / stringSpacing(p[0]);
@@ -394,7 +411,7 @@ export function spaceFreeFingers(tips, knuckles, pressedOf, axis, gap = 0.017) {
 export function leftHand({ position, tips }) {
   const hx = (slotX(position) + slotX(position + 3)) / 2;
   const edge = -stringSpan(hx) / 2;
-  const pressingOf = (f) => Math.min(1, Math.max(0, (GUITAR.stringZ + 0.02 - tips[f][2]) / 0.02));
+  const pressingOf = (f) => Math.min(1, Math.max(0, (B.dims.stringZ + 0.02 - tips[f][2]) / 0.02));
   // The palm sits under the neck, as a player's does: the knuckles just
   // beyond the treble edge of the fretboard, about level with the strings,
   // and the wrist below, so the fingers arch over the fretboard to the
@@ -409,7 +426,7 @@ export function leftHand({ position, tips }) {
   }
   const neckEdge = -neckHalfWidth(hx);
   const knuckleY = Math.min(neckEdge - KNUCKLE_GAP, Math.max(neckEdge - TREBLE_REACH, across / weight - 0.05));
-  const middleKnuckle = v(hx, knuckleY, GUITAR.stringZ + KNUCKLE_HEIGHT);
+  const middleKnuckle = v(hx, knuckleY, B.dims.stringZ + KNUCKLE_HEIGHT);
   const forward = norm(v(0, 0.33, 0.94));
   const wrist = sub(middleKnuckle, scale(forward, PALM_LENGTH));
   const hand = handBasis(wrist, forward, v(1, 0, 0), false);
@@ -480,7 +497,7 @@ export function rightHand({ wrist, indexTip }) {
   for (const f of FINGERS) {
     const k = hand.knuckles[f];
     // Resting fingers hang relaxed beside the index, just above the strings.
-    const rest = v(k[0], k[1] - 0.04, Math.max(GUITAR.stringZ + 0.015, k[2] - 0.05));
+    const rest = v(k[0], k[1] - 0.04, Math.max(B.dims.stringZ + 0.015, k[2] - 0.05));
     const target = f === 'index' ? indexTip : rest;
     Object.assign(
       joints,
@@ -490,7 +507,7 @@ export function rightHand({ wrist, indexTip }) {
   const thumbBase = add(add(wrist, scale(hand.lateral, 0.018)), scale(hand.forward, 0.012));
   const thumbDir = norm(add(add(scale(hand.lateral, 0.6), scale(hand.forward, 0.55)), scale(hand.palm, 0.45)));
   // The thumb floats over the bass strings.
-  const thumbTip = v(wrist[0] + 0.05, stringY(0, wrist[0] + 0.05) + 0.02, GUITAR.stringZ + 0.03);
+  const thumbTip = v(wrist[0] + 0.05, stringY(0, wrist[0] + 0.05) + 0.02, B.dims.stringZ + 0.03);
   Object.assign(joints, solveThumb(thumbBase, thumbDir, thumbTip, hand));
   return joints;
 }

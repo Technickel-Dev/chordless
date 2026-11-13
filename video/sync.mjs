@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { BEAT, secondsOfBeat } from './score.mjs';
+import { BEAT, secondsOfBeat, trailerPart } from './score.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const TAKES = path.join(HERE, 'build', 'takes');
@@ -74,7 +74,54 @@ export function onsets(take, from = 0, to = Infinity, { rate = 4000, hop = 0.005
   return out;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+/**
+ * How far a take's sound sits behind its performer's clock, in seconds, for
+ * its `n`th performance: the shift that best lines the score's notes up with
+ * the rises in the take's sound, all notes at once (so a dense part, where
+ * the nearest onset is often a neighbour's, still gives a clean answer).
+ * The capture's audio delay is not the same from run to run, so each take
+ * is measured. `score` is how much better the best shift fits than the
+ * average one; a low score (a smooth, bowed part) means the answer is weak.
+ */
+export function soundLag(name, n = 0, { from = -0.15, to = 0.2, step = 0.0025 } = {}) {
+  const take = readTake(name);
+  const m = take.marks.filter((x) => x.what === 'perform')[n];
+  const map = beatMap(take, n);
+  const times = trailerPart(m.inst)
+    .events.map((e) => secondsOfBeat(e.beat))
+    .filter((t) => t >= map.first - 1e-6 && t <= map.last)
+    .map((t) => map.at(t));
+  const t0 = Math.max(0, times[0] - 1);
+  const t1 = times.at(-1) + 0.6;
+  const rate = 4000;
+  const hop = 0.0025;
+  const r = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-ss', String(t0), '-t', String(t1 - t0), '-i', path.join(TAKES, `${name}.audio.wav`), '-ac', '1', '-ar', String(rate), '-f', 's16le', '-'], { maxBuffer: 1 << 30 });
+  const pcm = new Int16Array(r.stdout.buffer, r.stdout.byteOffset, r.stdout.length >> 1);
+  const k = Math.round(rate * hop);
+  const db = [];
+  for (let i = 0; i + k <= pcm.length; i += k) {
+    let e = 0;
+    for (let j = i; j < i + k; j++) e += pcm[j] * pcm[j];
+    db.push(10 * Math.log10(e / k + 1));
+  }
+  // Onset strength: how much louder than a moment ago.
+  const rise = db.map((v, i) => (i < 4 ? 0 : Math.max(0, v - Math.max(db[i - 4], db[i - 3]))));
+  const fit = (lag) => {
+    let sum = 0;
+    for (const t of times) {
+      const i = Math.round((t + lag - t0) / hop);
+      for (let d = -2; d <= 2; d++) sum += rise[i + d] ?? 0;
+    }
+    return sum;
+  };
+  const scores = [];
+  for (let lag = from; lag <= to + 1e-9; lag += step) scores.push([lag, fit(lag)]);
+  const best = scores.reduce((a, b) => (b[1] > a[1] ? b : a));
+  const mean = scores.reduce((a, b) => a + b[1], 0) / scores.length;
+  return { lag: best[0], score: best[1] / (mean || 1), notes: times.length };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const name = process.argv[2];
   const take = readTake(name);
   const { trailerPart } = await import('./score.mjs');
@@ -92,5 +139,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   errs.sort((a, b) => a - b);
   const med = errs[errs.length >> 1];
   console.log(name, `${events.length} notes, ${found.length} onsets, ${errs.length} matched; sound minus clock: median ${(med * 1000).toFixed(0)} ms, 10-90% ${(errs[Math.floor(errs.length * 0.1)] * 1000).toFixed(0)}..${(errs[Math.floor(errs.length * 0.9)] * 1000).toFixed(0)} ms`);
+  const L = soundLag(name);
+  console.log(`whole-take fit: sound ${(L.lag * 1000).toFixed(0)} ms behind the clock (fit ${L.score.toFixed(2)}x the average, ${L.notes} notes)`);
   console.log('drift (clock vs ideal tempo):', ((map.at(map.last) - map.at(map.first)) / (map.last - map.first) - 1) * 100, '%');
 }

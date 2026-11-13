@@ -132,6 +132,8 @@ of view. His emoji face is the mood gauge: 😎 (calm) → 😐 (the flub) → �
 
 #### Shot 1-1: The Empty Hall (0:00 – 0:03)
 
+**Generated:** `clips/curtains-open.mp4` (the curtains part on an empty stage).
+
 **Visuals:**
 > **Storyboard Prompt:** "A photorealistic, cinematic 16:9 still of a grand, gilded concert hall in near darkness. On stage, rows of empty orchestra chairs and music stands, but no musicians and no instruments. A single spotlight lands on an empty conductor's podium."
 >
@@ -140,6 +142,9 @@ of view. His emoji face is the mood gauge: 😎 (calm) → 😐 (the flub) → �
 > **Audio:** Orchestra tuning-up cacophony (no instruments visible, which is the joke), fading under the VO.
 
 #### Shot 1-2: The Introduction (0:03 – 0:09)
+
+**Generated:** `clips/enter-under-spotlight.mp4` (he walks into the spotlight). **Still to generate:**
+the talking to camera that carries the line below (1-2b; a card holds its place in the first pass).
 
 **Visuals:**
 > **Storyboard Prompt:** "A photorealistic 16:9 medium shot of TECHNICKEL on a conductor's podium in a dim, gilded concert hall, empty orchestra chairs behind him, spotlit, baton held at his side."
@@ -153,7 +158,11 @@ Good evening! I'm Technickel, conductor of AI. And every musician I know has the
 
 **Technickel (VO, quick, one line per shot):**
 Their instrument. (1-3) It needs its own plane seat. (1-4) It gets noise complaints at 2 a.m.
-(1-5) It won't fit up the stairs. (1-6) And it is *not* library-friendly.
+(1-5) It costs more than my car. (1-6) And hauling it to every jam? Uphill both ways.
+
+**Generated:** 1-3 `clips/fitting-guitar_case-in-overhead.mp4`, 1-4 `clips/drummer-wakes-sleeping-person.mp4`,
+1-5 `clips/shopping-for-violin.mp4`, 1-6 `clips/pushing-piano-uphill.mp4`. The last two replace the stairs
+and library gags: the cost of an instrument, and the work of getting it to practice or a jam.
 
 > **1-3 Storyboard Prompt:** "A photorealistic 16:9 still inside an airplane cabin. A full-size cello sits buckled into a window seat with a tiny airline meal on its tray table. Squeezed into the middle seat beside it, a cellist with a weary emoji face (😩) holds two boarding passes. No airline logos."
 >
@@ -163,13 +172,9 @@ Their instrument. (1-3) It needs its own plane seat. (1-4) It gets noise complai
 >
 > **1-4 Video Prompt:** "The ceiling shakes as someone upstairs pounds on it with a broom handle; plaster dust falls onto the cymbals. A note slides under the door reading 'PLEASE.' The drummer's emoji face changes to embarrassed (😬)."
 
-> **1-5 Storyboard Prompt:** "A photorealistic 16:9 still of a narrow apartment stairwell. Two movers with straining emoji faces (😣) are wedged sideways with a black grand piano, completely stuck. Behind them, a pianist with an anxious emoji face (😰) holds only the piano bench."
->
-> **1-5 Video Prompt:** "The movers push. The piano does not move. One mover slowly slides down the wall to sit on a step. The pianist sets the bench down and sits on it in defeat."
+> **1-5 (the cost):** a would-be violinist in a music shop reads the price tag on a violin in a glass case, then checks his wallet.
 
-> **1-6 Storyboard Prompt:** "A photorealistic 16:9 still of a silent, towering wood-paneled library. A percussionist with an excited emoji face (😁) stands between the shelves holding two large orchestral cymbals raised high, about to crash them."
->
-> **1-6 Video Prompt:** "From behind a bookshelf, a librarian with a shushing emoji face (🤫) slowly lowers their reading glasses and stares. The percussionist freezes mid-swing, cymbals an inch apart."
+> **1-6 (getting it to the jam):** a pianist pushes an upright piano up a steep street of row houses.
 
 *Alternates if one doesn't generate well:* the trumpet player whose practice sets off every dog
 on the block; the drummer's eleventh trip to an overflowing hatchback; the triangle player who

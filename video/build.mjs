@@ -19,7 +19,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { renderCards, renderSteam, W, H } from './cards.mjs';
 import { barTime, ENTRANCES, MONTAGE, SCENE_RUN, END_BAR } from './score.mjs';
-import { beatMap, readTake, onsets, interp } from './sync.mjs';
+import { beatMap, readTake, onsets, interp, soundLag } from './sync.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const B = path.join(HERE, 'build');
@@ -154,19 +154,51 @@ const ai = (shot, d) => seg({ kind: 'png', id: card({ id: `ai-${shot}`, kind: 'a
 /** A take's picture at score time `m` (seconds into the clip that began at its first note). */
 const takeAtAudio = (t, a) => t.offset + a;
 
-// ---- beat 1: the conductor of AI (0:00 - about 0:33)
-ai('1-1', 3.0);
+// ---- beat 1: the conductor of AI (0:00 - about 0:40). The generated clips in
+// video/clips where there are some; a card where a shot is still to generate.
+const CLIP_DIR = path.join(HERE, 'clips');
+const CLIP_FOR = {
+  '1-1': 'curtains-open',
+  '1-2': 'enter-under-spotlight',
+  '1-3': 'fitting-guitar_case-in-overhead',
+  '1-4': 'drummer-wakes-sleeping-person',
+  '1-5': 'shopping-for-violin',
+  '1-6': 'pushing-piano-uphill',
+};
+/** A shot's generated clip, known as a take, or null while it is still to generate. */
+const clipOf = (shot) => {
+  const file = CLIP_FOR[shot] && path.join(CLIP_DIR, `${CLIP_FOR[shot]}.mp4`);
+  if (!file || !existsSync(file)) return null;
+  const name = `clip-${shot}`;
+  takes[name] ??= { name, videoFile: file, audioFile: file, videoLen: probe(file) };
+  return takes[name];
+};
+/** The next cut: a shot's clip from `from` for `d` seconds, its own sound under the voice (or its card). */
+const clipSeg = (shot, from, d, vol = 0.5) => {
+  const k = clipOf(shot);
+  if (!k) return ai(shot, d);
+  const t0 = seg({ kind: 'take', take: k.name, at: from, dur: d, label: `clip ${shot}: ${CLIP_FOR[shot]}` });
+  audio.push({ file: k.audioFile, ss: from, dur: d, at: t0, vol, kind: 'stem', fadeIn: 0.15, fadeOut: 0.3 });
+  return t0;
+};
+clipSeg('1-1', 0, 4.6, 0.6);
 {
-  const d = dur('vo-1-2') + 0.7;
-  const t0 = seg({ kind: 'png', id: card({ id: 'ai-1-2', kind: 'ai', shot: '1-2' }), dur: d, label: 'AI 1-2' });
-  voAt('vo-1-2', t0 + 0.3);
-  sub('vo-1-2', t0 + 0.3);
+  // He walks into the spotlight and starts talking; the rest of the line waits on a talking clip (1-2b).
+  const t0 = clipSeg('1-2', 0, 4.9, 0.5);
+  const tVo = t0 + 1.6;
+  voAt('vo-1-2', tVo);
+  sub('vo-1-2', tVo);
+  const rest = tVo + dur('vo-1-2') + 0.5 - T;
+  if (rest > 0) seg({ kind: 'png', id: card({ id: 'ai-1-2b', kind: 'ai', shot: '1-2b' }), dur: rest, label: 'AI 1-2b (talking, to generate)' });
 }
+// The four gags: the plane, 2 a.m., the price, and getting it to the jam. The drummer's clip is loud.
+const GAG_VOL = { '1-4': 0.35 };
 for (const [shot, id] of [['1-3', 'vo-1-3'], ['1-4', 'vo-1-4'], ['1-5', 'vo-1-5'], ['1-6', 'vo-1-6']]) {
-  const d = Math.max(3.0, dur(id) + 0.8);
-  const t0 = ai(shot, d);
-  voAt(id, t0 + 0.25);
-  sub(id, t0 + 0.25);
+  const k = clipOf(shot);
+  const d = k ? Math.min(Math.max(4.4, dur(id) + 0.9), k.videoLen - 0.3) : Math.max(3.0, dur(id) + 0.8);
+  const t0 = clipSeg(shot, 0.25, d, GAG_VOL[shot] ?? 0.5);
+  voAt(id, t0 + 0.35);
+  sub(id, t0 + 0.35);
 }
 {
   const t0 = ai('1-7', dur('vo-1-7') + 1.2);
@@ -236,7 +268,24 @@ const CHORD = barTime(END_BAR);
 
 // ---- where each take is at a trailer time, drift and all (video/sync.mjs)
 const maps = {};
-const mapOf = (name) => (name === 'meltdown' ? md.wt : (maps[name] ??= beatMap(readTake(name), 0)));
+/**
+ * Where a take's notes really sound against its performer's clock (video/sync.mjs
+ * soundLag). A part that sounds early or late is shifted, picture and sound
+ * together, so its notes land on the score; a weak fit (a smooth, bowed part)
+ * keeps the usual capture delay.
+ */
+const shiftOf = (name) => {
+  const r = soundLag(name, name === 'meltdown' ? 1 : 0);
+  const shift = r.score >= 1.8 ? r.lag - AUDIO_LAG : 0;
+  console.log('timing', name.padEnd(22), `sound ${(r.lag * 1000).toFixed(0)} ms behind its clock (fit ${r.score.toFixed(2)}): shifted ${(shift * 1000).toFixed(0)} ms`);
+  return shift;
+};
+const mapOf = (name) => {
+  if (maps[name]) return maps[name];
+  const base = name === 'meltdown' ? md.wt : beatMap(readTake(name), 0);
+  const shift = shiftOf(name);
+  return (maps[name] = { ...base, at: (s) => base.at(s) + shift });
+};
 /** A take's picture covering trailer times [s0, s1]: where to start, how much, how fast. */
 const source = (name, s0, s1) => {
   const m = mapOf(name);
@@ -286,7 +335,7 @@ joins[0] = tW;
 // ---- The tutti: the instruments smashed, each blow on a cymbal crash.
 const CRASHES = ['crash-violin', 'crash-trumpet', 'crash-cello', 'crash-cymbals', 'crash-drums', 'crash-piano'];
 /** Punch-ins for the smashes that happen small in the frame: [zoom, x, y]. */
-const CRASH_ZOOM = { 'crash-violin': [1.3, 0.4, 0.6], 'crash-trumpet': [1.8, 0.52, 0.42], 'crash-cello': [1.25, 0.5, 0.42], 'crash-cymbals': [1.4, 0.55, 0.5], 'crash-piano': [1.5, 0.45, 0.5] };
+const CRASH_ZOOM = { 'crash-violin': [1.25, 0.4, 0.42], 'crash-trumpet': [1.8, 0.52, 0.42], 'crash-cello': [1.25, 0.5, 0.42], 'crash-cymbals': [1.4, 0.55, 0.5], 'crash-piano': [1.5, 0.45, 0.5] };
 /** When, in a smash take, its biggest blow lands: the loudest sound near any marked blow. */
 function impactOf(name) {
   const take = readTake(name);
@@ -296,6 +345,8 @@ function impactOf(name) {
   const windows = hits.length ? hits.map((h) => [h - 0.25, h + 0.45]) : [[cueMark ? sec(cueMark) : 3, (cueMark ? sec(cueMark) : 3) + 2.5]];
   let best = null;
   for (const [lo, hi] of windows) for (const o of onsets(name, lo + AUDIO_LAG, hi + AUDIO_LAG)) if (!best || o.db > best.db) best = o;
+  // A shove or a throw: the landing is the first loud sound; the louder ones after it are pieces settling.
+  if (!hits.length && best) best = onsets(name, windows[0][0] + AUDIO_LAG, windows[0][1] + AUDIO_LAG).find((o) => o.db >= best.db - 8) ?? best;
   const fallback = hits[0] ?? windows[0][0];
   console.log('impact', name, best ? (best.t - AUDIO_LAG).toFixed(2) : `none (${fallback.toFixed(2)})`);
   return best ? best.t - AUDIO_LAG : fallback;

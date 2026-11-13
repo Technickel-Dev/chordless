@@ -209,10 +209,11 @@ const md = takes.meltdown ? meltdownMarks() : null;
 /** A canvas take's sound runs this far behind its picture (measured with video/sync.mjs). */
 const AUDIO_LAG = 0.055;
 {
-  // The title card, over the idle theatre just before the tune.
-  const v = md ? Math.max(0, md.vTune - 2.9) : 0;
-  const t0 = seg({ kind: 'take', take: 'meltdown', at: v, dur: 2.4, grade: 'eq=brightness=-0.35', label: 'title card, over the theatre' });
-  overlays.push({ id: card({ id: 'title-chordless', kind: 'title', text: ['CHORDLESS', 'Air instruments for Meta Quest. Played with your bare hands.'] }), t0, t1: t0 + 2.4 });
+  // The title card, over the idle theatre just before the tune, held until the announcement is done.
+  const d = Math.max(2.4, dur('vo-1-8') + 0.9);
+  const v = md ? Math.max(0, md.vTune - d - 0.5) : 0;
+  const t0 = seg({ kind: 'take', take: 'meltdown', at: v, dur: d, grade: 'eq=brightness=-0.35', label: 'title card, over the theatre' });
+  overlays.push({ id: card({ id: 'title-chordless', kind: 'title', text: ['CHORDLESS', 'Play *virtually* any instrument.'] }), t0, t1: t0 + d });
   voAt('vo-1-8', t0 + 0.3);
   sub('vo-1-8', t0 + 0.3);
 }
@@ -246,7 +247,6 @@ if (md) {
   // The wreck, the menu, the trumpet chosen: all one clip, to the trumpet's first note.
   mseg(md.vWreck, md.vWt, { label: 'the wreck; the menu; the trumpet' });
   tW = T;
-  overlays.push({ id: card({ id: 'slam-destruction', kind: 'slam', text: 'FULL DESTRUCTION' }), t0: tWreck - 0.3, t1: tWreck + 2.6 });
   const keys = {
     rage: [[tRageStart, 0], [tD, 0.6], [tE, 1], [tWreck, 1], [tWreck + 1.4, 0]],
     shake: [[tRageStart, 0], [tD, 3], [tE, 20], [tWreck, 22], [tWreck + 0.4, 0]],
@@ -320,7 +320,7 @@ joins[0] = tW;
     return hasTake(name) ? source(name, Math.max(joins[i], gridStart) - T0, gridEnd - T0) : null;
   });
   seg({ kind: 'dyngrid', start: gridStart, dur: gridEnd - gridStart, joins, order: ORDER, sources, expandFirst: false, label: 'the orchestra builds: tiles' });
-  overlays.push({ id: card({ id: 'slam-instruments', kind: 'slam', text: 'MULTIPLE INSTRUMENTS', sub: 'TEN OF THEM' }), t0: joins[1] + 0.2, t1: joins[1] + 2.9 });
+  overlays.push({ id: card({ id: 'slam-instruments', kind: 'slam', text: 'Multiple Instruments', sub: 'Ten of them' }), t0: joins[1] + 0.2, t1: joins[1] + 2.9 });
   ORDER.forEach((inst, i) => {
     if (!NAMES[inst] || i === 0) return;
     overlays.push({ id: card({ id: `lower-${inst}`, kind: 'lower', text: [NAMES[inst], 'Theatre'] }), t0: joins[i] + 0.45, t1: joins[i] + 2.95 });
@@ -329,7 +329,7 @@ joins[0] = tW;
   const tVo = at(244) + 0.2;
   voAt('vo-b', tVo, 0.9);
   sub('vo-b', tVo);
-  overlays.push({ id: card({ id: 'slam-hands', kind: 'slam', text: 'BARE HANDS', sub: 'NO CONTROLLERS · NO INSTALL' }), t0: tVo + 6.2, t1: tVo + 8.8 });
+  overlays.push({ id: card({ id: 'slam-hands', kind: 'slam', text: 'Bare Hands', sub: 'No controllers · No install' }), t0: tVo + 6.2, t1: tVo + 8.8 });
 }
 
 // ---- The tutti: the instruments smashed, each blow on a cymbal crash.
@@ -351,6 +351,8 @@ function impactOf(name) {
   console.log('impact', name, best ? (best.t - AUDIO_LAG).toFixed(2) : `none (${fallback.toFixed(2)})`);
   return best ? best.t - AUDIO_LAG : fallback;
 }
+// FULL DESTRUCTION over the start of it, the smashing still showing through.
+overlays.push({ id: card({ id: 'slam-destruction', kind: 'slam', text: 'Full Destruction', scrim: 0.3 }), t0: at(MONTAGE.from) - 0.1, t1: at(MONTAGE.from) + 2.3 });
 for (let k = 0, bar = MONTAGE.from; bar < MONTAGE.to; bar += MONTAGE.every, k++) {
   const name = CRASHES[k % CRASHES.length];
   const d = at(bar + MONTAGE.every) - at(bar);
@@ -376,7 +378,7 @@ const SCENE_NAMES = { 'space-station': 'SPACE STATION', 'volcano-rim': 'VOLCANO 
     const t0 = takes[name] ? tseg(name, s0, s1, { label: `${scene}: ${inst}` }) : ai('c-1', s1 - s0);
     overlays.push({ id: card({ id: `lower-scene-${scene}`, kind: 'lower', text: [SCENE_NAMES[scene] ?? scene, NAMES[inst]] }), t0: t0 + 0.12, t1: t0 + 1.45 });
   }
-  overlays.push({ id: card({ id: 'slam-environments', kind: 'slam', text: 'CHANGING ENVIRONMENTS', sub: 'MORE THAN SIXTY' }), t0: tScenes, t1: tScenes + 1.5 });
+  overlays.push({ id: card({ id: 'slam-environments', kind: 'slam', text: 'Changing Environments', sub: 'More than sixty' }), t0: tScenes, t1: tScenes + 1.5 });
 }
 
 // ---- The closing chord: everyone at once, back on the stage.

@@ -6,6 +6,7 @@
  */
 import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 export const W = 1280;
@@ -15,7 +16,7 @@ export const H = 720;
 export const AI = {
   '1-1': ['The empty hall', 'Slow push in on a dark, gilded concert hall. Empty chairs, no instruments. A spotlight lands on the podium and TECHNICKEL steps into it.', '😎'],
   '1-2': ['The introduction', 'TECHNICKEL on the podium turns to the camera, gives a small bow and gestures at the empty chairs behind him.', '😎'],
-  '1-2b': ['Talking clip to generate', 'TECHNICKEL in the spotlight, talking to camera: "Good evening! I’m Technickel, conductor of AI. And every musician I know has the same problem."', '😎'],
+  '1-2b': ['Talking clip to generate', 'TECHNICKEL in the spotlight, talking to camera: "Good evening, ladies and gentlemen! I’m Technickel, conductor of AI. Behind every great musician is a very inconvenient instrument."', '😎'],
   '1-3': ['Gag: the plane seat', 'A guitarist in an airplane aisle tries to force a guitar case into the overhead bin. It will not go.', '😩'],
   '1-4': ['Gag: 2 a.m.', 'A drummer plays a full kit in the basement at night; upstairs, a sleeper wakes up.', '😎 😩'],
   '1-5': ['Gag: the price', 'In a music shop, a would-be violinist reads the price tag on a violin in a glass case, then looks into his wallet.', '😳'],
@@ -44,9 +45,9 @@ const base = `
   .ai p{font:400 28px/1.4 'Segoe UI';color:#d7d7e0;max-width:1000px}
   .ai .face{font-size:64px}
   .ai .note{font:500 20px 'Segoe UI';color:#8d8da3;margin-top:8px}
-  .slam{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.62)}
-  .slam div{font:900 118px/1 'Segoe UI Black','Segoe UI';letter-spacing:.04em;text-align:center;text-shadow:0 6px 40px rgba(0,0,0,.8);padding:0 40px}
-  .slam small{display:block;margin-top:22px;font:600 34px 'Segoe UI';letter-spacing:.3em;color:#ffb000}
+  .slam{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,var(--scrim,.62))}
+  .slam div{font:400 104px/1.05 'Shrikhand';color:#fafaf9;text-align:center;text-shadow:0 4px 0 rgba(0,0,0,.55),0 8px 40px rgba(0,0,0,.85);padding:0 60px}
+  .slam small{display:block;margin-top:18px;font:400 40px 'Shrikhand';color:#f59e0b;letter-spacing:.02em;text-shadow:0 3px 0 rgba(0,0,0,.6),0 4px 18px rgba(0,0,0,.8)}
   .lower{position:absolute;left:44px;bottom:78px;padding:12px 22px;border-left:6px solid #ffb000;background:rgba(10,10,16,.78);border-radius:6px}
   .lower b{font:700 30px 'Segoe UI';letter-spacing:.04em;display:block}
   .lower i{font:italic 400 24px 'Segoe UI';color:#e0e0e8}
@@ -55,14 +56,22 @@ const base = `
   .bug{position:absolute;right:20px;top:16px;font:700 16px 'Segoe UI';letter-spacing:.12em;padding:4px 10px;border:2px solid rgba(255,255,255,.8);border-radius:4px;background:rgba(0,0,0,.4)}
   .credit{position:absolute;font:500 18px/1.35 'Segoe UI';padding:6px 12px;background:rgba(0,0,0,.55);border-radius:4px;max-width:560px}
   .end{position:absolute;inset:0;background:#0d0d14;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center}
-  .end h1{font:900 110px 'Segoe UI Black','Segoe UI';letter-spacing:.08em}
+  .logo{height:auto;filter:drop-shadow(0 6px 24px rgba(0,0,0,.55))}
+  .end .logo{width:700px;margin-bottom:10px;filter:none}
   .end h2{font:500 28px 'Segoe UI';color:#ffb000}
   .end p{font:400 17px/1.4 'Segoe UI';color:#a9a9bb;max-width:1000px}
   .title{position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .title h1{font:900 120px 'Segoe UI Black','Segoe UI';letter-spacing:.08em;text-shadow:0 6px 40px #000}
-  .title h2{font:500 30px 'Segoe UI';letter-spacing:.06em;text-shadow:0 2px 12px #000}
+  .title .logo{width:780px;margin-bottom:22px}
+  .title h2{font:500 34px 'Segoe UI';letter-spacing:.04em;text-shadow:0 2px 12px #000}
+  .title h2 em{color:#fbbf24;font-style:italic;font-weight:700}
   .white{position:absolute;inset:0;background:#fff}
 `;
+
+/** The Chordless logo (the app's own, public/icons/logo.svg), inline so the cards need no server. */
+const LOGO = `data:image/svg+xml;base64,${readFileSync(new URL('../public/icons/logo.svg', import.meta.url)).toString('base64')}`;
+
+/** Shrikhand (SIL Open Font License), the face of the logo's wordmark. */
+const FONTS = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shrikhand&display=block">';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
@@ -75,7 +84,7 @@ function html(card) {
       return `<div class="ai"><div class="tag">${label} · not generated in this first pass</div><h1>${esc(title)}</h1><div class="face">${faces}</div><p>${esc(what)}</p></div>`;
     }
     case 'slam':
-      return `<div class="slam"><div>${esc(card.text)}${card.sub ? `<small>${esc(card.sub)}</small>` : ''}</div></div>`;
+      return `<div class="slam"${card.scrim != null ? ` style="--scrim:${card.scrim}"` : ''}><div>${esc(card.text)}${card.sub ? `<small>${esc(card.sub)}</small>` : ''}</div></div>`;
     case 'lower':
       return `<div class="lower"><b>${esc(card.text[0])}</b>${card.text[1] ? `<i>${esc(card.text[1])}</i>` : ''}</div>`;
     case 'sub':
@@ -85,9 +94,10 @@ function html(card) {
     case 'credit':
       return `<div class="credit" style="${card.style}">${esc(card.text)}</div>`;
     case 'title':
-      return `<div class="title"><h1>${esc(card.text[0])}</h1><h2>${esc(card.text[1] ?? '')}</h2></div>`;
+      // *word* is set like the app's title screen: amber italics.
+      return `<div class="title"><img class="logo" src="${LOGO}" alt="${esc(card.text[0])}"><h2>${esc(card.text[1] ?? '').split('*').map((part, i) => (i % 2 ? `<em>${part}</em>` : part)).join('')}</h2></div>`;
     case 'end':
-      return `<div class="end"><h1>CHORDLESS</h1><h2>Built with IWSDK, Meta's Immersive Web SDK, for Meta Quest</h2><p>https://technickel-dev.github.io/chordless/ (placeholder URL) · Meta VR Start Developer Competition 2026</p><p>Music: Beethoven, Ode to Joy (1824), and Rossini, William Tell Overture, Finale (1829), both public domain. William Tell arranged from the full score typeset by Max Wilkinson (2008), IMSLP #22579, CC BY 3.0. All music is in-app capture: every note is played and synthesized live by Chordless. Built with IWSDK and WebXR. Conductor scenes are AI-generated; all gameplay is real.</p></div>`;
+      return `<div class="end"><img class="logo" src="${LOGO}" alt="Chordless"><h2>Built with IWSDK, Meta's Immersive Web SDK, for Meta Quest</h2><p>https://technickel-dev.github.io/chordless/ (placeholder URL) · Meta VR Start Developer Competition 2026</p><p>Music: Beethoven, Ode to Joy (1824), and Rossini, William Tell Overture, Finale (1829), both public domain. William Tell arranged from the full score typeset by Max Wilkinson (2008), IMSLP #22579, CC BY 3.0. All music is in-app capture: every note is played and synthesized live by Chordless. Built with IWSDK and WebXR. Conductor scenes are AI-generated; all gameplay is real.</p></div>`;
     case 'white':
       return `<div class="white"></div>`;
     case 'redvig':
@@ -169,7 +179,9 @@ export async function renderCards(cards, dir) {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   const out = {};
   for (const card of cards) {
-    await page.setContent(`<style>${base}</style>${html(card)}`);
+    await page.setContent(`${FONTS}<style>${base}</style>${html(card)}`, { waitUntil: 'networkidle' });
+    const ready = await page.evaluate(async () => (await document.fonts.ready, document.fonts.check('40px Shrikhand')));
+    if (card.kind === 'slam' && !ready) throw new Error('the Shrikhand font did not load (it comes from Google Fonts)');
     const file = path.join(dir, `${card.id}.png`);
     await page.screenshot({ path: file, omitBackground: !['ai', 'end', 'white'].includes(card.kind) });
     out[card.id] = file;

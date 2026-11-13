@@ -346,7 +346,7 @@ sfx: # A10, plus the real capture's own audio on A11
 
 # ------------------------------------------------------ captions and credits
 supers: # V13, lower third; line 2 italic
-  - { at: 25.000, until: 27.000, kind: title, text: ["CHORDLESS", "Air instruments for Meta Quest. Played with your bare hands."] }
+  - { at: 25.000, until: 27.000, kind: title, text: ["CHORDLESS", "Play virtually any instrument."] }
   - { at: 31.000, dur: 3.0, text: ["GUITAR · Cliffside Sunset"] }
   - { section: middle-quiet, offset_bars: 2, bars_long: 2, text: ["VIOLIN · Underwater"] }
   - { section: middle-quiet, offset_bars: 6, bars_long: 2, text: ["TROMBONE · Jazz Club"] }

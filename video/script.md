@@ -152,13 +152,15 @@ the talking to camera that carries the line below (1-2b; a card holds its place 
 > **Video Prompt:** "TECHNICKEL turns to face the camera, gives a small bow, and gestures with his baton at the empty chairs behind him, as if presenting them."
 
 **Technickel (VO, warm and theatrical):**
-Good evening! I'm Technickel, conductor of AI. And every musician I know has the same problem.
+Good evening, ladies and gentlemen! I'm Technickel, conductor of AI. Behind every great musician is a very
+inconvenient instrument.
 
 #### Shots 1-3 to 1-6: The Gag Montage (0:09 – 0:21, 3 s each)
 
 **Technickel (VO, quick, one line per shot):**
-Their instrument. (1-3) It needs its own plane seat. (1-4) It gets noise complaints at 2 a.m.
-(1-5) It costs more than my car. (1-6) And hauling it to every jam? Uphill both ways.
+(1-3) Too fragile to check. Too big for the overhead bin. (1-4) When you practice, the whole house
+practices. (1-5) Your wallet feels it, if you can afford one at all. (1-6) And hauling it to a jam
+session? Uphill both ways.
 
 **Generated:** 1-3 `clips/fitting-guitar_case-in-overhead.mp4`, 1-4 `clips/drummer-wakes-sleeping-person.mp4`,
 1-5 `clips/shopping-for-violin.mp4`, 1-6 `clips/pushing-piano-uphill.mp4`. The last two replace the stairs
@@ -187,16 +189,16 @@ booked the conservatory practice room three weeks out, for a triangle.
 > **Video Prompt:** "TECHNICKEL flicks the baton once. Every instrument on stage dissolves into golden sparkles that drift up into the light, leaving only empty chairs. He tucks the baton under his arm, pleased."
 
 **Technickel (VO):**
-So I left the instruments at home. All of them.
+So I cut the chord. (The pun on Chordless: it sounds like "cord", and the logo's C is a coiled cord.)
 
 #### Shot 1-8: Title Card (0:25 – 0:27)
 
-Designed in Resolve (Text+), not generated. **CHORDLESS**, with the subtitle *Air instruments
-for Meta Quest. Played with your bare hands.* Behind it, a slow-motion take of fingertips on
-the air guitar's strings (from `takes/guitar-cliffside.mp4`), darkened.
+Designed, not generated: the Chordless logo (`public/icons/logo.svg`, as on the app's title
+screen), with the app's tagline under it: *Play **virtually** any instrument.* Behind it, the
+theatre before the tune, darkened. The end card carries the same logo.
 
 **Technickel (VO):**
-Meet Chordless.
+And now, tonight's performance: Chordless.
 
 #### Shot 1-9: From the Top (0:27 – 0:30)
 
@@ -492,10 +494,10 @@ Each take is a full `play:*` run, 1920×1080 at 60 fps, opened with `?scene=<fil
 
 | ID | Line starts with | Placement |
 | --- | --- | --- |
-| vo-1-2 | "Good evening!" | 0:03 |
-| vo-1-3 to vo-1-6 | "Their instrument." … | 0:09, one per gag |
-| vo-1-7 | "So I left the instruments at home." | 0:21.5 |
-| vo-1-8 | "Meet Chordless." | 0:25.3 |
+| vo-1-2 | "Good evening, ladies and gentlemen!" | 0:03 |
+| vo-1-3 to vo-1-6 | "Too fragile to check." … | 0:09, one per gag |
+| vo-1-7 | "So I cut the chord." | 0:21.5 |
+| vo-1-8 | "And now, tonight's performance: Chordless." | 0:25.3 |
 | vo-a | "Most music in VR is a rhythm game…" | 0:31, under the tune |
 | vo-b | "It's built with Meta's Immersive Web SDK…" | the quietest middle episode |
 | vo-7-2 | "That's Chordless." | the bow + 3.5 s |

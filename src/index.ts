@@ -18,6 +18,7 @@ import { AirDrumsSystem } from './drums/air-drums-system.js';
 import { AirTrumpetSystem } from './trumpet/air-trumpet-system.js';
 import { AirTromboneSystem } from './trombone/air-trombone-system.js';
 import { AirHornSystem } from './horn/air-horn-system.js';
+import { mountTitleScreen } from './title-screen.js';
 
 World.create(
   document.getElementById('scene-container') as HTMLDivElement,
@@ -34,4 +35,5 @@ World.create(
   world.registerSystem(AirTromboneSystem);
   world.registerSystem(AirHornSystem);
   world.registerSystem(PanelSystem);
+  mountTitleScreen(world);
 });

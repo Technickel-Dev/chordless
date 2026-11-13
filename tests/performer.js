@@ -1,7 +1,8 @@
 /**
  * Plays a song on the air guitar the way a guitarist would, with IWER's
  * emulated hands driven frame by frame (see hand-rig.js). Runs inside the
- * page, loaded through Vite.
+ * page, loaded through Vite. useInstrument() switches it to another fretted
+ * instrument (bass-performer.js plays the bass).
  *
  * The song is planned first:
  * - Left hand: a hand position on the neck chosen with lookahead (shifting
@@ -17,11 +18,22 @@
  * hands' poses are written to IWER.
  */
 
-import { GUITAR, OPEN_MIDI } from '/src/guitar/geometry.ts';
+import { GUITAR_BOARD } from '/src/guitar/geometry.ts';
 import { midiName } from '/src/guitar/chords.ts';
 import { AirGuitar } from '/src/guitar/air-guitar-component.ts';
 import { CHORDS } from '/tests/chord-hand.js';
-import { applyPose, FINGERS, gapY, leftHand, lerp, pressPoint, quatFromAxes, rightHand, slotX, v } from '/tests/hand-rig.js';
+import { applyPose, FINGERS, gapY, leftHand, lerp, pressPoint, quatFromAxes, rightHand, slotX, useBoard, v } from '/tests/hand-rig.js';
+
+/**
+ * The fretted instrument being played (one at a time): { instrument (its
+ * system's name), root (its model's name and component id), component, board }.
+ */
+let I = { instrument: 'guitar', root: 'AirGuitar', component: AirGuitar, board: GUITAR_BOARD };
+export function useInstrument(instrument) {
+  I = instrument;
+  useBoard(instrument.board);
+  instrumentEntity = null;
+}
 
 /** Fingertip height above the strings when hovering (clear of the app's release zone). */
 const HOVER = 0.026;
@@ -48,19 +60,19 @@ const dispatch = (method, params = {}) => window.IWER_MCP.dispatch(method, param
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * t * (10 + t * (-15 + 6 * t))); // minimum jerk
 
 function guitarRoot() {
-  const root = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName('AirGuitar');
+  const root = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(I.root);
   root.updateMatrixWorld(true);
   return root;
 }
 
-let guitarEntity = null;
+let instrumentEntity = null;
 async function guitarState() {
-  if (guitarEntity == null) {
-    const found = await dispatch('ecs_find_entities', { withComponents: ['AirGuitar'] });
-    guitarEntity = found.entities[0].entityIndex;
+  if (instrumentEntity == null) {
+    const found = await dispatch('ecs_find_entities', { withComponents: [I.root] });
+    instrumentEntity = found.entities[0].entityIndex;
   }
-  const q = await dispatch('ecs_query_entity', { entityIndex: guitarEntity });
-  return q.components.find((c) => c.componentId === 'AirGuitar').values;
+  const q = await dispatch('ecs_query_entity', { entityIndex: instrumentEntity });
+  return q.components.find((c) => c.componentId === I.root).values;
 }
 
 /**
@@ -191,7 +203,7 @@ function planRightHand(notes) {
   // that cannot be avoided goes where there is most time for it.
   const options = notes.map((n) =>
     // A chord strums from its lowest string (a B7 leaves the low E alone).
-    n.chord ? [[CHORDS[n.chord].strumFrom ?? 0, 6]] : [[n.string, n.string + 1], [n.string + 1, n.string]],
+    n.chord ? [[CHORDS[n.chord].strumFrom ?? 0, I.board.stringCount]] : [[n.string, n.string + 1], [n.string + 1, n.string]],
   );
   const hop = (from, to, time) => (from === to ? 0 : (1 + 0.2 * Math.abs(from - to)) * Math.max(1, 0.25 / time));
   // cost[i][k]: fewest lifts to play notes 0..i with note i picked option k.
@@ -236,10 +248,11 @@ function leftTip(finger, t, intervals, positionAt) {
    */
   const restAt = (at) => {
     const p = positionAt(at);
-    return v(slotX(p + k), pressPoint(3.5 + k * 0.5, p + k)[1], GUITAR.stringZ + HOVER);
+    const treble = ((3.5 + k * 0.5) / 5) * (I.board.stringCount - 1);
+    return v(slotX(p + k), pressPoint(treble, p + k)[1], I.board.dims.stringZ + HOVER);
   };
   const rest = restAt(t);
-  const hover = (p) => [p[0], p[1], GUITAR.stringZ + HOVER];
+  const hover = (p) => [p[0], p[1], I.board.dims.stringZ + HOVER];
   const pointOf = (i) => pressPoint(i.string, i.fret, i.fraction ?? 0.35);
 
   const now = mine.find((i) => t >= i.on && t < i.off);
@@ -277,7 +290,7 @@ function leftTip(finger, t, intervals, positionAt) {
 
 /** Index fingertip target for the picking hand at time t. */
 function rightTip(t, strokes) {
-  const at = (gap, height = -PICK_DEPTH) => v(PICK_X, gapY(gap, PICK_X), GUITAR.stringZ + height);
+  const at = (gap, height = -PICK_DEPTH) => v(PICK_X, gapY(gap, PICK_X), I.board.dims.stringZ + height);
   const i = strokes.findIndex((s) => t < s.end);
   if (i < 0) {
     const last = strokes.at(-1);
@@ -325,7 +338,7 @@ export function planPerformance(song, tempo = song.tempo) {
     if (e.chord) {
       const shape = CHORDS[e.chord];
       const presses = Object.entries(shape.fingers).map(([finger, [string, fret]]) => ({ finger, string, fret }));
-      const strings = [0, 1, 2, 3, 4, 5].slice(shape.strumFrom ?? 0);
+      const strings = Array.from({ length: I.board.stringCount }, (_, s) => s).slice(shape.strumFrom ?? 0);
       return { ...e, time, presses, strings, frets: presses.map((p) => p.fret), dynamic: e.dynamic ?? 'f' };
     }
     return { ...e, time, strings: [e.string], frets: e.fret > 0 ? [e.fret] : [], presses: [] };
@@ -391,7 +404,7 @@ export function handsFor(plan) {
   // reaches down and forward to the strings instead of curling under.
   const WRIST_BEHIND = 0.11;
   const WRIST_HEIGHT = 0.1;
-  let wristY = gapY(3, PICK_X) + WRIST_BEHIND;
+  let wristY = gapY(I.board.stringCount / 2, PICK_X) + WRIST_BEHIND;
   return (t, dt) => {
     const position = positionAt(t);
     const tips = {};
@@ -418,7 +431,14 @@ export function handsFor(plan) {
 export async function perform(song, { tempo = song.tempo, onEvent = () => {} } = {}) {
   // Wait for the synth to finish pre-rendering its notes: rendering during
   // the performance would stall frames and the hands would skip.
-  const guitarSystem = Array.from(window.FRAMEWORK_MCP_RUNTIME.world.systems ?? []).find((s) => s?.synth);
+  const systems = Array.from(window.FRAMEWORK_MCP_RUNTIME.world.systems ?? []);
+  const guitarSystem = systems.find((s) => s?.instrument === I.instrument);
+  // Take this instrument out and put the others away, then give it a few
+  // frames to hang itself on the player.
+  for (const s of systems) {
+    if (s?.instrument && s?.component && s.entity) s.entity.setValue(s.component, 'active', s === guitarSystem);
+  }
+  for (let i = 0; i < 4; i++) await new Promise((r) => requestAnimationFrame(r));
   await guitarSystem?.synth.warm;
   const plan = planPerformance(song, tempo);
   const { notes, end } = plan;
@@ -476,9 +496,9 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
   const guitar = guitarSystem.entity;
   let plucks = before.plucks;
   const watch = () => {
-    const count = guitar.getValue(AirGuitar, 'plucks');
+    const count = guitar.getValue(I.component, 'plucks');
     if (count > plucks) {
-      chords.push({ at: clock, chord: guitar.getValue(AirGuitar, 'chord') });
+      chords.push({ at: clock, chord: guitar.getValue(I.component, 'chord') });
       plucks = count;
     }
   };
@@ -561,7 +581,7 @@ export async function perform(song, { tempo = song.tempo, onEvent = () => {} } =
       position: n.position,
       heard: h?.note ?? '-',
       lateMs: h ? Math.round((h.at - n.time) * 1000) : null,
-      ok: h?.note === midiName(OPEN_MIDI[n.string] + n.fret) && h.count === 1,
+      ok: h?.note === midiName(I.board.openMidi[n.string] + n.fret) && h.count === 1,
     });
   }
   // Plucks no note claimed (outside the final strum) were extra.

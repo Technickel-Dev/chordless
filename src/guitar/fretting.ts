@@ -1,4 +1,4 @@
-import { fretAt, GUITAR, nearestString, STRING_COUNT } from './geometry.js';
+import { type Fretboard, GUITAR_BOARD } from './geometry.js';
 
 /**
  * How close a finger must come to the strings to fret them, in metres.
@@ -33,16 +33,25 @@ export const PRESS = {
  */
 export class FretReader {
   /** Fret sounding on each string; 0 is the open string. */
-  readonly frets = new Int8Array(STRING_COUNT);
+  readonly frets: Int8Array;
   /** Whether each string has a finger within the press zone this frame. */
-  readonly pressed = new Uint8Array(STRING_COUNT);
-  private readonly strict = new Int8Array(STRING_COUNT);
+  readonly pressed: Uint8Array;
+  private readonly strict: Int8Array;
   /** Bitmask per string of frets that have a point within the release zone. */
-  private readonly held = new Uint32Array(STRING_COUNT);
+  private readonly held: Uint32Array;
   /** How long each string has wanted to drop to a lower fret. */
-  private readonly releaseTime = new Float32Array(STRING_COUNT);
+  private readonly releaseTime: Float32Array;
   /** How long the fretting hand has been untracked. */
   private untracked = 0;
+
+  constructor(private readonly board: Fretboard = GUITAR_BOARD) {
+    const n = board.stringCount;
+    this.frets = new Int8Array(n);
+    this.pressed = new Uint8Array(n);
+    this.strict = new Int8Array(n);
+    this.held = new Uint32Array(n);
+    this.releaseTime = new Float32Array(n);
+  }
 
   begin(): void {
     this.strict.fill(0);
@@ -51,6 +60,8 @@ export class FretReader {
 
   /** Adds one finger point; returns the string it frets, or -1. */
   addPoint(x: number, y: number, z: number): number {
+    const { fretAt, nearestString } = this.board;
+    const GUITAR = this.board.dims;
     const fret = fretAt(x);
     if (fret === 0) return -1;
     if (z < GUITAR.boardTopZ - PRESS.below) return -1;
@@ -86,7 +97,7 @@ export class FretReader {
       this.untracked = 0;
     }
     let changed = false;
-    for (let s = 0; s < STRING_COUNT; s++) {
+    for (let s = 0; s < this.board.stringCount; s++) {
       const current = this.frets[s];
       let next = this.strict[s];
       // Hysteresis: a held fret survives small lifts within the release zone.

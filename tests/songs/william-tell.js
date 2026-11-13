@@ -39,6 +39,9 @@
  * gallop rhythm.
  * The trumpet version (WILLIAM_TELL_TRUMPET) plays the guitar's arrangement at
  * its sounding pitch and closes on a held E5, not in the score.
+ * The bass guitar version (WILLIAM_TELL_BASS) plays the guitar's arrangement
+ * two octaves lower, fingered afresh for the bass, and closes on its open
+ * low E instead of the strummed chord.
  *
  * Gioachino Rossini (1792-1868) composed the overture in 1829; the music
  * itself is in the public domain.
@@ -199,16 +202,18 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 const nameOf = (midi) => NOTE_NAMES[midi % 12] + String(Math.floor(midi / 12) - 1);
 
 /**
- * Chooses a string and fret for each note of a line, as a guitarist would:
+ * Chooses a string and fret for each note of a line, as a guitarist would
+ * (on the guitar unless `open`, the open strings lowest first, and
+ * `topFret` say otherwise):
  * the hand moves as little as it can, and the pick crosses as few strings
  * (both above all between quick notes),
  * prefers the lower frets (above the 12th, where the frets crowd the
  * fingers, only as far as it must; the top is B5 at the 19th), and crosses strings rather than jumping along one. Open strings
  * cost no movement.
  */
-export function fingerGuitar(line, beatSeconds) {
+export function fingerGuitar(line, beatSeconds, open = GUITAR_OPEN, topFret = 19) {
   const options = line.map((n) =>
-    GUITAR_OPEN.map((open, s) => ({ s, f: n.midi - open })).filter((o) => o.f >= 0 && o.f <= 19),
+    open.map((o, s) => ({ s, f: n.midi - o })).filter((o) => o.f >= 0 && o.f <= topFret),
   );
   const cost = options.map((o) => o.map(() => Infinity));
   const back = options.map((o) => o.map(() => 0));
@@ -591,4 +596,36 @@ export const WILLIAM_TELL_DRUMS = {
       drumBar(bar).map(([beat, hand, hit, dynamic]) => ({ beat: at(bar, beat), hand, hit, dynamic })),
     ),
   ].sort((a, b) => a.beat - b.beat || (a.hand < b.hand ? -1 : 1)),
+};
+
+/**
+ * The bass guitar's version: every note of the guitar's (WILLIAM_TELL) two
+ * octaves lower, the fanfare from the open low E, the themes in the bass's
+ * first positions (bar 445's low Bs, below its low E, an octave up),
+ * fingered for its four strings and 20 frets; it closes on
+ * the open low E, let ring, where the guitar strums its chord.
+ */
+const BASS_OPEN = [28, 33, 38, 43];
+const bassLine = WILLIAM_TELL.events
+  .filter((e) => !e.chord)
+  .map((e) => {
+    const midi = GUITAR_OPEN[e.string] + e.fret - 24;
+    // Bar 445's low Bs fall below the open E: up an octave, as a four-string player takes them.
+    return { beat: e.beat, midi: midi < BASS_OPEN[0] ? midi + 12 : midi, dynamic: e.dynamic };
+  });
+const bassFingers = fingerGuitar(bassLine, 60 / 152, BASS_OPEN, 20);
+export const WILLIAM_TELL_BASS = {
+  title: 'William Tell Overture: finale, bars 226-453 (bass)',
+  tempo: 152,
+  events: [
+    ...bassLine.map((n, i) => ({ beat: n.beat, note: nameOf(n.midi), string: bassFingers[i].s, fret: bassFingers[i].f, dynamic: n.dynamic })),
+    { beat: (452 - 244) * 2 + 1, note: 'E1', string: 0, fret: 0, dynamic: 'ff' },
+  ],
+};
+
+/** The bass's finale with bars 316-390 cut, as WILLIAM_TELL_CUT has it for the guitar. */
+export const WILLIAM_TELL_BASS_CUT = {
+  ...WILLIAM_TELL_BASS,
+  title: 'William Tell Overture: finale, bars 226-453, cut 316-390 (bass)',
+  events: cutFinale(WILLIAM_TELL_BASS.events),
 };

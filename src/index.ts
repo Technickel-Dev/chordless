@@ -8,6 +8,7 @@
 import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { AirGuitarSystem } from './guitar/air-guitar-system.js';
+import { AirBassSystem } from './bass/air-bass-system.js';
 import { PanelSystem } from './panel.js';
 import { AirViolinSystem } from './violin/air-violin-system.js';
 import { AirCelloSystem } from './cello/air-cello-system.js';
@@ -24,6 +25,7 @@ World.create(
   projectOptions,
 ).then((world) => {
   world.registerSystem(AirGuitarSystem);
+  world.registerSystem(AirBassSystem);
   world.registerSystem(AirViolinSystem);
   world.registerSystem(AirCelloSystem);
   world.registerSystem(AirCymbalsSystem);

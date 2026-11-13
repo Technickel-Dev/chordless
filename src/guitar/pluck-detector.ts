@@ -1,10 +1,13 @@
-import { GUITAR, STRING_COUNT, stringSpan, stringY } from './geometry.js';
+import { type Fretboard, GUITAR_BOARD } from './geometry.js';
 
 /** Where the picking fingertip interacts with the strings, in guitar space. */
-export const PLUCK_ZONE = {
+export type PluckZone = ReturnType<typeof pluckZone>;
+
+/** The pluck zone of a fretboard. */
+export const pluckZone = (board: Fretboard) => ({
   /** Just in front of the bridge to the upper frets over the body. */
-  minX: GUITAR.bridgeX + 0.012,
-  maxX: 0.2,
+  minX: board.dims.bridgeX + 0.012,
+  maxX: board.dims.pluckMaxX,
   /** Depth window around the string plane. Above it the finger passes over. */
   above: 0.018,
   below: 0.035,
@@ -19,7 +22,10 @@ export const PLUCK_ZONE = {
   strumBelow: 0.08,
   /** How long after a pluck the stroke counts as still under way. */
   strumHold: 0.15,
-};
+});
+
+/** The guitar's pluck zone. */
+export const PLUCK_ZONE = pluckZone(GUITAR_BOARD);
 
 /** Half-width of the dead band around a string, so jitter cannot re-pluck it. */
 export const STRING_HYSTERESIS = 0.0025;
@@ -45,6 +51,8 @@ export interface PluckEvent {
 export interface PluckDetectorOptions {
   /** Smooth tracking jitter with a One Euro filter (default true). */
   smoothing?: boolean;
+  /** The strings it plucks (the guitar's by default). */
+  board?: Fretboard;
 }
 
 /**
@@ -55,23 +63,22 @@ export interface PluckDetectorOptions {
  */
 export class PluckDetector {
   /** Pluck events from the last `update()`, valid up to `count`. */
-  readonly events: PluckEvent[] = Array.from({ length: STRING_COUNT }, () => ({
-    string: 0,
-    delay: 0,
-    velocity: 0,
-  }));
+  readonly events: PluckEvent[];
   count = 0;
   /** Strings the fingertip has deliberately rested on long enough to damp. */
-  readonly damping = new Uint8Array(STRING_COUNT);
+  readonly damping: Uint8Array;
   inZone = false;
+  /** Where the fingertip plucks. */
+  readonly zone: PluckZone;
 
+  private readonly board: Fretboard;
   private readonly smoothing: boolean;
   private readonly fx = new OneEuroFilter(4, 30, 5);
   private readonly fy = new OneEuroFilter(4, 30, 5);
   private readonly fz = new OneEuroFilter(4, 30, 5);
-  private readonly side = new Int8Array(STRING_COUNT);
-  private readonly lastPluck = new Float64Array(STRING_COUNT).fill(-Infinity);
-  private readonly touchStart = new Float64Array(STRING_COUNT).fill(-1);
+  private readonly side: Int8Array;
+  private readonly lastPluck: Float64Array;
+  private readonly touchStart: Float64Array;
   private px = 0;
   private py = 0;
   private pz = 0;
@@ -84,6 +91,14 @@ export class PluckDetector {
 
   constructor(options: PluckDetectorOptions = {}) {
     this.smoothing = options.smoothing ?? true;
+    const board = (this.board = options.board ?? GUITAR_BOARD);
+    this.zone = board === GUITAR_BOARD ? PLUCK_ZONE : pluckZone(board);
+    const n = board.stringCount;
+    this.events = Array.from({ length: n }, () => ({ string: 0, delay: 0, velocity: 0 }));
+    this.damping = new Uint8Array(n);
+    this.side = new Int8Array(n);
+    this.lastPluck = new Float64Array(n).fill(-Infinity);
+    this.touchStart = new Float64Array(n).fill(-1);
   }
 
   update(rawX: number, rawY: number, rawZ: number, dt: number): number {
@@ -102,12 +117,15 @@ export class PluckDetector {
     const y = this.smoothing ? this.fy.filter(rawY, dt) : rawY;
     const z = this.smoothing ? this.fz.filter(rawZ, dt) : rawZ;
 
-    const height = z - GUITAR.stringZ;
+    const { stringY } = this.board;
+    const zone = this.zone;
+    const STRING_COUNT = this.board.stringCount;
+    const height = z - this.board.dims.stringZ;
     this.inZone =
-      inX(x) &&
-      height < PLUCK_ZONE.above &&
-      height > -PLUCK_ZONE.below &&
-      Math.abs(y) < stringSpan(x) / 2 + PLUCK_ZONE.edge;
+      this.inX(x) &&
+      height < zone.above &&
+      height > -zone.below &&
+      Math.abs(y) < this.board.stringSpan(x) / 2 + zone.edge;
 
     if (!this.started) {
       for (let s = 0; s < STRING_COUNT; s++) {
@@ -179,11 +197,12 @@ export class PluckDetector {
     // that point was on the strings.
     const t = Math.sign(d0) !== newSide && d0 !== d1 ? clamp01(d0 / (d0 - d1)) : 0;
     const cx = this.px + (x - this.px) * t;
-    const ch = this.pz + (z - this.pz) * t - GUITAR.stringZ;
+    const ch = this.pz + (z - this.pz) * t - this.board.dims.stringZ;
+    const zone = this.zone;
     const striking = dir === this.strumDir && this.time <= this.strumUntil;
-    const above = striking ? PLUCK_ZONE.strumAbove : PLUCK_ZONE.above;
-    const below = striking ? PLUCK_ZONE.strumBelow : PLUCK_ZONE.below;
-    if (!inX(cx) || ch >= above || ch <= -below) return;
+    const above = striking ? zone.strumAbove : zone.above;
+    const below = striking ? zone.strumBelow : zone.below;
+    if (!this.inX(cx) || ch >= above || ch <= -below) return;
     if (this.time - this.lastPluck[s] < REPLUCK_SECONDS) return;
 
     const event = this.events[this.count++];
@@ -192,7 +211,11 @@ export class PluckDetector {
     event.velocity = velocity;
     this.lastPluck[s] = this.time;
     this.strumDir = dir;
-    this.strumUntil = this.time + PLUCK_ZONE.strumHold;
+    this.strumUntil = this.time + zone.strumHold;
+  }
+
+  private inX(x: number): boolean {
+    return x > this.zone.minX && x < this.zone.maxX;
   }
 
   /**
@@ -221,10 +244,6 @@ export class PluckDetector {
     this.inZone = false;
     this.count = 0;
   }
-}
-
-function inX(x: number): boolean {
-  return x > PLUCK_ZONE.minX && x < PLUCK_ZONE.maxX;
 }
 
 function clamp01(v: number): number {

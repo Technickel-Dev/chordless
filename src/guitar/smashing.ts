@@ -8,8 +8,7 @@
 
 import { Matrix4, Object3D, Quaternion, Vector3 } from '@iwsdk/core';
 import { GuitarHold } from './air-guitar-component.js';
-import { GUITAR, OPEN_MIDI, STRING_COUNT } from './geometry.js';
-import { GuitarModel, NECK_START } from './guitar-model.js';
+import { GuitarModel } from './guitar-model.js';
 import { JOINT, TrackedHand } from './hands.js';
 import {
   applyImpact,
@@ -26,7 +25,6 @@ import { Scars } from '../smash/scars.js';
 import { Splinters } from '../smash/splinter.js';
 import { STAGE_FLOOR } from '../smash/tumble.js';
 import {
-  BREAK_X,
   createGuitarWreck,
   GuitarWreck,
   measurePiece,
@@ -65,7 +63,6 @@ const SWING_COOLDOWN = 0.25;
 const SPLINTER_SPEED = 4;
 /** Debris clatters at most this often. */
 const CLATTER_INTERVAL = 0.05;
-const TOP_FRET = 19;
 
 const FIST_TIPS = [JOINT.indexTip, JOINT.middleTip, JOINT.ringTip] as const;
 
@@ -141,7 +138,7 @@ export class GuitarSmasher {
     this.wreck = createGuitarWreck(model);
     for (const piece of [this.wreck.upper, this.wreck.lower, ...this.wreck.shards]) piece.body.floor = STAGE_FLOOR;
     this.wreck.guitar.floor = STAGE_FLOOR;
-    this.damage = freshDamage(STRING_COUNT, this.wreck.shards.length);
+    this.damage = freshDamage(model.board.stringCount, this.wreck.shards.length);
     this.scars = new Scars(debrisRoot);
     this.splinters = new Splinters(debrisRoot);
     const count = this.wreck.points.length / 3;
@@ -219,7 +216,7 @@ export class GuitarSmasher {
     const root = this.model.root;
     root.updateMatrixWorld(true);
     this.inverse.copy(root.matrixWorld).invert();
-    const reach = this.damage.neckBroken ? BREAK_X + 0.02 : GUITAR.nutX + 0.2;
+    const reach = this.damage.neckBroken ? this.wreck.breakX + 0.02 : this.model.board.dims.nutX + 0.2;
     for (let i = 0; i < 2; i++) {
       const hand = hands[i];
       const gripping = hand.tracked && this.isFist(hand) && this.nearNeck(reach);
@@ -442,7 +439,7 @@ export class GuitarSmasher {
     root.updateMatrixWorld(true);
     this.inverse.copy(root.matrixWorld).invert();
     const at = this.tmp.copy(this.hit).applyMatrix4(this.inverse);
-    const out = applyImpact(d, speed, region, at.x, at.y, this.wreck.shardCentres, this.random, this.outcome);
+    const out = applyImpact(d, speed, region, at.x, at.y, this.wreck.shardCentres, this.random, this.outcome, this.model.board);
     const now = this.synth.now;
     // The first real blow to the body, or any shard coming off, shows the body in its shards.
     if (!this.cracked && (out.shardsOff.length > 0 || (region === Region.Body && out.loss > 0))) {
@@ -460,9 +457,9 @@ export class GuitarSmasher {
     // Every string still on crashes out together.
     if (speed >= SMASH.snap) {
       const velocity = Math.min(1, speed / 9);
-      for (let s = 0; s < STRING_COUNT; s++) {
+      for (let s = 0; s < d.strings.length; s++) {
         if (!d.strings[s]) continue;
-        const midi = OPEN_MIDI[s] + Math.floor(this.random() * 5);
+        const midi = this.model.board.openMidi[s] + Math.floor(this.random() * 5);
         this.synth.pluck(s, midi, velocity, now + s * 0.004, false);
         this.soundingMidi[s] = midi;
         this.amp[s] = Math.max(this.amp[s], velocity);
@@ -499,7 +496,7 @@ export class GuitarSmasher {
       if (shard === this.wreck.bridgeShard) {
         // Nothing holds the strings at this end now.
         showBridgeGone(this.wreck);
-        for (let s = 0; s < STRING_COUNT; s++) {
+        for (let s = 0; s < this.damage.strings.length; s++) {
           if (!this.damage.strings[s]) continue;
           this.damage.strings[s] = false;
           this.snapString(s, now);
@@ -514,7 +511,8 @@ export class GuitarSmasher {
     this.wreck.bridgeStubs[s].visible = !this.damage.wrecked;
     this.wreck.nutStubs[s].visible = true;
     // A string snapping: a bright ping, cut short.
-    this.synth.pluck(s, OPEN_MIDI[s] + TOP_FRET, 1, now + 0.01, false);
+    const board = this.model.board;
+    this.synth.pluck(s, board.openMidi[s] + board.dims.fretCount, 1, now + 0.01, false);
     this.synth.choke(s, now + 0.1);
     this.amp[s] = 0;
   }
@@ -686,11 +684,11 @@ export class GuitarSmasher {
   /** Whether the palm (from isFist) is round the neck, up to `reach` along it. */
   private nearNeck(reach: number): boolean {
     const p = this.tmp.copy(this.palm).applyMatrix4(this.inverse);
-    return p.x > NECK_START - 0.02 && p.x < reach && Math.hypot(p.y, p.z + 0.008) < GRAB_RADIUS;
+    return p.x > this.model.neckStart - 0.02 && p.x < reach && Math.hypot(p.y, p.z + 0.008) < GRAB_RADIUS;
   }
 
   private palmAboveBreak(hand: TrackedHand): boolean {
     this.inverse.copy(this.model.root.matrixWorld).invert();
-    return this.palmOf(hand).applyMatrix4(this.inverse).x > BREAK_X;
+    return this.palmOf(hand).applyMatrix4(this.inverse).x > this.wreck.breakX;
   }
 }

@@ -29,6 +29,7 @@
   .icon-button {
     width: 64px;
     height: 64px;
+    min-width: 64px;
     justify-content: center;
     padding-left: 0px;
     padding-right: 0px;
@@ -45,6 +46,11 @@
 
   .title:dark {
     color: #85b7eb;
+  }
+
+  .logo {
+    height: 48px;
+    width: 217px;
   }
 
   .menu {
@@ -179,7 +185,7 @@
     <Button id="menu-close" variant="secondary" class="icon-button">
       <ButtonIcon><X></X></ButtonIcon>
     </Button>
-    <div id="title" class="title">CHORDLESS</div>
+    <div id="title" class="title"><img class="logo" src="./ui/logo.png" /></div>
     <Button id="hint-toggle" variant="secondary" class="icon-button">
       <ButtonIcon><CircleHelp></CircleHelp></ButtonIcon>
     </Button>

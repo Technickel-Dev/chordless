@@ -67,6 +67,7 @@ import { createLightingRig } from './scene-assets/theatre-rig.scene-asset.js';
 import { createTheatreStage } from './scene-assets/theatre-stage.scene-asset.js';
 import { createTrainRoofSet } from './scene-assets/train-roof.scene-asset.js';
 import { createBeater, createTriangle } from './scene-assets/triangle.scene-asset.js';
+import { createBaton, createMusicStand } from './scene-assets/baton.scene-asset.js';
 import { createTropicalBeachSet } from './scene-assets/tropical-beach.scene-asset.js';
 import { createUnderwaterSet } from './scene-assets/underwater.scene-asset.js';
 import { createUpsideDownRoomSet } from './scene-assets/upside-down-room.scene-asset.js';
@@ -172,4 +173,6 @@ export default defineAssets({
   trumpet: createTrumpet(),
   trombone: createTrombone(),
   'french-horn': createFrenchHorn(),
+  baton: createBaton(),
+  'music-stand': createMusicStand(),
 });

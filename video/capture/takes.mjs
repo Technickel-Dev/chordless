@@ -4,6 +4,7 @@ import path from 'node:path';
 import { startApp } from '../../tests/app-start.js';
 import { meltdown, swingtest } from './meltdown.mjs';
 import { CLIPS } from './clips.mjs';
+import { baton, batonCheck } from './baton.mjs';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -34,6 +35,8 @@ const wt = (script, scene, env = {}) => ({ script, scene, env, seconds: 185 });
 
 export const TAKE_LIST = {
   meltdown: { scene: 'stage', run: meltdown, seconds: 220, capture: 'canvas' },
+  baton: { scene: 'stage', run: baton, seconds: 120, capture: 'canvas' },
+  'baton-check': { scene: 'stage', run: batonCheck, seconds: 120 },
   swingtest: { scene: 'stage', run: swingtest, seconds: 90 },
   'tune-ode': { scene: 'cliffside', run: tune, seconds: 70 },
   'wt-guitar': wt('tests/william-tell.mjs', 'cliffside'),

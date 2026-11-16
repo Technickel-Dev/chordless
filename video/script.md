@@ -32,7 +32,7 @@ episodes are trimmed.
 | 4. The rage | 0:45.3–1:07.9 | *William Tell* builds under him, and the picture goes red, then white |
 | 5. The high point | 1:07.9–1:20.5 | The score's tutti hits and he smashes the guitar. This is where destruction is introduced |
 | 6. The cards | 1:20.5–2:35.3 | **FULL DESTRUCTION**, **MULTIPLE INSTRUMENTS**, **CHANGING ENVIRONMENTS**, over the rest of the score |
-| 7. The bow | 2:35.3–2:52.3 | Final chord, the bow, a short pitch over real Quest footage, the end card |
+| 7. The bow | 2:35.3–2:52.3 | Final chord, the curtain call (the curtains close, bouquets thrown) under a short pitch, to black, the end card |
 
 ## How the rules shape this cut
 
@@ -378,18 +378,16 @@ shorten the music.*
 
 **(2:35.3 – 2:52.3)**
 
-#### Shot 7-1: Ovation (3 s)
+#### Shot 7-1: The Curtain Call (about 9.5 s)
 
-> **Storyboard Prompt:** "A photorealistic 16:9 medium shot of TECHNICKEL on the podium, VR headset pushed up on his head, baton lowered, in a warm spotlight in the gilded concert hall."
->
-> **Video Prompt:** "TECHNICKEL turns to the camera and takes a deep, theatrical bow. Golden confetti drifts down through the spotlight."
->
-> **Audio:** Applause swell (SFX), fading under the VO.
+Drawn, not generated (`video/curtain.mjs`). The closing chord's grid pulls back to become the stage
+of a gilded theatre, like the one in shot 1-1. A swagged valance drops into place and the red
+velvet curtains close over the stage, their hems swinging as they meet. Bouquets are thrown from
+the audience, one about every half second, and land on the apron in front of the curtains. A warm
+spot comes up on the closed curtains, then the picture fades to black. The end card fades in from
+the black.
 
-#### Shot 7-2: The Pitch, Over Real Footage (8 s)
-
-Picture: `R-quest` (your own hands, playing on a real Quest, with its own audio low under the VO),
-then `R-scene-flip` for the last 2 s.
+**Audio:** Applause from the moment the chord is cut off, under the VO, gone with the picture.
 
 **Technickel (VO, warm, unhurried):**
 That's Chordless. Not a game about music: an orchestra you can play, and break, in a headset.
@@ -474,7 +472,6 @@ None of this exists yet. Do it before recording.
 | c-1 to c-5 | The look, the fist, the face, the podium, the grin | 3–4 s each; only 1–2 s is used |
 | c-6 | The cutoff | 3–4 s |
 | c-grid | Technickel conducting in a neutral 2/4 pattern, for the grid centre tile | 8–10 s. It won't be on tempo, so it gets retimed to 152 bpm in the edit |
-| 7-1 | The bow | 5 s |
 
 ### Chordless takes (scripted, screen-captured)
 
@@ -508,5 +505,5 @@ Each take is a full `play:*` run, 1920×1080 at 60 fps, opened with `?scene=<fil
 | vo-1-8 | "And now, tonight's performance: Chordless." | 0:25.3 |
 | vo-a | "Most music in VR is a rhythm game…" | 0:31, under the tune |
 | vo-b | "It's built with Meta's Immersive Web SDK…" | the quietest middle episode |
-| vo-7-2 | "That's Chordless." | the bow + 3.5 s |
+| vo-7-2 | "That's Chordless." | the curtain call + 0.8 s |
 | vo-7-3 | "Practice anywhere." | the end card |

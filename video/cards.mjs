@@ -90,7 +90,7 @@ function html(card) {
     case 'lower':
       return `<div class="lower"><b>${esc(card.text[0])}</b>${card.text[1] ? `<i>${esc(card.text[1])}</i>` : ''}</div>`;
     case 'sub':
-      return `<div class="sub"><span>${esc(card.text)}</span></div>`;
+      return `<div class="sub"${card.bottom != null ? ` style="bottom:${card.bottom}px"` : ''}><span>${esc(card.text)}</span></div>`;
     case 'bug':
       return `<div class="bug">IN-APP CAPTURE</div>`;
     case 'credit':

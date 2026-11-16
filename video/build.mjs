@@ -18,6 +18,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { renderCards, renderSteam, W, H } from './cards.mjs';
+import { renderCurtain, writeApplause, CURTAIN } from './curtain.mjs';
 import { barTime, ENTRANCES, MONTAGE, SCENE_RUN, END_BAR } from './score.mjs';
 import { beatMap, readTake, onsets, interp, soundLag } from './sync.mjs';
 
@@ -146,9 +147,10 @@ const seg = (s) => {
   return T - s.dur;
 };
 const voAt = (id, at, vol = 1) => audio.push({ file: path.join(VO, `${id}.wav`), ss: 0, dur: dur(id), at, vol, kind: 'vo' });
-const sub = (id, at) => {
+/** A caption for a line; `bottom` (px) lifts it clear of something at the foot of the frame. */
+const sub = (id, at, { bottom } = {}) => {
   const d = dur(id);
-  overlays.push({ id: card({ id: `sub-${id}`, kind: 'sub', text: vo[id] }), t0: at, t1: at + d });
+  overlays.push({ id: card({ id: `sub-${id}`, kind: 'sub', text: vo[id], bottom }), t0: at, t1: at + d });
 };
 const ai = (shot, d) => seg({ kind: 'png', id: card({ id: `ai-${shot}`, kind: 'ai', shot }), dur: d, label: `AI ${shot}` });
 /** A take's picture at score time `m` (seconds into the clip that began at its first note). */
@@ -421,15 +423,23 @@ const SCENE_NAMES = { 'space-station': 'SPACE STATION', 'volcano-rim': 'VOLCANO 
 }
 const SCORE_END = T;
 
-// ---- the bow
+// ---- the curtain call: the closing chord's stage pulls back into a theatre, the
+// curtains close, bouquets are thrown onto the apron, to applause; to black, and the
+// end card fades in.
 {
-  ai('7-1', 3.0);
-  const t1 = ai('real-quest', dur('vo-7-2') + 0.8);
-  voAt('vo-7-2', t1 + 0.4);
-  sub('vo-7-2', t1 + 0.4);
-  const t2 = seg({ kind: 'png', id: card({ id: 'end', kind: 'end' }), dur: 5.5, label: 'end card' });
-  voAt('vo-7-3', t2 + 0.5);
-  sub('vo-7-3', t2 + 0.5);
+  const t0 = T;
+  const d = 0.8 + dur('vo-7-2') + 0.3 + CURTAIN.fade + CURTAIN.black;
+  seg({ kind: 'curtain', dur: d, label: 'the curtain call: curtains close, bouquets, to black' });
+  voAt('vo-7-2', t0 + 0.8);
+  // (The caption sits on the curtains, clear of the bouquets on the apron.)
+  sub('vo-7-2', t0 + 0.8, { bottom: 140 });
+  // The applause starts as the chord is cut off and is gone with the picture; it ducks under the line.
+  const ad = 1.0 + d - CURTAIN.black;
+  const file = writeApplause(path.join(B, 'applause.wav'), { dur: ad, fadeOutAt: ad - CURTAIN.fade - 0.2, fadeOut: CURTAIN.fade + 0.2 });
+  audio.push({ file, ss: 0, dur: ad, at: t0 - 1.0, vol: 3.2, kind: 'stem' });
+  const t2 = seg({ kind: 'png', id: card({ id: 'end', kind: 'end' }), dur: 5.5, fadeIn: 0.8, label: 'end card' });
+  voAt('vo-7-3', t2 + 0.8);
+  sub('vo-7-3', t2 + 0.8);
 }
 const TOTAL = T;
 
@@ -487,10 +497,13 @@ const segFiles = [];
 timeline.forEach((s, i) => {
   const out = path.join(SEG, `${String(i).padStart(3, '0')}.mp4`);
   segFiles.push(out);
+  // The curtain call is drawn after the rest: it starts from the last frame of the shot before it.
+  if (s.kind === 'curtain') return;
   let vf = scaleFilter;
   const args = ['-y', '-hide_banner', '-loglevel', 'error'];
   if (s.kind === 'png') {
     args.push('-loop', '1', '-framerate', String(FPS), '-t', s.dur.toFixed(3), '-i', cardFiles[s.id]);
+    if (s.fadeIn) vf = `${scaleFilter},fade=t=in:st=0:d=${s.fadeIn}`;
   } else if (s.kind === 'white') {
     args.push('-f', 'lavfi', '-t', s.dur.toFixed(3), '-i', `color=c=white:s=${W}x${H}:r=${FPS}`);
     vf = `format=yuv420p,fade=t=in:st=0:d=${Math.min(s.dur, 3).toFixed(2)}:color=white`;
@@ -608,6 +621,13 @@ timeline.forEach((s, i) => {
   }
   if (s.kind !== 'grid') run('ffmpeg', [...args, '-vf', vf, '-t', s.dur.toFixed(3), ...enc, '-r', String(FPS), out]);
 });
+for (const [i, s] of timeline.entries()) {
+  if (s.kind !== 'curtain') continue;
+  // The last frame of the shot before (every frame is written over the one before it).
+  const bg = path.join(B, 'curtain-bg.png');
+  run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-sseof', '-0.3', '-i', segFiles[i - 1], '-update', '1', bg]);
+  await renderCurtain({ background: bg, out: segFiles[i], dur: s.dur, fps: FPS, enc });
+}
 writeFileSync(path.join(SEG, 'list.txt'), segFiles.map((f) => `file '${f.replace(/\\/g, '/')}'`).join('\n'));
 run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', path.join(SEG, 'list.txt'), '-c', 'copy', path.join(B, 'picture.mp4')]);
 

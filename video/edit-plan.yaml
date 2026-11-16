@@ -72,7 +72,7 @@ tracks:
 
 media:
   ai: # clips/<id>.mp4
-    [1-1, 1-2, 1-3, 1-4, 1-5, 1-6, 1-7, c-1, c-2, c-3, c-4, c-5, c-6, c-grid, 7-1]
+    [1-1, 1-2, 1-3, 1-4, 1-5, 1-6, 1-7, c-1, c-2, c-3, c-4, c-5, c-6, c-grid]
   tune: # takes/<id>.mp4, audio in the same file
     [guitar-cliffside-tune, guitar-cliffside-rage]
   smash: # takes/<id>.mp4, one scripted smash each; audio in the same file
@@ -266,10 +266,8 @@ score:
 
 # ------------------------------------------------------------------- beat 7
 beat7:
-  - { id: 7-1, track: V2, end: 0.0, until_end: 3.0 }
-  - { id: R-quest, track: V1, end: 3.0, until_end: 9.0 }
-  - { id: R-scene-flip, track: V1, end: 9.0, until_end: 11.0 }
-  - { id: end-card, track: V13, end: 11.0, until_end: 17.0, kind: title, text: ["CHORDLESS", "Play it now", "https://chordless.technickel.dev", "Built with Meta's Immersive Web SDK (IWSDK)", "Meta VR Start Developer Competition 2026"] }
+  - { id: curtain-call, track: V1, end: 0.0, until_end: 9.5, note: "drawn by video/curtain.mjs: the grid pulls back into a theatre, the curtains close, bouquets land on the apron; to black" }
+  - { id: end-card, track: V13, end: 9.5, until_end: 15.0, fade_in: 0.8, kind: title, text: ["CHORDLESS", "Play it now", "https://chordless.technickel.dev", "Built with Meta's Immersive Web SDK (IWSDK)", "Meta VR Start Developer Competition 2026"] }
 
 # ----------------------------------------------------------- rage ramps (beat 4)
 # All applied on V14 over the whole of beat 4 and the first second of beat 5.
@@ -329,8 +327,8 @@ vo: # A1
   - { id: vo-1-8, at: 25.300 }
   - { id: vo-a, at: 31.000, must_fit: true, duck_stems: true, until: 42.000, note: under the tune }
   - { id: vo-b, section: middle-quiet, offset: 5.5, must_fit: true, duck_stems: true }
-  - { id: vo-7-2, end: 3.5 }
-  - { id: vo-7-3, end: 12.0 }
+  - { id: vo-7-2, end: 0.8, note: over the curtain call }
+  - { id: vo-7-3, end: 10.3 }
 
 sfx: # A10, plus the real capture's own audio on A11
   # (The baton taps at 27.6, 28.2 and 28.8 are the baton-countin take's own sound.)
@@ -338,8 +336,7 @@ sfx: # A10, plus the real capture's own audio on A11
   - { id: sfx-heartbeat, at: 45.3, until: 67.9, rate_ramp: [1.0, 2.0], note: doubling in rate, on the beat }
   - { id: sfx-whoosh, at: 54.9, note: into the cut to black }
   - { id: sfx-bass-hit, bar: 260, note: the swing into the floor, under the speed ramp }
-  - { id: sfx-applause, end: -0.5, until_end: 8.0, fade_out: 2.0 }
-  - { id: R-quest, track: A11, end: 3.0, until_end: 9.0, level_db: -14 }
+  - { id: sfx-applause, end: -1.0, until_end: 9.15, fade_out: 1.45, duck_under_vo: true, note: synthesized by video/curtain.mjs }
   - { id: sfx-broom-knock, end: 17.5, optional: true }
 
 # ------------------------------------------------------ captions and credits

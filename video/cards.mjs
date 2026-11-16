@@ -57,10 +57,9 @@ const base = `
   .credit{position:absolute;font:500 18px/1.35 'Segoe UI';padding:6px 12px;background:rgba(0,0,0,.55);border-radius:4px;max-width:560px}
   .end{position:absolute;inset:0;background:#0d0d14;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center}
   .logo{height:auto;filter:drop-shadow(0 6px 24px rgba(0,0,0,.55))}
-  .end .logo{width:640px;margin-bottom:6px;filter:none}
+  .end .logo{width:700px;margin-bottom:10px;filter:none}
   .end h2{font:500 28px 'Segoe UI';color:#ffb000}
-  .end p{font:400 20px/1.4 'Segoe UI';color:#b9b9c8;max-width:1100px}
-  .end .fine{font:400 23px/1.5 'Segoe UI';color:#dcdce6;margin-top:10px}
+  .end p{font:400 17px/1.4 'Segoe UI';color:#a9a9bb;max-width:1000px}
   .end .url{font:600 44px 'Segoe UI';color:#fafaf9;letter-spacing:.01em;margin:0 0 10px}
   .end .url small{display:block;font:400 30px 'Shrikhand';color:#f59e0b;margin-bottom:6px}
   .title{position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;flex-direction:column;align-items:center;justify-content:center}
@@ -100,7 +99,7 @@ function html(card) {
       // *word* is set like the app's title screen: amber italics.
       return `<div class="title"><img class="logo" src="${LOGO}" alt="${esc(card.text[0])}"><h2>${esc(card.text[1] ?? '').split('*').map((part, i) => (i % 2 ? `<em>${part}</em>` : part)).join('')}</h2></div>`;
     case 'end':
-      return `<div class="end"><img class="logo" src="${LOGO}" alt="Chordless"><div class="url"><small>Play it now</small>https://chordless.technickel.dev</div><h2>Built with Meta's Immersive Web SDK (IWSDK)</h2><p>Meta VR Start Developer Competition 2026</p><p class="fine">Music: Beethoven, <i>Ode to Joy</i> · Rossini, <i>William Tell Overture</i>, Finale · public domain<br>William Tell arranged from Max Wilkinson's typeset score (IMSLP #22579, CC BY 3.0)<br>Every note played live in Chordless · Conductor scenes AI-generated</p></div>`;
+      return `<div class="end"><img class="logo" src="${LOGO}" alt="Chordless"><div class="url"><small>Play it now</small>https://chordless.technickel.dev</div><h2>Built with Meta's Immersive Web SDK (IWSDK)</h2><p>Meta VR Start Developer Competition 2026</p><p>Music: Beethoven, <i>Ode to Joy</i> · Rossini, <i>William Tell Overture</i>, Finale · public domain<br>William Tell arranged from Max Wilkinson's typeset score (IMSLP #22579, CC BY 3.0)<br>Every note played live in Chordless · Conductor scenes AI-generated</p></div>`;
     case 'white':
       return `<div class="white"></div>`;
     case 'redvig':

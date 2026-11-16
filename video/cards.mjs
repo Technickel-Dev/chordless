@@ -99,7 +99,7 @@ function html(card) {
       // *word* is set like the app's title screen: amber italics.
       return `<div class="title"><img class="logo" src="${LOGO}" alt="${esc(card.text[0])}"><h2>${esc(card.text[1] ?? '').split('*').map((part, i) => (i % 2 ? `<em>${part}</em>` : part)).join('')}</h2></div>`;
     case 'end':
-      return `<div class="end"><img class="logo" src="${LOGO}" alt="Chordless"><div class="url"><small>Play it now</small>https://chordless.technickel.dev</div><h2>Built with IWSDK, Meta's Immersive Web SDK</h2><p>Meta VR Start Developer Competition 2026</p><p>Music: Beethoven, Ode to Joy (1824), and Rossini, William Tell Overture, Finale (1829), both public domain. William Tell arranged from the full score typeset by Max Wilkinson (2008), IMSLP #22579, CC BY 3.0. All music is in-app capture: every note is played and synthesized live by Chordless. Built with IWSDK and WebXR. Conductor scenes are AI-generated; all gameplay is real.</p></div>`;
+      return `<div class="end"><img class="logo" src="${LOGO}" alt="Chordless"><div class="url"><small>Play it now</small>https://chordless.technickel.dev</div><h2>Built with Meta's Immersive Web SDK (IWSDK)</h2><p>Meta VR Start Developer Competition 2026</p><p>Music: Beethoven, Ode to Joy (1824), and Rossini, William Tell Overture, Finale (1829), both public domain. William Tell arranged from the full score typeset by Max Wilkinson (2008), IMSLP #22579, CC BY 3.0. All music is in-app capture: every note is played and synthesized live by Chordless. Built with IWSDK and WebXR. Conductor scenes are AI-generated; all gameplay is real.</p></div>`;
     case 'white':
       return `<div class="white"></div>`;
     case 'redvig':

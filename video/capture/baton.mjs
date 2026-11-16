@@ -19,7 +19,10 @@ const REACH = 0.34;
 /** The wrist's turn while tapping: knuckles forward and down, so the baton points over the desk. */
 const TAP_TURN = { pitch: -38, yaw: -16, roll: 0 };
 
-export async function baton({ page, frame }, app, { record = true } = {}) {
+/** The Ode to Joy's beat (quarter = 100), which the count-in taps keep. */
+const ODE_BEAT = 0.6;
+
+export async function baton({ page, frame }, app, { record = true, countIn = false } = {}) {
   const log = (m) => console.log(`[baton] ${m}`);
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && !/ERR_ABORTED/.test(m.text()) && errors.push(m.text().slice(0, 200)));
@@ -74,7 +77,8 @@ export async function baton({ page, frame }, app, { record = true } = {}) {
   // The hint strip folded away, so the stand is in clear view.
   await choose(frame, dispatch, 'hint-toggle');
   // First person, looking down at the stand.
-  await dispatch('set_transform', { device: 'headset', position: { x: 0.05, y: 1.6, z: 0.05 }, orientation: { pitch: -24, yaw: 4, roll: 0 } });
+  // (The count-in looks a little higher, so the raised baton and the hall stay in view.)
+  await dispatch('set_transform', { device: 'headset', position: { x: 0.05, y: 1.6, z: 0.05 }, orientation: { pitch: countIn ? -15 : -24, yaw: 4, roll: 0 } });
   await dispatch('set_transform', { device: 'hand-left', position: { x: -0.35, y: 0.95, z: 0.05 }, orientation: { pitch: 0, yaw: 0, roll: 0 }, anchor: 'wrist' });
   await dispatch('set_hand_pose', { device: 'hand-left', poseId: 'default' });
   await dispatch('set_hand_pose', { device: 'hand-right', poseId: 'fist' });
@@ -111,6 +115,52 @@ export async function baton({ page, frame }, app, { record = true } = {}) {
   // Over the top edge, the shaft's end crossing it, a little behind the desk.
   const rimAbove = add(add(d.rim, d.up, 0.06), d.out, -0.035);
   const rimBelow = add(add(d.rim, d.up, -0.012), d.out, -0.035);
+
+  if (countIn) {
+    // The trailer's "from the top": three taps on the rim on the Ode's beats -4, -3
+    // and -2, both arms raised through beat -1, and the downbeat landing on beat 0,
+    // where the edit cuts to the guitar. Each move is sent ahead of its beat on the
+    // wall clock, so the taps keep time however long a round trip takes.
+    const until = (t) => wait(Math.max(0, t - Date.now()));
+    const send = (device, position, orientation, seconds) => dispatch('animate_to', { device, position, orientation, anchor: 'wrist', duration: seconds });
+    // From the conductor's right, close, the baton in profile against the stand: from
+    // the head, the wrists (which tap at eye height) would sit on the lens. The stand
+    // stays where it was set down.
+    await dispatch('set_transform', { device: 'headset', position: { x: 0.6, y: 1.6, z: -0.22 }, orientation: { pitch: 0, yaw: 0, roll: 0 } });
+    await dispatch('look_at', { device: 'headset', target: { x: 0.08, y: 1.6, z: -0.42 } });
+    // The left hand out of the shot (one hand animates at a time, so it could not keep up).
+    await dispatch('set_transform', { device: 'hand-left', position: { x: 1.2, y: 1.0, z: 0.1 }, orientation: { pitch: 0, yaw: 0, roll: 0 }, anchor: 'wrist' });
+    await glide('hand-right', wristFor(clear), TAP_TURN, 0.3);
+    await glide('hand-right', wristFor(rimAbove), TAP_TURN, 0.3);
+    await wait(700);
+    const DOWN = 0.05;
+    const t0 = Date.now() + 500; // the first tap lands
+    await mark('countin', { beat: ODE_BEAT, firstTapIn: 0.5 });
+    const before = (await baton()).taps;
+    for (let k = 0; k < 3; k++) {
+      await until(t0 + k * ODE_BEAT * 1000 - DOWN * 1000);
+      await send('hand-right', wristFor(rimBelow), TAP_TURN, DOWN);
+      await wait(DOWN * 1000 + 40);
+      await send('hand-right', wristFor(rimAbove), TAP_TURN, 0.12);
+    }
+    // The baton raised (animate_to resolves when its move ends), held through beat -1.
+    await send('hand-right', add(wristFor(clear), { x: 0.03, y: 0.14, z: 0.02 }), { pitch: 28, yaw: -12, roll: 0 }, 0.4);
+    const taps = (await baton()).taps - before;
+    // The downbeat, sharp, landing on beat 0, back where the taps started from: clear
+    // of the stand, the tip over its rim. (Sent a little early: the wait runs late.)
+    const SNAP = 0.14;
+    const go = t0 + 4 * ODE_BEAT * 1000 - SNAP * 1000 - 40;
+    await until(go);
+    const late = (Date.now() - go) / 1000;
+    await send('hand-right', wristFor(clear), TAP_TURN, SNAP);
+    await mark('downbeat', { late });
+    await wait(1600);
+    const extra = (await baton()).taps - before - taps;
+    await mark('end');
+    log(`count-in taps ${taps} (want 3), taps after ${extra} (want 0), errors ${JSON.stringify(errors)}`);
+    return { taps, extra, errors };
+  }
+
   await mark('attention');
   for (let i = 0; i < 3; i++) {
     await tap('rim', rimAbove, rimBelow, 0.05);
@@ -196,3 +246,6 @@ export async function baton({ page, frame }, app, { record = true } = {}) {
 
 /** The same moves, not recorded: an end-to-end check. */
 export const batonCheck = (ctx, app) => baton(ctx, app, { record: false });
+
+/** The trailer's count-in (shot 1-9): three taps on the Ode's beat, then the downbeat. */
+export const batonCountIn = (ctx, app) => baton(ctx, app, { countIn: true });

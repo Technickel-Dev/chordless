@@ -202,13 +202,15 @@ And now, tonight's performance: Chordless.
 
 #### Shot 1-9: From the Top (0:27 – 0:30)
 
-> **Storyboard Prompt:** "A photorealistic 16:9 medium shot of TECHNICKEL on the podium wearing a sleek, unbranded white VR headset over his sunglasses emoji face, baton raised in the spotlight."
->
-> **Video Prompt:** "TECHNICKEL taps his baton three times on the music stand, raises both arms, holds for one beat, then gives a sharp downbeat."
+**Real footage, not a generated clip:** the app's own air baton, on the theatre stage
+(`takes/baton-countin`, recorded by `node video/capture/take.mjs baton-countin`). Seen from the
+conductor's right, close, the baton taps the top edge of the music stand three times, rises, and
+gives a sharp downbeat. The taps are the baton's own sound.
 
-**Sync note:** The three baton taps are SFX on beats −4, −3 and −2 before the first note (the tune is
+**Sync note:** The three taps land on beats −4, −3 and −2 before the first note (the tune is
 quarter = 100, so they are 0.6 s apart), and the downbeat cuts straight to the guitar on the first
-note, at **0:30**.
+note, at **0:30**. The edit finds the taps in the take's sound and places the shot by them, so they
+keep the tune's time.
 
 ---
 
@@ -462,7 +464,7 @@ None of this exists yet. Do it before recording.
 
 | ID | Use | Length to generate |
 | --- | --- | --- |
-| 1-1 to 1-7, 1-9 | Beat 1 | 5–8 s each, trimmed in the edit |
+| 1-1 to 1-7 | Beat 1 | 5–8 s each, trimmed in the edit |
 | c-1 to c-5 | The look, the fist, the face, the podium, the grin | 3–4 s each; only 1–2 s is used |
 | c-6 | The cutoff | 3–4 s |
 | c-grid | Technickel conducting in a neutral 2/4 pattern, for the grid centre tile | 8–10 s. It won't be on tempo, so it gets retimed to 152 bpm in the edit |

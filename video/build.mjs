@@ -126,7 +126,7 @@ for (const name of ['meltdown']) if (have(name)) takes[name] = { ...analyse(name
 /** Seconds after the finale's first bar that a take's first note sounds. */
 const firstNoteOffset = (name) => (takes[name] ? (takes[name].firstBeat - beats['wt-guitar']) * 60 / 152 : 0);
 for (const f of (existsSync(TAKES) ? (await import('node:fs')).readdirSync(TAKES) : []))
-  if (/^(orch|crash|scn)-.*\.json$/.test(f)) {
+  if (/^(orch|crash|scn|baton)-.*\.json$/.test(f)) {
     const name = f.slice(0, -5);
     if (existsSync(path.join(TAKES, `${name}.webm`))) takes[name] = { name, videoFile: path.join(TAKES, `${name}.webm`), audioFile: path.join(TAKES, `${name}.audio.wav`) };
   }
@@ -217,9 +217,40 @@ const AUDIO_LAG = 0.055;
   voAt('vo-1-8', t0 + 0.3);
   sub('vo-1-8', t0 + 0.3);
 }
-const tapT = T + 0.0;
-ai('1-9', 3.0);
-for (const k of [0, 1, 2]) audio.push({ kind: 'tap', at: tapT + 1.2 + k * 0.6, dur: 0.08, vol: 0.9 });
+// ---- 1-9, from the top: the baton taps the stand on the Ode's beats -4, -3 and -2,
+// rises, and its downbeat cuts to the guitar's first note (beat 0). The taps are found
+// in the take's sound, and the shot is placed so they keep the tune's time.
+const ODE_BEAT = 0.6; // quarter = 100
+/** The cut to the tune, this far ahead of its first note's attack. */
+let tunePre = 0.5;
+if (md) {
+  // The guitar's first note, in the picture: the first rise in the take's sound at the tune.
+  const first = onsets('meltdown', md.vTune - 0.3 + AUDIO_LAG, md.vTune + 0.5 + AUDIO_LAG, { rise: 12 })[0];
+  md.vNote = first ? first.t - AUDIO_LAG : md.vTune;
+  console.log('tune', JSON.stringify({ vTune: md.vTune, vNote: md.vNote }));
+}
+const countIn = (() => {
+  if (!takes['baton-countin']) return null;
+  const take = readTake('baton-countin');
+  const c = take.marks.find((m) => m.what === 'countin').t / 1000;
+  const taps = onsets('baton-countin', c + AUDIO_LAG, c + 2.2 + AUDIO_LAG, { rise: 12 }).slice(0, 3).map((o) => o.t - AUDIO_LAG);
+  if (taps.length < 3) return console.warn('count-in: fewer than three taps heard'), null;
+  // Beat 0, fitted through all three taps.
+  const beat0 = taps.reduce((s, t, k) => s + t + (4 - k) * ODE_BEAT, 0) / 3;
+  console.log('count-in', JSON.stringify({ taps: taps.map((t) => +(t - beat0).toFixed(3)) }));
+  return { taps, beat0 };
+})();
+if (countIn && md) {
+  tunePre = 0.04;
+  const v0 = countIn.taps[0] - 0.7;
+  const d = countIn.beat0 - tunePre - v0;
+  const t0 = seg({ kind: 'take', take: 'baton-countin', at: v0, dur: d, zoom: 1.2, zoomAt: [0.45, 0.45], label: '1-9 from the top: the baton count-in' });
+  audio.push({ file: takes['baton-countin'].audioFile, ss: v0 + AUDIO_LAG, dur: d, at: t0, vol: 1, kind: 'sfx', fadeIn: 0.1 });
+} else {
+  const tapT = T + 0.0;
+  ai('1-9', 3.0);
+  for (const k of [0, 1, 2]) audio.push({ kind: 'tap', at: tapT + 1.2 + k * 0.6, dur: 0.08, vol: 0.9 });
+}
 
 // ---- one unbroken take in the theatre. The tune's first phrase (no voiceover),
 // its last note wrong, a short fury (shake, red, steam), the guitar smashed in
@@ -230,7 +261,7 @@ let tW = 0;
 let tWreck = 0;
 const mseg = (v0, v1, extra = {}) => seg({ kind: 'take', take: 'meltdown', at: v0, dur: v1 - v0, ...extra });
 if (md) {
-  const a0 = md.vTune - 0.5;
+  const a0 = md.vNote - tunePre;
   const tA = mseg(a0, md.vFlub - 0.05, { label: 'the tune, in the theatre' });
   overlays.push({ id: card({ id: 'lower-guitar', kind: 'lower', text: ['GUITAR · Theatre'] }), t0: tA + 0.4, t1: tA + 3.4 });
   // The wrong note: a punch, a red flash. The rage starts here and not before.
@@ -424,7 +455,7 @@ overlays.push({ id: card({ id: 'credit-capture', kind: 'credit', text: 'In-app c
   const MUSIC_END = CHORD + 4.4;
   if (md) {
     // The tune, the silence, the smash and the menu, as they sounded; then the trumpet, on the score's clock.
-    const a0 = md.vTune - 0.5;
+    const a0 = md.vNote - tunePre;
     const aEnd = md.wt.at(-0.3);
     // The tune and its wrong note brought up to sit near the orchestra; the rest as recorded.
     const aSplit = md.vFlub + 1.6;
@@ -636,5 +667,6 @@ run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'concat', '-saf
   writeFileSync(fs, filters.join(';\n'));
   run('ffmpeg', [...args, '-filter_complex_script', fs, '-map', '[out]', '-ar', '48000', path.join(B, 'mix.wav')]);
 }
-run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', path.join(B, 'picture-text.mp4'), '-i', path.join(B, 'mix.wav'), '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', path.join(B, 'first-pass.mp4')]);
+// The mix is padded with silence so the picture (the end card) runs to its end; the music stops sooner.
+run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', path.join(B, 'picture-text.mp4'), '-i', path.join(B, 'mix.wav'), '-c:v', 'copy', '-af', 'apad', '-c:a', 'aac', '-b:a', '192k', '-shortest', path.join(B, 'first-pass.mp4')]);
 console.log(`first pass: ${path.join(B, 'first-pass.mp4')} (${TOTAL.toFixed(1)} s, ${timeline.length} cuts)`);

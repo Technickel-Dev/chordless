@@ -398,8 +398,13 @@ That's Chordless. Not a game about music: an orchestra you can play, and break, 
 
 Designed in Resolve. **CHORDLESS**, the site's address (**https://chordless.technickel.dev**,
 large, under the logo, with "Play it now" above it), *Built with Meta's Immersive Web SDK
-(IWSDK)*, and "Meta VR Start Developer Competition 2026". The credits
-block from [Attribution](#attribution) runs in small type underneath.
+(IWSDK)*, and "Meta VR Start Developer Competition 2026". Underneath, the credits from
+[Attribution](#attribution) in three short, legible lines (the long form goes in the YouTube
+description):
+
+> Music: Beethoven, *Ode to Joy* · Rossini, *William Tell Overture*, Finale · public domain
+> William Tell arranged from Max Wilkinson's typeset score (IMSLP #22579, CC BY 3.0)
+> Every note played live in Chordless · Conductor scenes AI-generated
 
 **Technickel (VO):**
 Practice anywhere. Break anything.

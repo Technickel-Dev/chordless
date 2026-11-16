@@ -99,7 +99,7 @@ function html(card) {
       // *word* is set like the app's title screen: amber italics.
       return `<div class="title"><img class="logo" src="${LOGO}" alt="${esc(card.text[0])}"><h2>${esc(card.text[1] ?? '').split('*').map((part, i) => (i % 2 ? `<em>${part}</em>` : part)).join('')}</h2></div>`;
     case 'end':
-      return `<div class="end"><img class="logo" src="${LOGO}" alt="Chordless"><div class="url"><small>Play it now</small>https://chordless.technickel.dev</div><h2>Built with Meta's Immersive Web SDK (IWSDK)</h2><p>Meta VR Start Developer Competition 2026</p><p>Music: Beethoven, <i>Ode to Joy</i> · Rossini, <i>William Tell Overture</i>, Finale · public domain<br>William Tell arranged from Max Wilkinson's typeset score (IMSLP #22579, CC BY 3.0)<br>Every note played live in Chordless · Conductor scenes AI-generated</p></div>`;
+      return `<div class="end"><img class="logo" src="${LOGO}" alt="Chordless"><div class="url"><small>Play it now</small>https://chordless.technickel.dev</div><h2>Built with Meta's Immersive Web SDK (IWSDK)</h2><p>Meta VR Start Developer Competition 2026</p><p>Music: Beethoven, <i>Ode to Joy</i> · Rossini, <i>William Tell Overture</i>, Finale · public domain<br>William Tell arranged from Max Wilkinson's typeset score (IMSLP #22579, CC BY 3.0)<br>All music and gameplay recorded in Chordless · Conductor and story scenes are AI-generated</p></div>`;
     case 'white':
       return `<div class="white"></div>`;
     case 'redvig':

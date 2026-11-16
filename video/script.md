@@ -404,7 +404,7 @@ description):
 
 > Music: Beethoven, *Ode to Joy* · Rossini, *William Tell Overture*, Finale · public domain
 > William Tell arranged from Max Wilkinson's typeset score (IMSLP #22579, CC BY 3.0)
-> Every note played live in Chordless · Conductor scenes AI-generated
+> All music and gameplay recorded in Chordless · Conductor and story scenes are AI-generated
 
 **Technickel (VO):**
 Practice anywhere. Break anything.

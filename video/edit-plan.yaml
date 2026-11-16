@@ -269,7 +269,7 @@ beat7:
   - { id: 7-1, track: V2, end: 0.0, until_end: 3.0 }
   - { id: R-quest, track: V1, end: 3.0, until_end: 9.0 }
   - { id: R-scene-flip, track: V1, end: 9.0, until_end: 11.0 }
-  - { id: end-card, track: V13, end: 11.0, until_end: 17.0, kind: title, text: ["CHORDLESS", "Play it now", "https://chordless.technickel.dev", "Built with IWSDK, Meta's Immersive Web SDK, for Meta Quest", "Meta VR Start Developer Competition 2026"] }
+  - { id: end-card, track: V13, end: 11.0, until_end: 17.0, kind: title, text: ["CHORDLESS", "Play it now", "https://chordless.technickel.dev", "Built with IWSDK, Meta's Immersive Web SDK", "Meta VR Start Developer Competition 2026"] }
 
 # ----------------------------------------------------------- rage ramps (beat 4)
 # All applied on V14 over the whole of beat 4 and the first second of beat 5.

@@ -397,7 +397,9 @@ That's Chordless. Not a game about music: an orchestra you can play, and break, 
 #### Shot 7-3: End Card and Credits (6 s)
 
 Designed in Resolve. **CHORDLESS**, *Built with IWSDK, Meta's Immersive Web SDK, for Meta
-Quest*, the GitHub Pages URL, and "Meta VR Start Developer Competition 2026". The credits
+Quest*, the site's address (**https://chordless.technickel.dev**, large, under the logo, with
+"Play it now" above it), and "Meta VR
+Start Developer Competition 2026". The credits
 block from [Attribution](#attribution) runs in small type underneath.
 
 **Technickel (VO):**

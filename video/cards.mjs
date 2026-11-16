@@ -60,6 +60,8 @@ const base = `
   .end .logo{width:700px;margin-bottom:10px;filter:none}
   .end h2{font:500 28px 'Segoe UI';color:#ffb000}
   .end p{font:400 17px/1.4 'Segoe UI';color:#a9a9bb;max-width:1000px}
+  .end .url{font:600 44px 'Segoe UI';color:#fafaf9;letter-spacing:.01em;margin:0 0 10px}
+  .end .url small{display:block;font:400 30px 'Shrikhand';color:#f59e0b;margin-bottom:6px}
   .title{position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;flex-direction:column;align-items:center;justify-content:center}
   .title .logo{width:780px;margin-bottom:22px}
   .title h2{font:500 34px 'Segoe UI';letter-spacing:.04em;text-shadow:0 2px 12px #000}
@@ -97,7 +99,7 @@ function html(card) {
       // *word* is set like the app's title screen: amber italics.
       return `<div class="title"><img class="logo" src="${LOGO}" alt="${esc(card.text[0])}"><h2>${esc(card.text[1] ?? '').split('*').map((part, i) => (i % 2 ? `<em>${part}</em>` : part)).join('')}</h2></div>`;
     case 'end':
-      return `<div class="end"><img class="logo" src="${LOGO}" alt="Chordless"><h2>Built with IWSDK, Meta's Immersive Web SDK, for Meta Quest</h2><p>https://technickel-dev.github.io/chordless/ (placeholder URL) · Meta VR Start Developer Competition 2026</p><p>Music: Beethoven, Ode to Joy (1824), and Rossini, William Tell Overture, Finale (1829), both public domain. William Tell arranged from the full score typeset by Max Wilkinson (2008), IMSLP #22579, CC BY 3.0. All music is in-app capture: every note is played and synthesized live by Chordless. Built with IWSDK and WebXR. Conductor scenes are AI-generated; all gameplay is real.</p></div>`;
+      return `<div class="end"><img class="logo" src="${LOGO}" alt="Chordless"><div class="url"><small>Play it now</small>https://chordless.technickel.dev</div><h2>Built with IWSDK, Meta's Immersive Web SDK, for Meta Quest</h2><p>Meta VR Start Developer Competition 2026</p><p>Music: Beethoven, Ode to Joy (1824), and Rossini, William Tell Overture, Finale (1829), both public domain. William Tell arranged from the full score typeset by Max Wilkinson (2008), IMSLP #22579, CC BY 3.0. All music is in-app capture: every note is played and synthesized live by Chordless. Built with IWSDK and WebXR. Conductor scenes are AI-generated; all gameplay is real.</p></div>`;
     case 'white':
       return `<div class="white"></div>`;
     case 'redvig':

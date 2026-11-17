@@ -80,6 +80,13 @@ performer; see [Still to build](#still-to-build).
 cold into the silence after the flub. Because the rage must *build*, it uses the same layering as the
 concert cut, one instrument section at a time, but its sections now carry the story:
 
+> **As built** (`video/score.mjs`, about 71 s from the trumpet's fanfare to the closing chord):
+> bars 226–259, the fanfare and the quiet theme, the orchestra coming in a tile at a time; 260–275,
+> the tutti, the instruments smashed on its accents; 276–283, the second tune, the melody alone, the
+> scenes four bars each in calm places; 284–299, the theme twice more, the accompaniment back in;
+> 300–315, the tutti again, the scenes two bars each; 316, the closing chord. The table below is the
+> earlier plan.
+
 | Section | Share | Playing | What is on screen |
 | --- | --- | --- | --- |
 | Fanfare | ~10 s | trumpet alone | **Rage 1**: the silence cracks, Technickel's grin goes flat |
@@ -158,9 +165,9 @@ inconvenient instrument.
 #### Shots 1-3 to 1-6: The Gag Montage (0:09 – 0:21, 3 s each)
 
 **Technickel (VO, quick, one line per shot):**
-(1-3) Too fragile to check. Too big for the overhead bin. (1-4) When you practice, the whole house
-practices. (1-5) Your wallet feels it, if you can afford one at all. (1-6) And hauling it to a jam
-session? Uphill both ways.
+(1-3) They are often too fragile to check. Too big for the overhead bin. (1-4) Back home, when you
+practice, the whole house practices. (1-5) Your wallet feels it, and for many, it's out of reach.
+(1-6) And hauling it to a jam session? Uphill both ways.
 
 **Generated:** 1-3 `clips/fitting-guitar_case-in-overhead.mp4`, 1-4 `clips/drummer-wakes-sleeping-person.mp4`,
 1-5 `clips/shopping-for-violin.mp4`, 1-6 `clips/pushing-piano-uphill.mp4`. The last two replace the stairs
@@ -350,17 +357,18 @@ The first three are the ones you named. The optional fourth carries the "built o
 claim and the real-Quest shot. If the cut feels too long, drop it and move `R-quest` to the pitch
 in beat 7.
 
-**VO-B, the tech line (1:27–1:38, about 11 s, over the quiet middle episodes):**
-It's built with Meta's Immersive Web SDK, so it runs right in the Quest browser. No install, no
-controllers. Ten instruments, and more than sixty places to play them.
+**VO-B, the tech line (about 6 s, over the quiet theme as the orchestra builds):**
+It's built with Meta's Immersive Web SDK, so it runs right in the browser. No install, no
+controllers.
 
 *Fit this line to the quietest passage. If the section is shorter than the line, move the line, don't
 shorten the music.*
 
 #### Grid and coda
 
-- **Quiet before the coda (2:08.5):** a 3×3 grid builds, Technickel conducting in the centre tile
-  (`c-grid`), one instrument tile appearing every 2 bars.
+- **Quiet before the coda (2:08.5):** a 3×3 grid builds, one instrument tile appearing every 2
+  bars; the trombone (`orch-trombone`, the trumpet's line an octave down) takes the tile the
+  conductor once had.
 - **Coda (2:18.5–2:32.5):** full screen on the cymbals' crash, then a 1-bar montage of the smash and
   environment takes, cutting back to the grid on each 4-bar phrase downbeat.
 - **Final chord (2:32.5):** the Theatre, full screen: the entire stage comes apart on the last crash
@@ -380,17 +388,16 @@ shorten the music.*
 
 #### Shot 7-1: The Curtain Call (about 9.5 s)
 
-Drawn, not generated (`video/curtain.mjs`). The closing chord's grid pulls back to become the stage
-of a gilded theatre, like the one in shot 1-1. A swagged valance drops into place and the red
-velvet curtains close over the stage, their hems swinging as they meet. Bouquets are thrown from
-the audience, one about every half second, and land on the apron in front of the curtains. A warm
-spot comes up on the closed curtains, then the picture fades to black. The end card fades in from
-the black.
+Drawn, not generated (`video/curtain.mjs`). Red velvet curtains close over the closing chord's
+grid, full frame, as cloth: their folds start bunched by the side and spread as they are drawn,
+the hems trail the tops and swing when they meet. Bouquets are thrown from the audience, one about
+every half second, and drop out of the bottom of the frame onto the stage below. A warm spot comes up on the closed
+curtains, then the picture fades to black. The end card, on black, fades in from it.
 
 **Audio:** Applause from the moment the chord is cut off, under the VO, gone with the picture.
 
 **Technickel (VO, warm, unhurried):**
-That's Chordless. Not a game about music: an orchestra you can play, and break, in a headset.
+That concludes tonight's performance of Chordless. And the encore? That's up to you.
 
 #### Shot 7-3: End Card and Credits (6 s)
 
@@ -405,7 +412,7 @@ description):
 > All music and gameplay recorded in Chordless · Conductor and story scenes are AI-generated
 
 **Technickel (VO):**
-Practice anywhere. Break anything.
+Play virtually any instrument, any time, anywhere.
 
 **(Fade to black. Optional sting: one broom-handle knock on a ceiling, then silence.)**
 
@@ -471,7 +478,6 @@ None of this exists yet. Do it before recording.
 | 1-1 to 1-7 | Beat 1 | 5–8 s each, trimmed in the edit |
 | c-1 to c-5 | The look, the fist, the face, the podium, the grin | 3–4 s each; only 1–2 s is used |
 | c-6 | The cutoff | 3–4 s |
-| c-grid | Technickel conducting in a neutral 2/4 pattern, for the grid centre tile | 8–10 s. It won't be on tempo, so it gets retimed to 152 bpm in the edit |
 
 ### Chordless takes (scripted, screen-captured)
 
@@ -500,10 +506,10 @@ Each take is a full `play:*` run, 1920×1080 at 60 fps, opened with `?scene=<fil
 | ID | Line starts with | Placement |
 | --- | --- | --- |
 | vo-1-2 | "Good evening, ladies and gentlemen!" | 0:03 |
-| vo-1-3 to vo-1-6 | "Too fragile to check." … | 0:09, one per gag |
+| vo-1-3 to vo-1-6 | "They are often too fragile to check." … | 0:09, one per gag |
 | vo-1-7 | "So I cut the chord." | 0:21.5 |
 | vo-1-8 | "And now, tonight's performance: Chordless." | 0:25.3 |
 | vo-a | "Most music in VR is a rhythm game…" | 0:31, under the tune |
 | vo-b | "It's built with Meta's Immersive Web SDK…" | the quietest middle episode |
-| vo-7-2 | "That's Chordless." | the curtain call + 0.8 s |
-| vo-7-3 | "Practice anywhere." | the end card |
+| vo-7-2 | "That concludes tonight's performance of Chordless." … | the curtain call + 0.8 s |
+| vo-7-3 | "Play virtually any instrument, any time, anywhere." | the end card |

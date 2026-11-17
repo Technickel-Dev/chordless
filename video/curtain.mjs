@@ -1,8 +1,9 @@
 /**
- * The curtain call, the trailer's last shot before the end card. The closing chord's
- * last frame pulls back to become the stage of a gilded theatre (like the one in the
- * opening clip). The red velvet curtains close over it, bouquets are thrown from the
- * audience onto the apron, and the picture fades to black.
+ * The curtain call, the trailer's last shot before the end card. Red velvet curtains
+ * close over the closing chord's last frame, as cloth: their folds start bunched by
+ * the side and spread as they are drawn, the hems trail the tops and swing when they
+ * meet. Bouquets are thrown from the audience and fall out of shot onto the stage, and
+ * the picture fades to black.
  *
  * It is drawn on a canvas one frame at a time from a seeded random source, so every
  * build draws the same shot. The applause under it is synthesized from single claps.
@@ -13,7 +14,7 @@ import { chromium } from 'playwright';
 import { W, H } from './cards.mjs';
 
 /** When things happen in the shot (seconds from its start). The fade to black ends `black` before the end. */
-export const CURTAIN = { pull: [0, 1.15], close: [0.7, 3.0], fade: 1.25, black: 0.35 };
+export const CURTAIN = { close: [0.3, 2.9], fade: 1.25, black: 0.35 };
 
 /** Renders the shot to `out` (an mp4 encoded with `enc`), `dur` seconds over the picture in `background`. */
 export async function renderCurtain({ background, out, dur, fps, enc }) {
@@ -23,7 +24,8 @@ export async function renderCurtain({ background, out, dur, fps, enc }) {
     const page = await browser.newPage({ viewport: { width: W, height: H } });
     await page.setContent(`<body style="margin:0;background:#000"><canvas id="c" width="${W}" height="${H}"></canvas></body>`);
     await page.evaluate(scene, { W, H, bg, D: dur, T: CURTAIN });
-    const ff = spawn('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(fps), '-i', '-', ...enc, '-r', String(fps), out], { stdio: ['pipe', 'ignore', 'pipe'] });
+    // The JPEGs are full range; the rest of the cut is video range (black at 16), so convert.
+    const ff = spawn('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(fps), '-i', '-', '-vf', 'scale=in_range=full:out_range=limited,format=yuv420p', ...enc, '-r', String(fps), out], { stdio: ['pipe', 'ignore', 'pipe'] });
     let err = '';
     ff.stderr.on('data', (d) => (err += d));
     const done = new Promise((resolve, reject) => ff.on('close', (code) => (code ? reject(new Error(`ffmpeg ${code}: ${err}`)) : resolve())));
@@ -40,7 +42,7 @@ export async function renderCurtain({ background, out, dur, fps, enc }) {
   }
 }
 
-/** Runs in the page: sets up the theatre and defines window.draw(t). */
+/** Runs in the page: sets up the curtains and bouquets and defines window.draw(t). */
 async function scene({ W, H, bg, D, T }) {
   const c = document.getElementById('c');
   const ctx = c.getContext('2d');
@@ -61,178 +63,7 @@ async function scene({ W, H, bg, D, T }) {
   const ease = (u) => (u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2);
   const span = (t, [a, b]) => clamp((t - a) / (b - a));
   const TAU = Math.PI * 2;
-
-  // The stage opening (theatre coordinates: at the end of the pull-back, the screen), 16:9.
-  const O = { x: 150, y: 74, w: 980, h: 551.25 };
-  const cx = O.x + O.w / 2;
-  const floorY = O.y + O.h;
-  const F = { x: O.x - 28, y: O.y - 46, w: O.w + 56 }; // the proscenium's outer edge
   const FADE = [D - T.black - T.fade, D - T.black];
-
-  const goldGradient = (g, x0, y0, x1, y1) => {
-    const q = g.createLinearGradient(x0, y0, x1, y1);
-    for (const [p, col] of [[0, '#3d2706'], [0.18, '#9b7224'], [0.38, '#f3d98a'], [0.55, '#c39a3e'], [0.8, '#6e4c14'], [1, '#2e1d05']]) q.addColorStop(p, col);
-    return q;
-  };
-
-  // ---- the theatre around the opening, drawn once at twice the size (it is seen up close at first)
-  const st = document.createElement('canvas');
-  st.width = W * 2;
-  st.height = H * 2;
-  {
-    const g = st.getContext('2d');
-    g.scale(2, 2);
-    const wall = g.createLinearGradient(0, 0, 0, H);
-    wall.addColorStop(0, '#0b0203');
-    wall.addColorStop(0.45, '#220809');
-    wall.addColorStop(1, '#0a0202');
-    g.fillStyle = wall;
-    g.fillRect(-50, -50, W + 100, H + 100);
-    // Gilded pilasters either side.
-    for (const x of [30, W - 30 - 60]) {
-      const p = g.createLinearGradient(x, 0, x + 60, 0);
-      for (const [q, col] of [[0, '#1c1004'], [0.3, '#7a5418'], [0.5, '#caa04c'], [0.7, '#6a4614'], [1, '#160c03']]) p.addColorStop(q, col);
-      g.globalAlpha = 0.5;
-      g.fillStyle = p;
-      g.fillRect(x, 24, 60, floorY - 24);
-      g.globalAlpha = 1;
-    }
-    g.clearRect(O.x, O.y, O.w, O.h);
-    // The proscenium: two posts and a lintel, with a row of rosettes.
-    g.fillStyle = goldGradient(g, F.x, 0, O.x, 0);
-    g.fillRect(F.x, F.y, 28, floorY - F.y);
-    g.fillStyle = goldGradient(g, O.x + O.w + 28, 0, O.x + O.w, 0);
-    g.fillRect(O.x + O.w, F.y, 28, floorY - F.y);
-    g.fillStyle = goldGradient(g, 0, F.y, 0, O.y);
-    g.fillRect(F.x, F.y, F.w, 46);
-    for (let x = F.x + 32; x < F.x + F.w - 20; x += 48) {
-      const r = g.createRadialGradient(x - 2, F.y + 21, 1, x, F.y + 23, 9);
-      r.addColorStop(0, '#fff2b8');
-      r.addColorStop(0.5, '#c8963a');
-      r.addColorStop(1, '#4a3008');
-      g.fillStyle = r;
-      g.beginPath();
-      g.arc(x, F.y + 23, 9, 0, TAU);
-      g.fill();
-    }
-    g.strokeStyle = 'rgba(0,0,0,0.6)';
-    g.lineWidth = 3;
-    g.strokeRect(O.x - 1.5, O.y - 1.5, O.w + 3, O.h + 3);
-    // The apron, its boards running toward a point above the stage.
-    g.beginPath();
-    g.moveTo(F.x - 4, floorY);
-    g.lineTo(F.x + F.w + 4, floorY);
-    g.lineTo(W + 220, H + 30);
-    g.lineTo(-220, H + 30);
-    g.closePath();
-    const wood = g.createLinearGradient(0, floorY, 0, H);
-    wood.addColorStop(0, '#2a1209');
-    wood.addColorStop(0.5, '#4d2410');
-    wood.addColorStop(1, '#683317');
-    g.fillStyle = wood;
-    g.fill();
-    g.save();
-    g.clip();
-    const vy = floorY - 600;
-    g.strokeStyle = 'rgba(15,5,2,0.55)';
-    g.lineWidth = 1.2;
-    for (let xb = -500; xb <= W + 500; xb += 58) {
-      const xt = cx + (xb - cx) * ((floorY - vy) / (H + 30 - vy));
-      g.beginPath();
-      g.moveTo(xt, floorY);
-      g.lineTo(xb, H + 30);
-      g.stroke();
-    }
-    const shade = g.createLinearGradient(0, floorY, 0, floorY + 16);
-    shade.addColorStop(0, 'rgba(0,0,0,0.7)');
-    shade.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = shade;
-    g.fillRect(-50, floorY, W + 100, 16);
-    g.restore();
-    // The front edge: the footlights' trough, with a gold lip.
-    g.fillStyle = '#0d0403';
-    g.fillRect(-10, H - 20, W + 20, 24);
-    g.fillStyle = goldGradient(g, 0, H - 23, 0, H - 19);
-    g.fillRect(-10, H - 23, W + 20, 3);
-  }
-
-  // ---- the valance across the top of the opening: a velvet band, swags, gold fringe and tassels
-  const va = document.createElement('canvas');
-  va.width = O.w * 2;
-  va.height = 2 * 84;
-  {
-    const v = va.getContext('2d');
-    v.scale(2, 2);
-    const band = v.createLinearGradient(0, 0, 0, 26);
-    band.addColorStop(0, '#3a0408');
-    band.addColorStop(0.6, '#9a1220');
-    band.addColorStop(1, '#5a0810');
-    v.fillStyle = band;
-    v.fillRect(0, 0, O.w, 26);
-    const n = 5;
-    const sw = O.w / n;
-    for (let i = 0; i < n; i++) {
-      const xa = i * sw;
-      const xb = xa + sw;
-      const mid = (xa + xb) / 2;
-      v.beginPath();
-      v.moveTo(xa, 18);
-      v.quadraticCurveTo(mid, 98, xb, 18);
-      v.closePath();
-      const r = v.createRadialGradient(mid, 26, 4, mid, 30, sw * 0.62);
-      r.addColorStop(0, '#c41d30');
-      r.addColorStop(0.55, '#8a0f1c');
-      r.addColorStop(1, '#3a0408');
-      v.fillStyle = r;
-      v.fill();
-      for (let k = 1; k <= 3; k++) {
-        v.beginPath();
-        v.moveTo(xa + k * 10, 20);
-        v.quadraticCurveTo(mid, 98 - k * 17, xb - k * 10, 20);
-        v.strokeStyle = 'rgba(0,0,0,0.28)';
-        v.lineWidth = 3;
-        v.stroke();
-        v.strokeStyle = 'rgba(255,140,140,0.12)';
-        v.lineWidth = 1.5;
-        v.stroke();
-      }
-      // Gold fringe along the swag's hem.
-      v.beginPath();
-      v.moveTo(xa, 18);
-      v.quadraticCurveTo(mid, 98, xb, 18);
-      v.strokeStyle = '#c8963a';
-      v.lineWidth = 3.5;
-      v.stroke();
-      for (let k = 0; k <= 60; k++) {
-        const u = k / 60;
-        const x = (1 - u) ** 2 * xa + 2 * u * (1 - u) * mid + u * u * xb;
-        const y = (1 - u) ** 2 * 18 + 2 * u * (1 - u) * 98 + u * u * 18;
-        v.strokeStyle = k % 2 ? '#e8c46a' : '#a77b25';
-        v.lineWidth = 1.6;
-        v.beginPath();
-        v.moveTo(x, y + 1);
-        v.lineTo(x, y + 8);
-        v.stroke();
-      }
-    }
-    v.fillStyle = goldGradient(v, 0, 21, 0, 26);
-    v.fillRect(0, 21, O.w, 5);
-    for (let i = 0; i <= n; i++) {
-      const x = Math.min(O.w - 6, Math.max(6, i * sw));
-      v.strokeStyle = '#b8862e';
-      v.lineWidth = 2;
-      v.beginPath();
-      v.moveTo(x, 24);
-      v.lineTo(x, 52);
-      v.stroke();
-      v.fillStyle = goldGradient(v, x - 6, 0, x + 6, 0);
-      v.beginPath();
-      v.moveTo(x, 50);
-      v.bezierCurveTo(x + 9, 58, x + 7, 74, x, 78);
-      v.bezierCurveTo(x - 7, 74, x - 9, 58, x, 50);
-      v.fill();
-    }
-  }
 
   // ---- bouquets, drawn once each
   const PAPER = ['#d9b48a', '#f4efe6', '#f5c3d2', '#d6c8ef', '#e3edd2', '#fbe7c6'];
@@ -374,129 +205,139 @@ async function scene({ W, H, bg, D, T }) {
     return cv;
   }
 
-  // Thrown from the audience across the middle of the shot, each landing in its own spot on the apron.
+  // Thrown from the audience across the middle of the shot: each rises toward the
+  // curtains and drops out of the bottom of the frame, onto the stage below it.
   const N = 9;
-  const throwFrom = 1.15;
-  const throwTo = Math.min(6.0, D - T.black - T.fade - 1.6);
+  const throwFrom = 1.0;
+  const throwTo = Math.min(5.8, D - T.black - T.fade - 1.6);
   const slots = [...Array(N).keys()].sort(() => rnd() - 0.5);
   const bouquets = [...Array(N).keys()].map((i) => {
-    const x1 = F.x + 80 + (slots[i] * (F.w - 160)) / (N - 1) + (rnd() - 0.5) * 90;
-    const y1 = floorY + 16 + rnd() * (H - 28 - floorY - 16);
-    const near = (y1 - floorY) / (H - floorY);
-    const s1 = lerp(0.62, 0.86, near);
+    const x1 = 90 + (slots[i] * (W - 180)) / (N - 1) + (rnd() - 0.5) * 80;
     const sign = rnd() < 0.5 ? -1 : 1;
-    const rot0 = (rnd() - 0.5) * 0.8;
-    const rotEnd = sign * (0.95 + rnd() * 1.2) + (rnd() < 0.45 ? sign * TAU : 0);
     return {
       img: makeBouquet(i),
       t0: throwFrom + (i * (throwTo - throwFrom)) / (N - 1) + (rnd() - 0.5) * 0.2,
-      dur: 1.0 + rnd() * 0.25,
+      dur: 1.15 + rnd() * 0.3,
       x0: clamp(x1 + (rnd() - 0.5) * 520, 60, W - 60),
       y0: H + 130,
       x1,
-      y1,
-      yApex: 170 + rnd() * 160,
+      y1: H + 110,
+      yApex: 170 + rnd() * 170,
       s0: 1.3 + rnd() * 0.2,
-      s1,
-      rot0,
-      rotEnd,
+      s1: 0.62 + rnd() * 0.2,
+      rot0: (rnd() - 0.5) * 0.8,
+      spin: sign * (1.6 + rnd() * 2.6),
     };
   });
 
-  // The curtains: two panels of velvet folds from behind the posts, meeting in the middle.
-  const PW = O.w / 2 + 44;
-  const FOLD = 44;
-  const folds = (x0) => {
-    const q = ctx.createLinearGradient(x0, 0, x0 + PW, 0);
-    const n = PW / FOLD;
-    for (let k = 0; k <= 120; k++) {
-      const p = k / 120;
-      const lit = (0.5 - 0.5 * Math.cos(TAU * p * n)) ** 1.25;
-      q.addColorStop(p, `rgb(${Math.round(lerp(40, 196, lit))},${Math.round(lerp(3, 26, lit))},${Math.round(lerp(8, 40, lit))})`);
+  // ---- the curtains: each a sheet of velvet in narrow strips, hung from just past its
+  // edge of the frame, its folds fixed in the cloth (so they spread as it is drawn).
+  const FOLDS = 14;
+  const STRIPS = FOLDS * 12;
+  const ROWS = 48; // enough that the leading edge is a smooth curve
+  const OUT = -40; // where a panel hangs from
+  const MEET = W / 2 + 18; // where its leading edge stops, a little past the middle
+  const Y0 = -24;
+  const Y1 = H + 24;
+  const closedAt = (t) => ease(span(t, T.close));
+  const edgeAt = (t) => lerp(0, MEET, closedAt(t));
+  const xs = new Float32Array((STRIPS + 1) * (ROWS + 1));
+  const rowY = (k) => lerp(Y0, Y1, k / ROWS);
+  /** The leading edge, top to bottom: a path of its own, or (`join`) continuing the one begun. */
+  const edgePath = (dx = 0, join = false) => {
+    for (let k = 0; k <= ROWS; k++) {
+      const x = xs[k * (STRIPS + 1) + STRIPS] + dx;
+      if (k || join) ctx.lineTo(x, rowY(k));
+      else ctx.moveTo(x, rowY(k));
     }
-    return q;
   };
-  const edgeAt = (t) => lerp(O.x - 14, cx + 16, ease(span(t, T.close)));
-  function panel(edge, lag, mirror) {
+  // Where each fold falls in the cloth, a little uneven, as real folds are.
+  const foldPhase = (u) => u * FOLDS + 0.22 * Math.sin(u * FOLDS * 0.83 + 1.3) + 0.12 * Math.sin(u * FOLDS * 2.1 + 0.4);
+  function panel(t, mirror) {
+    const closed = closedAt(t);
+    const edge = edgeAt(t);
+    const dt = 1 / 60;
+    // How fast it is being drawn, 0 to 1.
+    const speed = ((edgeAt(t) - edgeAt(t - dt)) / dt) * ((T.close[1] - T.close[0]) / 1.5 / MEET);
+    const after = t - T.close[1];
+    // The hem trails the top while it moves, and swings past and back when it stops.
+    const lag = 85 * speed + (after > 0 ? -26 * Math.sin(after * 5.5) * Math.exp(-after * 2) : 0);
+    // Ripples running through the cloth, dying away once it hangs still.
+    const ripple = clamp(closed * 6) * 7 * (speed + 0.12 + (after > 0 ? 0.5 * Math.exp(-after * 1.4) : 0));
+    // The folds bunched toward the side still stacked, even once it is drawn.
+    const p = lerp(1.9, 1, closed);
+    for (let k = 0; k <= ROWS; k++) {
+      const yn = k / ROWS;
+      const ex = edge - lag * yn ** 1.6;
+      for (let i = 0; i <= STRIPS; i++) {
+        const u = i / STRIPS;
+        const sway = ripple * Math.sin(TAU * (2.5 * u - 0.9 * t) + yn * 2.2) * yn ** 1.4 * u;
+        xs[k * (STRIPS + 1) + i] = OUT + (ex - OUT) * u ** p + sway;
+      }
+    }
     ctx.save();
     if (mirror) {
-      ctx.translate(2 * cx, 0);
+      ctx.translate(W, 0);
       ctx.scale(-1, 1);
     }
-    const top = O.y;
-    const bot = floorY;
-    const x0 = edge - PW;
-    const lead = (start) => {
-      start(edge, top);
-      ctx.bezierCurveTo(edge, top + (bot - top) * 0.45, edge - lag * 0.6, bot - (bot - top) * 0.2, edge - lag, bot);
-    };
-    ctx.beginPath();
-    ctx.moveTo(x0 - 80, top);
-    lead((x, y) => ctx.lineTo(x, y));
-    ctx.lineTo(x0 - 80, bot);
-    ctx.closePath();
-    ctx.fillStyle = folds(x0);
-    ctx.fill();
-    const v = ctx.createLinearGradient(0, top, 0, bot);
-    v.addColorStop(0, 'rgba(0,0,0,0.55)');
-    v.addColorStop(0.22, 'rgba(0,0,0,0.05)');
-    v.addColorStop(0.75, 'rgba(0,0,0,0)');
-    v.addColorStop(1, 'rgba(0,0,0,0.35)');
-    ctx.fillStyle = v;
-    ctx.fill();
-    // The hem's gold fringe.
-    ctx.fillStyle = goldGradient(ctx, 0, bot - 12, 0, bot);
-    ctx.fillRect(x0 - 80, bot - 12, edge - lag - (x0 - 80), 6);
-    for (let x = x0 - 80; x < edge - lag; x += 3) {
-      ctx.strokeStyle = (x / 3) % 2 < 1 ? '#e8c46a' : '#9b7224';
-      ctx.lineWidth = 1.4;
+    // Its shadow on what is behind it, beyond the leading edge.
+    for (const [dx, a, w] of [[5, 0.28, 10], [12, 0.16, 16], [22, 0.08, 22]]) {
       ctx.beginPath();
-      ctx.moveTo(x, bot - 6);
-      ctx.lineTo(x, bot);
+      edgePath(dx);
+      ctx.strokeStyle = `rgba(0,0,0,${a})`;
+      ctx.lineWidth = w;
       ctx.stroke();
     }
-    // The leading edge, lit, with a shadow just inside it.
+    // The cloth, strip by strip: deep folds where it is bunched, softer where it is pulled out.
+    const width = MEET - OUT;
+    for (let i = 0; i < STRIPS; i++) {
+      const um = (i + 0.5) / STRIPS;
+      const raw = 0.5 - 0.5 * Math.cos(TAU * foldPhase(um));
+      const stretch = clamp(((edge - OUT) * p * um ** (p - 1)) / width, 0, 1.6);
+      const depth = clamp(lerp(1, 0.72, stretch));
+      const lit = 1 - depth + depth * raw ** 1.2;
+      const col = `rgb(${Math.round(lerp(34, 205, lit))},${Math.round(lerp(2, 28, lit))},${Math.round(lerp(7, 44, lit))})`;
+      ctx.fillStyle = col;
+      ctx.strokeStyle = col;
+      ctx.beginPath();
+      for (let k = 0; k <= ROWS; k++) {
+        const x = xs[k * (STRIPS + 1) + i];
+        if (k) ctx.lineTo(x, rowY(k));
+        else ctx.moveTo(x, rowY(k));
+      }
+      for (let k = ROWS; k >= 0; k--) ctx.lineTo(xs[k * (STRIPS + 1) + i + 1], rowY(k));
+      ctx.closePath();
+      ctx.fill();
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+    // Light from above and in front: the top in shadow, the foot darker.
     ctx.beginPath();
-    lead((x, y) => ctx.moveTo(x, y));
-    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-    ctx.lineWidth = 7;
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,120,120,0.4)';
-    ctx.lineWidth = 2.2;
-    ctx.stroke();
+    ctx.moveTo(OUT - 10, Y0);
+    edgePath(0, true);
+    ctx.lineTo(OUT - 10, Y1);
+    ctx.closePath();
+    const v = ctx.createLinearGradient(0, 0, 0, H);
+    v.addColorStop(0, 'rgba(0,0,0,0.6)');
+    v.addColorStop(0.2, 'rgba(0,0,0,0.08)');
+    v.addColorStop(0.7, 'rgba(0,0,0,0)');
+    v.addColorStop(1, 'rgba(0,0,0,0.45)');
+    ctx.fillStyle = v;
+    ctx.fill();
     ctx.restore();
   }
 
+  /** A bouquet in flight: up out of the audience, over toward the curtains (getting smaller), and down out of shot. */
   function drawBouquet(q, t) {
-    const u = (t - q.t0) / q.dur;
-    if (u < 0) return;
-    const f = Math.min(1, u);
-    const yRest = q.y1 - 16 * q.s1;
-    const cy = 2 * q.yApex - (q.y0 + yRest) / 2;
+    const f = (t - q.t0) / q.dur;
+    if (f < 0 || f > 1) return;
+    const cy = 2 * q.yApex - (q.y0 + q.y1) / 2;
     const x = lerp(q.x0, q.x1, 1 - (1 - f) ** 1.3);
-    let y = (1 - f) ** 2 * q.y0 + 2 * f * (1 - f) * cy + f * f * yRest;
-    const s = 1 / lerp(1 / q.s0, 1 / q.s1, f);
-    let rot = lerp(q.rot0, q.rotEnd, 1 - (1 - f) ** 1.6);
-    const after = t - (q.t0 + q.dur);
-    if (after > 0 && after < 0.32) {
-      y -= 10 * q.s1 * Math.sin((Math.PI * after) / 0.32) * (1 - after / 0.32);
-      rot += 0.14 * Math.sin(after * 26) * Math.exp(-after * 9);
-    }
-    const lift = yRest - y;
-    if (f > 0.4) {
-      ctx.save();
-      ctx.globalAlpha = 0.5 * clamp(1 - lift / 260) * clamp((f - 0.4) / 0.3);
-      ctx.fillStyle = '#000';
-      ctx.beginPath();
-      const rx = 40 * s * (1 + lift / 220);
-      ctx.ellipse(x, q.y1 + 3, rx, rx * 0.22, 0, 0, TAU);
-      ctx.fill();
-      ctx.restore();
-    }
+    const y = (1 - f) ** 2 * q.y0 + 2 * f * (1 - f) * cy + f * f * q.y1;
+    const s = 1 / lerp(1 / q.s0, 1 / q.s1, Math.min(1, f * 1.4));
     ctx.save();
     ctx.translate(x, y);
-    ctx.scale(1, lerp(1, 0.8, f ** 4));
-    ctx.rotate(rot);
+    ctx.rotate(q.rot0 + q.spin * f);
     ctx.scale(s, s);
     ctx.drawImage(q.img, -65, -80, 130, 150);
     ctx.restore();
@@ -506,76 +347,35 @@ async function scene({ W, H, bg, D, T }) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, W, H);
-
-    // The camera: at first the opening fills the screen (the closing chord's last frame
-    // exactly); it pulls back to the whole theatre, then pushes in a little once the
-    // curtains are closed.
-    const pe = ease(span(t, T.pull));
-    const push = ease(span(t, [T.close[1], D])) * 0.05;
-    const z = lerp(W / O.w, 1, pe) * (1 + push);
-    const fx = lerp(cx, W / 2, pe);
-    const fy = lerp(O.y + O.h / 2, H / 2, pe) + push * 60;
-    ctx.translate(W / 2, H / 2);
-    ctx.scale(z, z);
-    ctx.translate(-fx, -fy);
+    // A slow push in once the curtains are closed.
+    const push = 1 + 0.03 * ease(span(t, [T.close[1], D]));
+    ctx.translate(W / 2, H * 0.6);
+    ctx.scale(push, push);
+    ctx.translate(-W / 2, -H * 0.6);
 
     // The stage, dimming as the curtains close.
-    const closing = ease(span(t, T.close));
-    ctx.drawImage(img, O.x, O.y, O.w, O.h);
-    ctx.fillStyle = `rgba(0,0,0,${0.35 * closing})`;
-    ctx.fillRect(O.x, O.y, O.w, O.h);
+    const closed = closedAt(t);
+    ctx.drawImage(img, 0, 0, W, H);
+    ctx.fillStyle = `rgba(0,0,0,${0.3 * closed})`;
+    ctx.fillRect(0, 0, W, H);
 
-    // The curtains, the hem trailing while they move and swinging once as they meet.
-    const dt = 1 / 60;
-    const speed = ((edgeAt(t) - edgeAt(t - dt)) / dt) * ((T.close[1] - T.close[0]) / 1.5 / (cx + 16 - (O.x - 14)));
-    let lag = 30 * speed;
-    if (t > T.close[1]) lag -= 9 * Math.sin((t - T.close[1]) * 7) * Math.exp(-(t - T.close[1]) * 2.2);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(O.x, O.y, O.w, O.h);
-    ctx.clip();
-    panel(edgeAt(t), lag, false);
-    panel(edgeAt(t), lag, true);
-    // The valance drops into place from behind the lintel.
-    ctx.drawImage(va, O.x, O.y + lerp(-86, 0, ease(span(t, [0.2, 1.05]))), O.w, 84);
-    ctx.restore();
+    panel(t, false);
+    panel(t, true);
 
-    ctx.drawImage(st, 0, 0, W, H);
-
-    // Light: the footlights, their wash up the curtains, and a warm spot for the curtain call.
-    ctx.globalCompositeOperation = 'lighter';
-    const wash = ctx.createLinearGradient(0, H, 0, floorY - 150);
-    wash.addColorStop(0, 'rgba(255,170,90,0.16)');
-    wash.addColorStop(1, 'rgba(255,170,90,0)');
-    ctx.fillStyle = wash;
-    ctx.fillRect(F.x, floorY - 150, F.w, H - floorY + 150);
-    for (let x = 40; x < W; x += 80) {
-      const r = ctx.createRadialGradient(x, H - 10, 0, x, H - 10, 30);
-      r.addColorStop(0, 'rgba(255,225,160,0.9)');
-      r.addColorStop(0.25, 'rgba(255,190,110,0.35)');
-      r.addColorStop(1, 'rgba(255,190,110,0)');
-      ctx.fillStyle = r;
-      ctx.fillRect(x - 30, H - 40, 60, 60);
-    }
+    // A warm spot on the closed curtains for the curtain call.
     const glow = ease(span(t, [T.close[1] - 0.5, T.close[1] + 0.9]));
     if (glow > 0) {
-      const r = ctx.createRadialGradient(cx, floorY - 200, 10, cx, floorY - 200, 420);
-      r.addColorStop(0, `rgba(255,190,130,${0.24 * glow})`);
+      ctx.globalCompositeOperation = 'lighter';
+      const r = ctx.createRadialGradient(W / 2, H * 0.52, 10, W / 2, H * 0.52, 520);
+      r.addColorStop(0, `rgba(255,190,130,${0.22 * glow})`);
       r.addColorStop(1, 'rgba(255,190,130,0)');
       ctx.fillStyle = r;
-      ctx.fillRect(cx - 420, floorY - 620, 840, 840);
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'source-over';
     }
-    ctx.globalCompositeOperation = 'source-over';
 
-    // Bouquets: those lying on the apron first, back to front, then those in the air.
-    const order = bouquets.slice().sort((a, b) => {
-      const fa = t >= a.t0 + a.dur;
-      const fb = t >= b.t0 + b.dur;
-      return fa !== fb ? (fa ? -1 : 1) : a.y1 - b.y1;
-    });
-    for (const q of order) drawBouquet(q, t);
+    // Bouquets, the later throws (nearer the camera) over the earlier ones.
+    for (const q of bouquets) drawBouquet(q, t);
 
     // To black.
     ctx.setTransform(1, 0, 0, 1, 0, 0);

@@ -2,7 +2,7 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { startApp } from '../../tests/app-start.js';
-import { meltdown, swingtest } from './meltdown.mjs';
+import { meltdown, swingtest, menupick } from './meltdown.mjs';
 import { CLIPS } from './clips.mjs';
 import { baton, batonCheck, batonCountIn } from './baton.mjs';
 
@@ -39,6 +39,7 @@ export const TAKE_LIST = {
   'baton-check': { scene: 'stage', run: batonCheck, seconds: 120 },
   'baton-countin': { scene: 'stage', run: batonCountIn, seconds: 60, capture: 'canvas' },
   swingtest: { scene: 'stage', run: swingtest, seconds: 90 },
+  menupick: { scene: 'stage', run: menupick, seconds: 60, capture: 'canvas' },
   'tune-ode': { scene: 'cliffside', run: tune, seconds: 70 },
   'wt-guitar': wt('tests/william-tell.mjs', 'cliffside'),
   'wt-trumpet': wt('tests/trumpet-william-tell.mjs', 'pirate-ship'),

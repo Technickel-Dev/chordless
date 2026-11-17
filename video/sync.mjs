@@ -83,7 +83,7 @@ export function onsets(take, from = 0, to = Infinity, { rate = 4000, hop = 0.005
  * is measured. `score` is how much better the best shift fits than the
  * average one; a low score (a smooth, bowed part) means the answer is weak.
  */
-export function soundLag(name, n = 0, { from = -0.15, to = 0.2, step = 0.0025 } = {}) {
+export function soundLag(name, n = 0, { from = -0.15, to = 0.25, step = 0.0025 } = {}) {
   const take = readTake(name);
   const m = take.marks.filter((x) => x.what === 'perform')[n];
   const map = beatMap(take, n);
@@ -114,6 +114,13 @@ export function soundLag(name, n = 0, { from = -0.15, to = 0.2, step = 0.0025 } 
     }
     return sum;
   };
+  // The galop runs in steady quavers, so a shift of half a beat fits almost as well as
+  // the true one. The first note comes out of silence and can't be mistaken: search
+  // only near it (or, if it isn't clear, near the capture's usual delay).
+  const first = onsets(name, times[0] - 0.3, times[0] + 0.6, { rise: 9 })[0];
+  const anchor = first && first.t - times[0] > -0.1 && first.t - times[0] < 0.25 ? first.t - times[0] : 0.055;
+  from = Math.max(from, anchor - 0.08);
+  to = Math.min(to, anchor + 0.08);
   const scores = [];
   for (let lag = from; lag <= to + 1e-9; lag += step) scores.push([lag, fit(lag)]);
   const best = scores.reduce((a, b) => (b[1] > a[1] ? b : a));

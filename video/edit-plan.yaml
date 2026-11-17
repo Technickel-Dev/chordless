@@ -72,7 +72,7 @@ tracks:
 
 media:
   ai: # clips/<id>.mp4
-    [1-1, 1-2, 1-3, 1-4, 1-5, 1-6, 1-7, c-1, c-2, c-3, c-4, c-5, c-6, c-grid]
+    [1-1, 1-2, 1-3, 1-4, 1-5, 1-6, 1-7, c-1, c-2, c-3, c-4, c-5, c-6]
   tune: # takes/<id>.mp4, audio in the same file
     [guitar-cliffside-tune, guitar-cliffside-rage]
   smash: # takes/<id>.mp4, one scripted smash each; audio in the same file
@@ -229,10 +229,10 @@ score:
       budget: [128.5, 138.5]
       playing: [trumpet, guitar, cello, violin, trombone, horn, piano, triangle, drums]
       # The grid: each tile is its take scaled to 1/3 and moved by pan/tilt in
-      # pixels. The centre tile runs the whole section; the others enter one
-      # every 2 bars in this order. All tiles run until the final chord.
+      # pixels. The tiles enter one every 2 bars in this order (the trombone
+      # where the conductor's tile was). All tiles run until the final chord.
       grid:
-        - { id: c-grid, track: V7, zoom: 0.333, pan: 0, tilt: 0, retime: "conducting on the beat at 152 bpm" }
+        - { take: orch-trombone, track: V7, zoom: 0.333, pan: 0, tilt: 0 }
         - { take: trumpet-pirate-ship, track: V3, zoom: 0.333, pan: -640, tilt: 360 }
         - { take: guitar-cliffside, track: V4, zoom: 0.333, pan: 0, tilt: 360 }
         - { take: cello-balloon-basket, track: V5, zoom: 0.333, pan: 640, tilt: 360 }
@@ -266,7 +266,7 @@ score:
 
 # ------------------------------------------------------------------- beat 7
 beat7:
-  - { id: curtain-call, track: V1, end: 0.0, until_end: 9.5, note: "drawn by video/curtain.mjs: the grid pulls back into a theatre, the curtains close, bouquets land on the apron; to black" }
+  - { id: curtain-call, track: V1, end: 0.0, until_end: 9.5, note: "drawn by video/curtain.mjs: cloth curtains close over the grid, bouquets thrown, falling out of shot; to black" }
   - { id: end-card, track: V13, end: 9.5, until_end: 15.0, fade_in: 0.8, kind: title, text: ["CHORDLESS", "Play it now", "https://chordless.technickel.dev", "Built with Meta's Immersive Web SDK (IWSDK)", "Meta VR Start Developer Competition 2026"] }
 
 # ----------------------------------------------------------- rage ramps (beat 4)

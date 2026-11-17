@@ -55,7 +55,7 @@ const base = `
   .sub span{display:inline-block;max-width:1080px;padding:6px 16px;background:rgba(0,0,0,.66);border-radius:6px;font:500 26px/1.3 'Segoe UI'}
   .bug{position:absolute;right:20px;top:16px;font:700 16px 'Segoe UI';letter-spacing:.12em;padding:4px 10px;border:2px solid rgba(255,255,255,.8);border-radius:4px;background:rgba(0,0,0,.4)}
   .credit{position:absolute;font:500 18px/1.35 'Segoe UI';padding:6px 12px;background:rgba(0,0,0,.55);border-radius:4px;max-width:560px}
-  .end{position:absolute;inset:0;background:#0d0d14;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center}
+  .end{position:absolute;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center}
   .logo{height:auto;filter:drop-shadow(0 6px 24px rgba(0,0,0,.55))}
   .end .logo{width:700px;margin-bottom:10px;filter:none}
   .end h2{font:500 28px 'Segoe UI';color:#ffb000}

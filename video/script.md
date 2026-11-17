@@ -46,7 +46,7 @@ Simulator" and real gameplay that honestly represents the app. So:
   and also covers the rule that entries may not "depict any identifiable person other than
   Entrants". No real brand logos in generated clips.
 - **Record at least one shot on a real Quest with your own hands** (shot `R-quest`, under the
-  **BARE HANDS** card and the closing pitch).
+  **HANDS-ON EXPERIENCE** card and the closing pitch).
 - **Captions and cards carry the story during the music, not voiceover.** There are only two
   voiceover lines during the performance, both in quiet passages. The loud passages have no talking.
   Voiceover is on its own track, so a music-only cut is just muting A1.
@@ -95,7 +95,7 @@ concert cut, one instrument section at a time, but its sections now carry the st
 | Middle episodes, quiet | ~18 s | + violin, trombone, horn | **MULTIPLE INSTRUMENTS** card |
 | Middle episodes, building | ~14 s | + piano, + triangle | the instrument roll continues |
 | Galop returns | ~16 s | + drums | **CHANGING ENVIRONMENTS** card |
-| Quiet before the coda | ~10 s | everyone but the cymbals | **BARE HANDS** card, the 3×3 grid builds |
+| Quiet before the coda | ~10 s | everyone but the cymbals | **HANDS-ON EXPERIENCE** card, the 3×3 grid builds |
 | Coda | ~14 s | **everything, with the cymbals' first crash** | the whole stage breaks on the crash |
 | Final chord | ~3 s | everything | cutoff |
 
@@ -198,11 +198,24 @@ booked the conservatory practice room three weeks out, for a triangle.
 **Technickel (VO):**
 So I cut the chord. (The pun on Chordless: it sounds like "cord", and the logo's C is a coiled cord.)
 
+#### Shot 1-7b: The Headset Goes On (about 3.3 s)
+
+**Rendered, not generated** (`video/headset.mjs`, a small Three.js model): the generated clip 1-7
+ends by fading to black, and this picks up from the black. A VR headset turns in the light, no
+hands: first its front (the white visor, three dark sensor strips) with the strap loop behind,
+then its side, then, as the strap lifts up and over as if to go over your head, its inside (the
+grey face pad, the two lenses). It comes up to your face until everything goes dark. Then the
+two lenses wake onto the empty theatre, out of focus, a soft image in each, and open out and
+meet in one clear picture: the first frame of the title card's shot. Sound: a soft lift, the
+pad seating, a two-note start-up chime.
+
 #### Shot 1-8: Title Card (0:25 – 0:27)
 
 Designed, not generated: the Chordless logo (`public/icons/logo.svg`, as on the app's title
 screen), with the app's tagline under it: *Play **virtually** any instrument.* Behind it, the
-theatre before the tune, darkened. The end card carries the same logo.
+empty theatre seen from the stalls (take `title-house`): no instrument, hands or menus, the stage
+lights on, the camera pushing slowly in over the seats towards the stage. The end card carries
+the same logo.
 
 **Technickel (VO):**
 And now, tonight's performance: Chordless.
@@ -229,11 +242,16 @@ POV capture, `takes/guitar-cliffside-tune.mp4`: the air guitar at the Cliffside 
 playing *Ode to Joy* slowly, single notes. Nothing flashy; it should feel like a first lesson.
 Slow push-in on the fretting hand over the 14 s.
 
-**Lower third (0:31, 3 s):** GUITAR · Cliffside Sunset
+**Lower third (0:31, 3 s):** GUITAR / *Theatre*. Every pop-up in the trailer is just the
+instrument, with the location in italics underneath.
 **On screen at the first note:**
 
-- **Music credit** (top left, 0:30–0:36): *Ludwig van Beethoven · Ode to Joy (1824) · Public domain*
-- **Corner bug** (small, top right, for the rest of the video): *IN-APP CAPTURE*
+- **Song title** (bottom right, level with the lower third, 0:30–0:35): the lower third's mirror
+  image, with an amber music note and the amber bar on the right. *Ode to Joy* is in the logo's
+  face, with *Ludwig van Beethoven · 1824 · Public domain* underneath. *William Tell Overture,
+  Finale* (Gioachino Rossini · 1829) comes up in the same place at the trumpet's first note.
+- **In-app capture badge** (top right, for the rest of the score): the app icon and *In-app capture*
+  in the logo's face, in amber on a dark rounded badge.
 
 **VO-A, the uniqueness line (0:31–0:42, about 11 s, under the tune):**
 Most music in VR is a rhythm game, or a mixed-reality overlay on a guitar you already own.
@@ -348,18 +366,18 @@ The card text is in `edit-plan.yaml`, and the picture behind each is real captur
 
 | Card | Time | Under it | Why this beat |
 | --- | --- | --- | --- |
-| **FULL DESTRUCTION** | 1:11–1:14.5 (bar 264) | the smash from beat 5, then **instrument after instrument** hit one by one, every 2 bars: the piano pushed over with keys flying, the drums pulled off their stands and thrown, the trumpet smashed, the violin smashed | It is the first thing the trailer shows, so the card names it |
-| **MULTIPLE INSTRUMENTS** | 1:21–1:24.5 (middle episodes) | a quiet moment: a pinch of both hands, and everything comes back whole. Then the instruments, one every 2 bars: violin, cello, trombone, horn, trumpet, piano, triangle, drums, cymbals, guitar | The pause after the destruction; ten instruments, one per bar |
-| **CHANGING ENVIRONMENTS** | 1:53–1:56.5 (galop returns) | a rapid scene flip with the player's real hands on **Next scene**, then a cut every bar: stage, Cliffside Sunset, Underwater, Space Station, Library, Ice Cave, Volcano Rim, Pinball, and so on | The music has returned to the galop; the picture races through the worlds |
-| **BARE HANDS** *(optional fourth)* | 2:09–2:12 (quiet before the coda) | `R-quest`, the real headset, real hands, no controllers | Proves the app works on the real device |
+| **FULL DESTRUCTION** / *Break a leg. Or, if it goes badly, everything else.* | 1:11–1:14.5 (bar 264) | the smash from beat 5, then **instrument after instrument** hit one by one, every 2 bars: the piano pushed over with keys flying, the drums pulled off their stands and thrown, the trumpet smashed, the violin smashed | It is the first thing the trailer shows, so the card names it |
+| **MULTIPLE INSTRUMENTS** / *A playground for musicians* | 1:21–1:24.5 (middle episodes) | a quiet moment: a pinch of both hands, and everything comes back whole. Then the instruments, one every 2 bars: violin, cello, trombone, horn, trumpet, piano, triangle, drums, cymbals, guitar | The pause after the destruction; ten instruments, one per bar |
+| **CHANGING ENVIRONMENTS** / *Stage fright? Try a new stage.* | 1:53–1:56.5 (galop returns) | a cut every four bars, then every two, an instrument playing in each place: Rainy Rooftop (violin), Pirate Ship (trumpet), Cherry Blossom Garden (guitar), Endless Library (cello), Desert Canyon (trombone), Museum at Night (piano), then Space Station (trumpet), Bowling Alley (drums), Clock Tower (piano), Farm Festival (violin), Bathtub (cymbals), Train Roof (cello), Parking Garage (triangle), Tropical Beach (guitar) | The music has returned to the galop; the picture races through the worlds |
+| **HANDS-ON EXPERIENCE** *(optional fourth)* | 2:09–2:12 (quiet before the coda) | `R-quest`, the real headset, real hands, no controllers | Proves the app works on the real device |
 
 The first three are the ones you named. The optional fourth carries the "built on the open web"
 claim and the real-Quest shot. If the cut feels too long, drop it and move `R-quest` to the pitch
 in beat 7.
 
-**VO-B, the tech line (about 6 s, over the quiet theme as the orchestra builds):**
-It's built with Meta's Immersive Web SDK, so it runs right in the browser. No install, no
-controllers.
+**VO-B, the tech line (about 8 s, over the quiet theme as the orchestra builds):**
+It's built with Meta's Immersive Web SDK, so it runs in VR, right in the browser. No install,
+no controllers.
 
 *Fit this line to the quietest passage. If the section is shorter than the line, move the line, don't
 shorten the music.*

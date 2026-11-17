@@ -53,8 +53,13 @@ const base = `
   .lower i{font:italic 400 24px 'Segoe UI';color:#e0e0e8}
   .sub{position:absolute;left:0;right:0;bottom:22px;text-align:center}
   .sub span{display:inline-block;max-width:1080px;padding:6px 16px;background:rgba(0,0,0,.66);border-radius:6px;font:500 26px/1.3 'Segoe UI'}
-  .bug{position:absolute;right:20px;top:16px;font:700 16px 'Segoe UI';letter-spacing:.12em;padding:4px 10px;border:2px solid rgba(255,255,255,.8);border-radius:4px;background:rgba(0,0,0,.4)}
-  .credit{position:absolute;font:500 18px/1.35 'Segoe UI';padding:6px 12px;background:rgba(0,0,0,.55);border-radius:4px;max-width:560px}
+  .bug{position:absolute;right:20px;top:16px;display:flex;align-items:center;gap:10px;padding:6px 16px 6px 6px;background:rgba(10,10,16,.72);border:1px solid rgba(245,158,11,.5);border-radius:14px}
+  .bug img{width:36px;height:36px;border-radius:9px}
+  .bug b{display:block;font:400 20px/1.15 'Shrikhand';color:#f59e0b}
+  .song{position:absolute;right:44px;bottom:78px;display:flex;align-items:center;gap:14px;padding:10px 22px 12px 16px;border-right:6px solid #ffb000;background:rgba(10,10,16,.78);border-radius:6px;text-align:right}
+  .song svg{width:36px;height:36px;flex:none}
+  .song b{display:block;font:400 28px/1.2 'Shrikhand';color:#fafaf9}
+  .song span{display:block;margin-top:2px;font:500 16px 'Segoe UI';letter-spacing:.03em;color:#c9c9d6}
   .end{position:absolute;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center}
   .logo{height:auto;filter:drop-shadow(0 6px 24px rgba(0,0,0,.55))}
   .end .logo{width:700px;margin-bottom:10px;filter:none}
@@ -62,7 +67,7 @@ const base = `
   .end p{font:400 17px/1.4 'Segoe UI';color:#a9a9bb;max-width:1000px}
   .end .url{font:600 44px 'Segoe UI';color:#fafaf9;letter-spacing:.01em;margin:0 0 10px}
   .end .url small{display:block;font:400 30px 'Shrikhand';color:#f59e0b;margin-bottom:6px}
-  .title{position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .title{position:absolute;inset:0;background:rgba(0,0,0,.15);display:flex;flex-direction:column;align-items:center;justify-content:center}
   .title .logo{width:780px;margin-bottom:22px}
   .title h2{font:500 34px 'Segoe UI';letter-spacing:.04em;text-shadow:0 2px 12px #000}
   .title h2 em{color:#fbbf24;font-style:italic;font-weight:700}
@@ -72,8 +77,14 @@ const base = `
 /** The Chordless logo (the app's own, public/icons/logo.svg), inline so the cards need no server. */
 const LOGO = `data:image/svg+xml;base64,${readFileSync(new URL('../public/icons/logo.svg', import.meta.url)).toString('base64')}`;
 
+/** The app icon (public/icons/icon.svg), for the in-app capture badge. */
+const ICON = `data:image/svg+xml;base64,${readFileSync(new URL('../public/icons/icon.svg', import.meta.url)).toString('base64')}`;
+
 /** Shrikhand (SIL Open Font License), the face of the logo's wordmark. */
 const FONTS = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shrikhand&display=block">';
+
+/** A music note in the trailer's amber (Material Symbols "music_note", Apache 2.0). */
+const NOTE = '<svg viewBox="0 0 24 24"><path fill="#f59e0b" d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
@@ -88,13 +99,16 @@ function html(card) {
     case 'slam':
       return `<div class="slam"${card.scrim != null ? ` style="--scrim:${card.scrim}"` : ''}><div>${esc(card.text)}${card.sub ? `<small>${esc(card.sub)}</small>` : ''}</div></div>`;
     case 'lower':
-      return `<div class="lower"><b>${esc(card.text[0])}</b>${card.text[1] ? `<i>${esc(card.text[1])}</i>` : ''}</div>`;
+      return `<div class="lower"${card.bottom != null ? ` style="bottom:${card.bottom}px"` : ''}><b>${esc(card.text[0])}</b>${card.text[1] ? `<i>${esc(card.text[1])}</i>` : ''}</div>`;
     case 'sub':
       return `<div class="sub"${card.bottom != null ? ` style="bottom:${card.bottom}px"` : ''}><span>${esc(card.text)}</span></div>`;
     case 'bug':
-      return `<div class="bug">IN-APP CAPTURE</div>`;
-    case 'credit':
-      return `<div class="credit" style="${card.style}">${esc(card.text)}</div>`;
+      // The app's icon and "In-app capture" in the logo's face.
+      return `<div class="bug"><img src="${ICON}" alt=""><b>In-app capture</b></div>`;
+    case 'song':
+      // A song's title in the logo's face, with the composer, year and licence underneath: the
+      // lower third's mirror image, at the bottom right.
+      return `<div class="song"${card.bottom != null ? ` style="bottom:${card.bottom}px"` : ''}>${NOTE}<div><b>${esc(card.text[0])}</b><span>${esc(card.text[1])}</span></div></div>`;
     case 'title':
       // *word* is set like the app's title screen: amber italics.
       return `<div class="title"><img class="logo" src="${LOGO}" alt="${esc(card.text[0])}"><h2>${esc(card.text[1] ?? '').split('*').map((part, i) => (i % 2 ? `<em>${part}</em>` : part)).join('')}</h2></div>`;
@@ -112,68 +126,6 @@ function html(card) {
   }
 }
 
-/**
- * Steam: soft white puffs rising from the lower corners and edges of the view,
- * as a looping PNG sequence with alpha (dir/steam_0001.png ...). Deterministic,
- * and periodic over `seconds`, so the builder can loop it.
- */
-export async function renderSteam(dir, { seconds = 4, fps = 30 } = {}) {
-  await mkdir(dir, { recursive: true });
-  const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: W, height: H } });
-  await page.setContent(`<style>html,body{margin:0;background:transparent}canvas{display:block}</style><canvas id=c width=${W} height=${H}></canvas>`);
-  await page.evaluate(([W, H, loop]) => {
-    let seed = 7;
-    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    const puffs = [];
-    for (let i = 0; i < 46; i++) {
-      const side = i % 3; // 0 left edge, 1 right edge, 2 low centre-ish
-      puffs.push({
-        born: rnd() * loop,
-        life: 2.4 + rnd() * 1.4,
-        x: side === 0 ? -10 + rnd() * 120 : side === 1 ? W - 110 + rnd() * 120 : W * (0.3 + rnd() * 0.4),
-        y: side === 2 ? H + 30 : H * (0.55 + rnd() * 0.45),
-        dx: (side === 0 ? 1 : side === 1 ? -1 : rnd() - 0.5) * (30 + rnd() * 60),
-        dy: -(150 + rnd() * 170),
-        r0: 38 + rnd() * 30,
-        r1: 170 + rnd() * 120,
-        a: 0.2 + rnd() * 0.2,
-      });
-    }
-    const ctx = document.getElementById('c').getContext('2d');
-    window.draw = (t) => {
-      ctx.clearRect(0, 0, W, H);
-      ctx.filter = 'blur(18px)';
-      for (const p of puffs) {
-        for (const k of [-1, 0]) {
-          const age = ((t - p.born) % loop + loop) % loop + (k === -1 ? 0 : 0);
-          if (age > p.life) continue;
-          const u = age / p.life;
-          const x = p.x + p.dx * age;
-          const y = p.y + p.dy * age;
-          const r = p.r0 + (p.r1 - p.r0) * u;
-          const alpha = p.a * Math.sin(Math.PI * Math.min(1, u * 1.05)) ** 0.8;
-          const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-          g.addColorStop(0, `rgba(245,245,250,${alpha})`);
-          g.addColorStop(1, 'rgba(245,245,250,0)');
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.arc(x, y, r, 0, Math.PI * 2);
-          ctx.fill();
-          break;
-        }
-      }
-    };
-  }, [W, H, seconds]);
-  const frames = Math.round(seconds * fps);
-  for (let i = 0; i < frames; i++) {
-    await page.evaluate((t) => window.draw(t), i / fps);
-    await page.screenshot({ path: path.join(dir, `steam_${String(i + 1).padStart(4, '0')}.png`), omitBackground: true });
-  }
-  await browser.close();
-  return path.join(dir, 'steam_%04d.png');
-}
-
 /** Renders every card to `dir`/<id>.png; returns the paths by id. */
 export async function renderCards(cards, dir) {
   await mkdir(dir, { recursive: true });
@@ -183,7 +135,7 @@ export async function renderCards(cards, dir) {
   for (const card of cards) {
     await page.setContent(`${FONTS}<style>${base}</style>${html(card)}`, { waitUntil: 'networkidle' });
     const ready = await page.evaluate(async () => (await document.fonts.ready, document.fonts.check('40px Shrikhand')));
-    if (card.kind === 'slam' && !ready) throw new Error('the Shrikhand font did not load (it comes from Google Fonts)');
+    if (['slam', 'bug', 'song'].includes(card.kind) && !ready) throw new Error('the Shrikhand font did not load (it comes from Google Fonts)');
     const file = path.join(dir, `${card.id}.png`);
     await page.screenshot({ path: file, omitBackground: !['ai', 'end', 'white'].includes(card.kind) });
     out[card.id] = file;

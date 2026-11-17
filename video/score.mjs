@@ -106,23 +106,26 @@ export const ENTRANCES = [
 /** All in: the grid holds four bars, then the smashing starts on the tutti's second cymbal crash. */
 export const MONTAGE = { from: 264, to: 276, every: 2 };
 /**
- * The scenes: [scene, instrument, first bar, bars]. Four bars each, in calm
- * places, through the second tune and the theme (an instrument that is
- * playing there), then two bars each through the tutti again.
+ * The scenes: [scene, instrument, first bar, bars]. Four bars each, in the places
+ * with the most to look at, through the second tune and the theme (an instrument
+ * that is playing there: only the melody plays in the second tune), then two bars
+ * each through the tutti again. The instruments suit the places where they can.
+ * An optional fifth entry tilts the view up by that many degrees from the
+ * instrument's usual one, where the place is hard to see past the instrument.
  */
 export const SCENE_RUN = [
-  ['northern-lights', 'violin', 276, 4],
-  ['lantern-lake', 'trumpet', 280, 4],
+  ['rainy-rooftop', 'violin', 276, 4],
+  ['pirate-ship', 'trumpet', 280, 4],
   ['blossom-garden', 'guitar', 284, 4],
-  ['waterfall-pool', 'cello', 288, 4],
-  ['floating-islands', 'trombone', 292, 4],
-  ['lighthouse', 'piano', 296, 4],
+  ['library', 'cello', 288, 4, 16],
+  ['desert-canyon', 'trombone', 292, 4],
+  ['museum', 'piano', 296, 4],
   ['space-station', 'trumpet', 300, 2],
-  ['volcano-rim', 'drums', 302, 2],
-  ['bouncy-castle', 'piano', 304, 2],
-  ['snow-globe', 'violin', 306, 2],
-  ['giant-turtle', 'cello', 308, 2],
-  ['upside-down-room', 'cymbals', 310, 2],
-  ['ice-cave', 'triangle', 312, 2],
-  ['stadium', 'guitar', 314, 2],
+  ['bowling-alley', 'drums', 302, 2],
+  ['clock-tower', 'piano', 304, 2, 14],
+  ['farm', 'violin', 306, 2],
+  ['bathtub', 'cymbals', 308, 2],
+  ['train-roof', 'cello', 310, 2, 16],
+  ['parking-garage', 'triangle', 312, 2],
+  ['tropical-beach', 'guitar', 314, 2, 15],
 ];

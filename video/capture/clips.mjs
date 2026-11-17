@@ -270,8 +270,9 @@ export const CLIPS = {
 for (const inst of Object.keys(PARTS)) {
   CLIPS[`orch-${inst}`] = { scene: 'stage', capture: 'canvas', seconds: 150, run: (ctx, app) => playPart(ctx, app, { inst }) };
 }
-for (const [scene, inst, bar, bars] of SCENE_RUN) {
-  CLIPS[`scn-${scene}`] = { scene, capture: 'canvas', seconds: 90, run: (ctx, app) => playPart(ctx, app, { inst, fromBar: bar - 2, toBar: bar + bars + 1 }) };
+for (const [scene, inst, bar, bars, tilt = 0] of SCENE_RUN) {
+  const view = tilt ? { ...PARTS[inst].view, pitch: PARTS[inst].view.pitch + tilt } : undefined;
+  CLIPS[`scn-${scene}`] = { scene, capture: 'canvas', seconds: 90, run: (ctx, app) => playPart(ctx, app, { inst, fromBar: bar - 2, toBar: bar + bars + 1, view }) };
 }
 /** A few seconds of the trumpet on the stage, to check the capture. */
 CLIPS['probe-canvas'] = { scene: 'stage', capture: 'canvas', seconds: 90, run: (ctx, app) => playPart(ctx, app, { inst: 'trumpet', fromBar: 226, toBar: 233 }) };

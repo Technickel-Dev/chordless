@@ -114,7 +114,8 @@ beat1:
   - { id: 1-5, track: V2, at: 15.000, until: 18.000, note: gag - the price of a violin }
   - { id: 1-6, track: V2, at: 18.000, until: 21.000, note: gag - pushing the piano uphill to a jam }
   - { id: 1-7, track: V2, at: 21.000, until: 25.000, note: the vanishing act }
-  - { id: guitar-cliffside, track: V1, at: 25.000, until: 27.000, in: 2.0, speed: 0.5, grade: "darken -1.5 stops", note: title card background }
+  - { id: headset-on, track: V1, dur: 3.35, note: "rendered 3D headset, no hands: front, side, then the inside up to your face, out of 1-7's fade to black; the lenses wake onto title-house's first frame" }
+  - { id: title-house, track: V1, at: 25.000, until: 27.000, note: "title card background: the empty theatre from the stalls, a slow push-in towards the stage" }
   - { id: baton-countin, track: V1, at: 27.000, until: 30.000, zoom: 1.2, note: "shot 1-9, real footage: three taps on the stand on beats -4, -3, -2 (their own sound), then the downbeat lands on the cut" }
 
 # ------------------------------------------------- beat 2 and 3: the tune, the flub
@@ -241,7 +242,7 @@ score:
         - { take: triangle-fridge, track: V9, zoom: 0.333, pan: -640, tilt: -360 }
         - { take: drums-neon-arcade, track: V10, zoom: 0.333, pan: 0, tilt: -360 }
         - { take: cymbals-bowling-alley, track: V11, zoom: 0.333, pan: 640, tilt: -360, note: "arrives last, poised and silent" }
-      real: { id: R-quest, track: V2, bars_long: 4, note: the BARE HANDS card sits on this; optional }
+      real: { id: R-quest, track: V2, bars_long: 4, note: the HANDS-ON EXPERIENCE card sits on this; optional }
 
     - id: coda
       beat: 6
@@ -288,10 +289,10 @@ rage:
 # A card is a game-trailer slam: a quarter-second dark dip, big white type (Text+),
 # a stinger, then gone. All on V13 and A10.
 cards:
-  - { id: card-full-destruction, text: "FULL DESTRUCTION", bar: 264, dur: 3.5, stinger: sfx-card-slam, under: smash montage, note: on the first non-guitar smash }
-  - { id: card-multiple-instruments, text: "MULTIPLE INSTRUMENTS", section: middle-quiet, offset: 0.3, dur: 3.5, stinger: sfx-card-slam }
-  - { id: card-changing-environments, text: "CHANGING ENVIRONMENTS", section: galop-returns, offset: 0.3, dur: 3.5, stinger: sfx-card-slam }
-  - { id: card-bare-hands, text: "BARE HANDS", section: pre-coda, offset: 0.3, dur: 3.0, stinger: sfx-card-slam, optional: true, note: "subtitle: NO CONTROLLERS, NO INSTALL" }
+  - { id: card-full-destruction, text: "FULL DESTRUCTION", bar: 264, dur: 3.5, stinger: sfx-card-slam, under: smash montage, note: on the first non-guitar smash, subtitle: "Break a leg. Or, if it goes badly, everything else." }
+  - { id: card-multiple-instruments, text: "MULTIPLE INSTRUMENTS", section: middle-quiet, offset: 0.3, dur: 3.5, stinger: sfx-card-slam, note: "subtitle: A playground for musicians" }
+  - { id: card-changing-environments, text: "CHANGING ENVIRONMENTS", section: galop-returns, offset: 0.3, dur: 3.5, stinger: sfx-card-slam, note: "subtitle: Stage fright? Try a new stage." }
+  - { id: card-hands-on, text: "HANDS-ON EXPERIENCE", section: pre-coda, offset: 0.3, dur: 3.0, stinger: sfx-card-slam, optional: true, note: "subtitle: NO CONTROLLERS, NO INSTALL" }
 
 # ---------------------------------------------------------------------- audio
 # Music: each instrument's stem is its take's audio, one continuous clip from
@@ -342,17 +343,16 @@ sfx: # A10, plus the real capture's own audio on A11
 # ------------------------------------------------------ captions and credits
 supers: # V13, lower third; line 2 italic
   - { at: 25.000, until: 27.000, kind: title, text: ["CHORDLESS", "Play virtually any instrument."] }
-  - { at: 31.000, dur: 3.0, text: ["GUITAR · Cliffside Sunset"] }
+  - { at: 31.000, dur: 3.0, text: ["GUITAR", "Theatre"] } # every pop-up: instrument, then location
   - { section: middle-quiet, offset_bars: 2, bars_long: 2, text: ["VIOLIN · Underwater"] }
   - { section: middle-quiet, offset_bars: 6, bars_long: 2, text: ["TROMBONE · Jazz Club"] }
   - { section: middle-quiet, offset_bars: 8, bars_long: 2, text: ["FRENCH HORN · Mountaintop"] }
   - { section: galop-returns, offset: 0.0, bars_long: 4, text: ["Drums · Grandma's Living Room", "2:13 a.m. Headphones in. Grandma's still asleep."] }
 
 credits: # V13
-  - { id: tune-credit, at: 30.000, until: 36.000, position: top-left, text: ["Ludwig van Beethoven · Ode to Joy (1824) · Public domain"] }
-  - { id: music-credit, at: 45.3, until: 51.3, position: top-left, text: ["Gioachino Rossini · William Tell Overture, Finale (1829) · Public domain"] }
-  - { id: capture-credit, at: 30.000, until: 36.000, position: bottom, text: ["In-app capture. Every note is played and synthesized live in Chordless."] }
-  - { id: capture-bug, at: 30.000, until_end: 0.0, position: top-right, size: small, text: ["IN-APP CAPTURE"] }
+  - { id: tune-credit, at: 30.000, until: 35.000, position: bottom-right, text: ["Ode to Joy", "Ludwig van Beethoven · 1824 · Public domain"], note: "song card: music note, title in Shrikhand, amber bar on the right" }
+  - { id: music-credit, at: 45.3, until: 51.3, position: bottom-right, text: ["William Tell Overture, Finale", "Gioachino Rossini · 1829 · Public domain"] }
+  - { id: capture-badge, at: 30.000, until: score-end, position: top-right, text: ["In-app capture"], note: "app icon, amber Shrikhand on a dark rounded badge" }
   - id: end-credits
     end: 11.0
     until_end: 17.0
@@ -375,6 +375,6 @@ markers:
   - { bar: 260, name: "Beat 5: the high point; white-out; the smash" }
   - { section: middle-quiet, name: "MULTIPLE INSTRUMENTS card; VO-B" }
   - { section: galop-returns, name: "CHANGING ENVIRONMENTS card; drums in" }
-  - { section: pre-coda, name: "Grid builds; BARE HANDS card" }
+  - { section: pre-coda, name: "Grid builds; HANDS-ON EXPERIENCE card" }
   - { section: coda, name: "Coda: cymbals" }
   - { end: 0.0, name: "Beat 7: the bow" }

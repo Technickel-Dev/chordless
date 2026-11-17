@@ -82,16 +82,25 @@ export function rig({ frame, mark }) {
       await wait(35);
     }
   };
-  /** Where the fist is when the guitar is raised over the shoulder, and where it holds it for the strike. */
-  const WIND = { x: 0.05, y: 1.75, z: -0.25, yaw: 22, roll: 108 };
-  const FLOOR_FRONT = { x: 0.05, z: -0.42 };
+  /** Where the fist is at the top of the wind-up: raised high over the head, the guitar back behind it. */
+  const WIND = { x: 0.08, y: 2.0, z: -0.04, yaw: 20, roll: 150 };
+  /** The shoulder the arm swings round, how long the arm is, and where the fist ends up, out in front and low. */
+  const SHOULDER = { x: 0.1, y: 1.5, z: -0.1 };
+  const ARM = 0.5;
+  const FLOOR_FRONT = { x: 0.05, z: -0.5 };
   /**
-   * One overhead swing: the guitar goes up and back, hangs a beat, then comes
-   * down in an arc, speeding up, to put its lowest point through the floor.
+   * One overhead smash: the guitar wound up high behind the head, then swung over and down
+   * in a fast arc round the shoulder, the wrist whipping it through, to put its lowest point
+   * through the floor. A full swing breaks a guitar in one. Given `hit` (m/s), the arc stops a
+   * hand's breadth short of the floor, and the guitar is driven the rest of the way a step per
+   * rendered frame at that speed (a frame or two, too quick to see), so the blow lands at that
+   * speed and cracks the guitar instead.
    */
-  const swing = async (n, past = 0.08) => {
-    await tween(WIND, 520);
-    await wait(120);
+  /** How fast a full blow lands (m/s): a body hit over 11 m/s shatters the guitar. */
+  const FULL = 15;
+  const swing = async (n, { dur = 430, hit = 0 } = {}) => {
+    await tween(WIND, 400);
+    await wait(90);
     // The guitar's lowest point, read again if a frame reports it badly (it can, just after a big turn).
     const low = async () => {
       for (let k = 0; k < 6; k++) {
@@ -101,27 +110,33 @@ export function rig({ frame, mark }) {
       }
       return null;
     };
-    const top = (await low()) ?? 1.2;
+    // Faster and faster round the shoulder, over the top and out in front, to just short of the floor.
+    const a0 = Math.atan2(-(WIND.z - SHOULDER.z), WIND.y - SHOULDER.y);
+    const a1 = Math.atan2(-(FLOOR_FRONT.z - SHOULDER.z), -0.35);
     const t0 = Date.now();
-    const DUR = 300;
     for (;;) {
-      const s = Math.min(1, (Date.now() - t0) / DUR);
-      const e = s * s; // faster as it falls
-      const roll = lerp(WIND.roll, -78, Math.min(1, e * 1.05));
-      const yaw = lerp(WIND.yaw, 8, e);
-      const x = lerp(WIND.x, FLOOR_FRONT.x, e);
-      const z = lerp(WIND.z, FLOOR_FRONT.z, e);
-      await put({ x, y: hand.y, z }, yaw, roll);
-      // Steer the fist so the guitar's lowest point follows a fall to just under the floor.
-      const want = lerp(top, -past, e);
-      const now = await low();
-      // Without a reading, follow the fall the fist itself makes.
-      hand.y = now == null ? lerp(WIND.y, 0.5, e) : hand.y - (now - want);
+      const s = Math.min(1, (Date.now() - t0) / dur);
+      const e = s * s;
+      const a = lerp(a0, a1, e);
+      hand.y = SHOULDER.y + ARM * Math.cos(a);
+      await put({ x: lerp(WIND.x, FLOOR_FRONT.x, e), y: hand.y, z: SHOULDER.z - ARM * Math.sin(a) }, lerp(WIND.yaw, 8, e), lerp(WIND.roll, -78, Math.min(1, e * 1.05)));
       if (s >= 1) break;
     }
-    await put({ x: hand.x, y: hand.y, z: hand.z }, hand.yaw, hand.roll);
+    // Then straight down into the floor at the blow's speed: `hit` m/s for a checked blow that
+    // cracks the guitar, `FULL` for one that breaks it. The app counts a blow when the guitar
+    // meets the floor, at the speed the hand moved over that frame, and holds the guitar up
+    // while the hand goes on. So the drive is the emulator's own linear move, which advances the
+    // hand by the speed times each frame's own time step (exact even when frames come unevenly,
+    // as they do while the canvas records), on past the gap left under the guitar by two
+    // frames' travel: one blow, at that speed, and only one.
+    const gap = (await low()) ?? 0.6;
+    const speed = hit || FULL;
+    const drop = gap + Math.max(0.08, (2 * speed) / 60);
+    const to = { x: hand.x, y: hand.y - drop, z: hand.z };
+    await dispatch('animate_to', { device: 'hand-right', position: to, orientation: { pitch: 0, yaw: hand.yaw, roll: hand.roll }, anchor: 'wrist', duration: drop / speed });
+    hand.y = to.y;
     await mark('impact', { n });
-    await wait(260);
+    await wait(240);
     return guitar();
   };
   return { dispatch, guitar, neckPoint, lowest, hand, put, tween, grab, tremble, swing };
@@ -334,10 +349,26 @@ export async function meltdown({ page, frame }, app) {
   await r.tremble(neck, 1800);
   await mark('shakingDone');
 
-  // 3. The smash: overhead swings, until it is wrecked. Looking out over where it lands.
+  // 3. The smash: overhead swings, building up, until it is wrecked. Looking out over where it
+  // lands. A full swing breaks the guitar in one (a body hit over 11 m/s shatters it), so the
+  // first two check themselves just before they land: they crack it, snap strings and knock
+  // pieces off; full swings finish it.
   await dispatch('set_transform', { device: 'headset', ...SWING_VIEW });
   let g = await r.guitar();
-  for (let i = 0; i < 12 && g.condition !== 'wrecked'; i++) g = await r.swing(i + 1);
+  // Two checked hits that crack it and knock pieces off (aimed at about 6.5 m/s, nudged by
+  // what the last one did), then full swings to finish it.
+  let aim = 6.5;
+  let breaking = 0;
+  for (let i = 0; i < 12 && g.condition !== 'wrecked'; i++) {
+    const full = breaking >= 2;
+    g = await r.swing(i + 1, { hit: full ? 0 : aim });
+    if (!full) {
+      if (g.lastImpact >= 5) breaking++;
+      if (g.lastImpact < 5) aim += 1.5;
+      else if (g.lastImpact > 8.5) aim -= 1.5;
+    }
+    console.log(`[meltdown] swing ${i + 1}: ${g.condition}, ${g.lastImpact?.toFixed(1)} m/s, ${g.strings} strings left, ${g.shardsOff} pieces off`);
+  }
   await wait(500);
   await dispatch('set_hand_pose', { device: 'hand-right', poseId: 'open' });
   await dispatch('set_hand_pose', { device: 'hand-left', poseId: 'open' });
@@ -370,14 +401,18 @@ export async function swingtest({ page, frame }, app) {
   await startApp({ page, frame }, { root: 'AirGuitar', view: { pitch: -30, yaw: 0, roll: 0 } });
   await app.hideBanner();
   const r = rig({ frame, mark: async (w) => console.log('[swingtest]', w) });
+  // (Recording the canvas as the real take does, when the take asks for it.)
+  if (app.startCapture && process.env.SWING_CAPTURE) await app.startCapture();
   await wait(1500);
   const neck = await r.grab();
   await r.tremble(neck, 1200);
   await r.dispatch('set_transform', { device: 'headset', ...SWING_VIEW });
   let g = await r.guitar();
-  for (let i = 0; i < 4 && g.condition !== 'wrecked'; i++) {
-    g = await r.swing(i + 1);
-    console.log('swing', i + 1, g.condition, g.strings);
+  // SWING_HITS (m/s, comma-separated; 0 = a full swing) tries a build-up of hits.
+  const hits = (process.env.SWING_HITS ?? '0,0,0,0').split(',').map(Number);
+  for (let i = 0; i < hits.length && g.condition !== 'wrecked'; i++) {
+    g = await r.swing(i + 1, { hit: hits[i] });
+    console.log('swing', i + 1, 'aim', hits[i], ':', g.condition, 'speed', g.lastImpact?.toFixed(1), 'health', g.health?.toFixed(2), 'strings', g.strings, 'shardsOff', g.shardsOff, 'neckBroken', g.neckBroken);
   }
   await wait(1500);
   return { condition: g.condition };

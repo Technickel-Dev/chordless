@@ -150,8 +150,10 @@ of view. His emoji face is the mood gauge: 😎 (calm) → 😐 (the flub) → �
 
 #### Shot 1-2: The Introduction (0:03 – 0:09)
 
-**Generated:** `clips/enter-under-spotlight.mp4` (he walks into the spotlight). **Still to generate:**
-the talking to camera that carries the line below (1-2b; a card holds its place in the first pass).
+**Generated:** `clips/enter-under-spotlight.mp4` (720p, 14 s): he walks into the spotlight and talks to
+camera with his hands, then the lights go down on him. Used up to where the lights start to go down
+(10.3 s); its last part is 1-7. The welcome line starts as he walks in, and the clip's own generated
+voice is left out (its footsteps are kept). His face is an emoji, so there are no lips to sync.
 
 **Visuals:**
 > **Storyboard Prompt:** "A photorealistic 16:9 medium shot of TECHNICKEL on a conductor's podium in a dim, gilded concert hall, empty orchestra chairs behind him, spotlit, baton held at his side."
@@ -189,7 +191,11 @@ and library gags: the cost of an instrument, and the work of getting it to pract
 on the block; the drummer's eleventh trip to an overflowing hatchback; the triangle player who
 booked the conservatory practice room three weeks out, for a triangle.
 
-#### Shot 1-7: The Vanishing Act (0:21 – 0:25)
+#### Shot 1-7: The Lights Go Down
+
+**Generated:** the last part of `clips/enter-under-spotlight.mp4` (from 10.3 s): back on the stage, the
+spotlight narrows and the stage goes dark, out to black for the headset shot. (It replaces the
+vanishing act below, kept for reference.)
 
 > **Storyboard Prompt:** "A photorealistic 16:9 wide shot of the gilded concert hall, now fully lit. Every orchestra chair holds an instrument (cellos, violins, a grand piano, a drum kit, trumpets) but there are still no musicians. TECHNICKEL stands on the podium, baton raised."
 >

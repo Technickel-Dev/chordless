@@ -74,6 +74,7 @@ export const TAKE_LIST = {
   'baton-countin': { scene: 'stage', run: batonCountIn, seconds: 60, capture: 'canvas' },
   'title-house': { scene: 'stage', run: titleHouse, seconds: 40, capture: 'canvas' },
   swingtest: { scene: 'stage', run: swingtest, seconds: 90 },
+  'swingtest-canvas': { scene: 'stage', run: swingtest, seconds: 90, capture: 'canvas' },
   menupick: { scene: 'stage', run: menupick, seconds: 60, capture: 'canvas' },
   'tune-ode': { scene: 'cliffside', run: tune, seconds: 70 },
   'wt-guitar': wt('tests/william-tell.mjs', 'cliffside'),

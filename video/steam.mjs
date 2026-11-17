@@ -14,13 +14,26 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { W, H } from './cards.mjs';
 
+/** When each vent fires in the loop: every (a share of the loop) and phase (a share of that). */
+const VENTS = [
+  { every: 1 / 4, phase: 0.0 },
+  { every: 1 / 4, phase: 0.5 },
+  { every: 1 / 3, phase: 0.25 },
+  { every: 1 / 3, phase: 0.75 },
+];
+
+/** When bursts of steam leave the vents, in seconds into a loop of `L` (for the hiss under them). */
+export function steamBursts(L = 4) {
+  return VENTS.flatMap((v) => Array.from({ length: Math.round(1 / v.every) }, (_, b) => ((b + v.phase) * v.every * L) % L)).sort((a, b) => a - b);
+}
+
 export async function renderSteam(dir, { seconds = 4, fps = 30 } = {}) {
   await mkdir(dir, { recursive: true });
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({ viewport: { width: W, height: H } });
     await page.setContent(`<style>html,body{margin:0;background:transparent}canvas{display:block}</style><canvas id=c width=${W} height=${H}></canvas>`);
-    await page.evaluate(scene, { W, H, L: seconds });
+    await page.evaluate(scene, { W, H, L: seconds, timing: VENTS });
     const frames = Math.round(seconds * fps);
     for (let i = 0; i < frames; i++) {
       await page.evaluate((t) => window.draw(t), i / fps);
@@ -33,7 +46,7 @@ export async function renderSteam(dir, { seconds = 4, fps = 30 } = {}) {
 }
 
 /** Runs in the page: makes the puff sprites and the puffs, and defines window.draw(t). */
-function scene({ W, H, L }) {
+function scene({ W, H, L, timing }) {
   let seed = 12345;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const smooth = (a, b, x) => {
@@ -104,11 +117,11 @@ function scene({ W, H, L }) {
 
   // ---- the puffs: bursts from four vents at the lower edges of the view
   const vents = [
-    { x: 70, y: H + 50, dx: 0.42, dy: -1, every: L / 4, phase: 0.0 },
-    { x: W - 70, y: H + 50, dx: -0.42, dy: -1, every: L / 4, phase: 0.5 },
-    { x: -50, y: H * 0.62, dx: 1, dy: -0.75, every: L / 3, phase: 0.25 },
-    { x: W + 50, y: H * 0.62, dx: -1, dy: -0.75, every: L / 3, phase: 0.75 },
-  ];
+    { x: 70, y: H + 50, dx: 0.42, dy: -1 },
+    { x: W - 70, y: H + 50, dx: -0.42, dy: -1 },
+    { x: -50, y: H * 0.62, dx: 1, dy: -0.75 },
+    { x: W + 50, y: H * 0.62, dx: -1, dy: -0.75 },
+  ].map((v, i) => ({ ...v, every: L * timing[i].every, phase: timing[i].phase }));
   const puffs = [];
   for (const v of vents) {
     const n = Math.round(L / v.every);

@@ -18,7 +18,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { renderCards, W, H } from './cards.mjs';
-import { renderSteam } from './steam.mjs';
+import { renderSteam, steamBursts } from './steam.mjs';
+import { writeMothFlutter, writeRageSfx } from './sfx.mjs';
 import { renderCurtain, writeApplause, CURTAIN } from './curtain.mjs';
 import { renderHeadset, writeHeadsetSound, HEADSET } from './headset.mjs';
 import { barTime, ENTRANCES, MONTAGE, SCENE_RUN, END_BAR } from './score.mjs';
@@ -193,7 +194,11 @@ const CLIP_FOR = {
   '1-4': 'drummer-wakes-sleeping-person',
   '1-5': 'shopping-for-violin',
   '1-6': 'pushing-piano-uphill',
+  // The spotlight clip's last part, where the lights go down on him.
+  '1-7': 'enter-under-spotlight',
 };
+/** The spotlight clip: where its own (generated) voice starts, and where its lights start to go down. */
+const SPOT = { voice: 4.6, down: 10.3 };
 /** A shot's generated clip, known as a take, or null while it is still to generate. */
 const clipOf = (shot) => {
   const file = CLIP_FOR[shot] && path.join(CLIP_DIR, `${CLIP_FOR[shot]}.mp4`);
@@ -202,39 +207,70 @@ const clipOf = (shot) => {
   takes[name] ??= { name, videoFile: file, audioFile: file, videoLen: probe(file) };
   return takes[name];
 };
-/** The next cut: a shot's clip from `from` for `d` seconds, its own sound under the voice (or its card). */
-const clipSeg = (shot, from, d, vol = 0.5) => {
+/**
+ * The next cut: a shot's clip from `from` for `d` seconds, its own sound under the voice (or
+ * its card). Only the clip's sound from `soundFrom` to `soundUntil` (seconds into the cut) is used.
+ */
+const clipSeg = (shot, from, d, vol = 0.5, { soundFrom = 0, soundUntil = d } = {}) => {
   const k = clipOf(shot);
   if (!k) return ai(shot, d);
   const t0 = seg({ kind: 'take', take: k.name, at: from, dur: d, label: `clip ${shot}: ${CLIP_FOR[shot]}` });
-  audio.push({ file: k.audioFile, ss: from, dur: d, at: t0, vol, kind: 'stem', fadeIn: 0.15, fadeOut: 0.3 });
+  if (soundUntil > soundFrom) audio.push({ file: k.audioFile, ss: from + soundFrom, dur: soundUntil - soundFrom, at: t0 + soundFrom, vol, kind: 'stem', fadeIn: 0.15, fadeOut: 0.3 });
   return t0;
 };
 clipSeg('1-1', 0, 4.6, 0.6);
 {
-  // He walks into the spotlight and starts talking; the rest of the line waits on a talking clip (1-2b).
-  const t0 = clipSeg('1-2', 0, 4.9, 0.5);
-  const tVo = t0 + 1.6;
-  voAt('vo-1-2', tVo);
-  sub('vo-1-2', tVo);
-  const rest = tVo + dur('vo-1-2') + 0.5 - T;
-  if (rest > 0) seg({ kind: 'png', id: card({ id: 'ai-1-2b', kind: 'ai', shot: '1-2b' }), dur: rest, label: 'AI 1-2b (talking, to generate)' });
+  // He walks into the spotlight and talks: one clip, up to where its lights start to go down
+  // (that part closes the opening, as 1-7). The welcome starts as he walks in; the clip's own
+  // voice is left out (its sound, the footsteps, stops where it starts talking).
+  const k = clipOf('1-2');
+  if (k) {
+    const voFrom = Math.max(0.6, SPOT.down - 0.25 - dur('vo-1-2'));
+    const t0 = clipSeg('1-2', 0, SPOT.down, 0.5, { soundUntil: SPOT.voice });
+    voAt('vo-1-2', t0 + voFrom);
+    sub('vo-1-2', t0 + voFrom);
+  } else {
+    const t0 = ai('1-2', 4.9);
+    voAt('vo-1-2', t0 + 1.6);
+    sub('vo-1-2', t0 + 1.6);
+    seg({ kind: 'png', id: card({ id: 'ai-1-2b', kind: 'ai', shot: '1-2b' }), dur: dur('vo-1-2') - 2.8, label: 'AI 1-2b (talking, to generate)' });
+  }
 }
 // The four gags: the plane, 2 a.m., the price, and getting it to the jam. The drummer's clip is loud.
 const GAG_VOL = { '1-4': 0.35 };
+// The price gag's clip has a bird singing as the wallet opens, but what flies out is a moth:
+// from there its sound loses the birdsong (a steep low-pass), and a moth's flutter goes over it.
+const MOTH_AT = 3.74;
+{
+  const k = clipOf('1-5');
+  if (k) {
+    const clean = path.join(B, 'clip-1-5-moth.wav');
+    const lp = Array(6).fill('lowpass=f=2500').join(',');
+    run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', k.videoFile, '-filter_complex', `[0:a]atrim=0:${MOTH_AT},asetpts=N/SR/TB[a];[0:a]atrim=start=${MOTH_AT - 0.04},asetpts=N/SR/TB,${lp}[b];[a][b]acrossfade=d=0.04[o]`, '-map', '[o]', clean]);
+    k.audioFile = clean;
+  }
+}
 for (const [shot, id] of [['1-3', 'vo-1-3'], ['1-4', 'vo-1-4'], ['1-5', 'vo-1-5'], ['1-6', 'vo-1-6']]) {
   const k = clipOf(shot);
   const d = k ? Math.min(Math.max(4.4, dur(id) + 0.9), k.videoLen - 0.3) : Math.max(3.0, dur(id) + 0.8);
   const t0 = clipSeg(shot, 0.25, d, GAG_VOL[shot] ?? 0.5);
+  if (shot === '1-5' && k) {
+    const flutter = Math.max(0.3, d - (MOTH_AT - 0.25) + 0.15);
+    audio.push({ file: writeMothFlutter(path.join(B, 'moth.wav'), { dur: flutter }), ss: 0, dur: flutter, at: t0 + MOTH_AT - 0.25, vol: 0.45, kind: 'sfx' });
+  }
   // A beat after the cut, or sooner if the line would otherwise run past the next one.
   const lead = Math.max(0.1, Math.min(0.35, d - dur(id) - 0.12));
   voAt(id, t0 + lead);
   sub(id, t0 + lead);
 }
 {
-  const t0 = ai('1-7', dur('vo-1-7') + 1.2);
-  voAt('vo-1-7', t0 + 0.8);
-  sub('vo-1-7', t0 + 0.8);
+  // Back on the stage: the lights go down on him, out to black for the headset. (Its sound
+  // starts a moment in, past the end of the clip's own voice.)
+  const k = clipOf('1-7');
+  const d = k ? k.videoLen - SPOT.down - 0.05 : dur('vo-1-7') + 1.2;
+  const t0 = clipSeg('1-7', SPOT.down, d, 0.4, { soundFrom: 0.4 });
+  voAt('vo-1-7', t0 + 0.6);
+  sub('vo-1-7', t0 + 0.6);
 }
 const md = takes.meltdown ? meltdownMarks() : null;
 /** A canvas take's sound runs this far behind its picture (measured with video/sync.mjs). */
@@ -329,6 +365,17 @@ if (md) {
   for (const s of timeline) if (s.rageKeys) Object.assign(s, { rage: keys.rage, shake: keys.shake.map((p) => [...p]), spikes: keys.spikes });
   overlays.push({ id: card({ id: 'red-vig', kind: 'redvig' }), t0: tRageStart, t1: tWreck + 1.6, fade: { in: tE - tRageStart, out: 1.4 } });
   overlays.push({ id: 'STEAM', steam: true, t0: tD - 0.4, t1: tWreck + 0.6, fade: { in: 1.6, out: 0.6 } });
+  // The rage's own sound under the take: a building rumble, a racing heartbeat, a kettle
+  // whistle as the steam starts, a hiss with each puff, a whoosh and a boom for each hit.
+  // (The steam loops every 4 s from the start of the cut, so its puffs are at those times.)
+  {
+    const steamFrom = tD - 0.4;
+    const puffs = [];
+    for (let k = Math.floor(steamFrom / 4); k * 4 < tWreck + 1; k++) for (const s of new Set(steamBursts(4))) puffs.push(k * 4 + s - tRageStart);
+    const len = tWreck - tRageStart + 2.5;
+    const file = writeRageSfx(path.join(B, 'rage.wav'), { dur: len, shake: tD - tRageStart, steam: steamFrom - tRageStart, hits: keys.spikes.map((h) => h - tRageStart), wreck: tWreck - tRageStart, puffs });
+    audio.push({ file, ss: 0, dur: len, at: tRageStart, vol: 1, kind: 'sfx' });
+  }
   T0 = tW;
 } else {
   ai('c-1', 17);
@@ -515,7 +562,7 @@ overlays.push({ id: card({ id: 'song-wt', kind: 'song', text: ['William Tell Ove
       const b = Math.min(s1, a + CH);
       const ca = m.at(a) + AUDIO_LAG;
       const cb = m.at(b) + AUDIO_LAG;
-      audio.push({ file: takes[name].audioFile, ss: ca, dur: cb - ca, at: T0 + a, vol, kind: 'stem', tempo: (cb - ca) / (b - a), fadeIn: a === s0 ? fadeIn : 0, fadeOut: b >= s1 - 1e-6 ? fadeOut : 0 });
+      audio.push({ file: takes[name].audioFile, ss: ca, dur: cb - ca, at: T0 + a, vol, kind: 'stem', score: true, tempo: (cb - ca) / (b - a), fadeIn: a === s0 ? fadeIn : 0, fadeOut: b >= s1 - 1e-6 ? fadeOut : 0 });
     }
   };
   const MUSIC_END = CHORD + 4.4;
@@ -749,9 +796,14 @@ run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'concat', '-saf
 }
 
 // Audio: every item delayed to its time, the music ducked under the voice, then mixed.
+// The score's two loud tuttis (bars 260-275, and 300 to the closing chord) sit about 3 dB
+// lower than the rest of it, eased in and out over half a bar.
+const LOUD = 0.7;
+const scoreLevel = [[0, 1], [at(259.5), 1], [at(260), LOUD], [at(275.5), LOUD], [at(276), 1], [at(299.5), 1], [at(300), LOUD], [TOTAL + 5, LOUD]];
 {
   const args = ['-y', '-hide_banner', '-loglevel', 'error'];
   const music = [];
+  const score = [];
   const voices = [];
   const sfx = [];
   let n = 0;
@@ -772,8 +824,12 @@ run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'concat', '-saf
     if (a.tempo && Math.abs(a.tempo - 1) > 1e-4) f += `,atempo=${a.tempo.toFixed(5)}`;
     f += `,adelay=${Math.round(a.at * 1000)}|${Math.round(a.at * 1000)}[a${n}]`;
     filters.push(f);
-    (a.kind === 'vo' ? voices : a.kind === 'sfx' ? sfx : music).push(`[a${n}]`);
+    (a.kind === 'vo' ? voices : a.kind === 'sfx' ? sfx : a.score ? score : music).push(`[a${n}]`);
     n++;
+  }
+  if (score.length) {
+    filters.push(`${score.join('')}amix=inputs=${score.length}:normalize=0:duration=longest,volume='${kf(scoreLevel, 't')}':eval=frame[score]`);
+    music.push('[score]');
   }
   const mixed = (list, name) => (list.length ? `${list.join('')}amix=inputs=${list.length}:normalize=0:duration=longest[${name}]` : `anullsrc=r=48000:cl=stereo[${name}]`);
   filters.push(mixed(music, 'music'), mixed(voices, 'voice0'), mixed(sfx, 'sfx'));

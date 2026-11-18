@@ -26,7 +26,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      # onnxruntime-node (pulled in by @iwsdk/reference, a local dev tool) tries
+      # to download its CUDA add-on from github.com/microsoft/onnxruntime on
+      # Linux, and that download now 404s. The site never loads onnxruntime and
+      # the npm package already ships the CPU binaries, so skip the CUDA part.
       - run: npm ci
+        env:
+          npm_config_onnxruntime_node_install_cuda: skip
       - run: npm run typecheck
       # NODE_ENV=production turns off sourcemaps (see vite.config.ts).
       - run: npm run build

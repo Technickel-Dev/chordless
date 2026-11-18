@@ -1,26 +1,13 @@
 # Chordless
 
-Air instruments for Meta Quest, played with your bare hands: a guitar, a bass
-guitar, a violin, a cello, a pair of orchestral cymbals, a triangle, a piano, a
-drum kit, a trumpet, a trombone, a French horn and a conductor's baton. On the guitar your left fingers fret real strings at real fret
-positions on a full-size steel-string guitar, and your right index fingertip
-plucks: sweep across the strings to strum, flick one string to pick a single
-note. On the violin and cello your left fingers stop the strings anywhere on
-a fretless fingerboard and your right hand draws a bow. The bass is played
-as the guitar is, with four strings. The cymbals are one
-in each hand: clash them together. The triangle hangs from your left hand
-and the beater is in your right. The piano stands in front of you and
-you play its keys with all ten fingertips. The drum kit stands in front of you
-with a stick in each fist. The trumpet is in your right hand, its fingers on
-the valves, and a pinch of your left hand blows it. The trombone is held to your lips in your left
-hand, and your right hand works the slide. The French horn is in your left
-hand too, its fingers on the valves, with your right hand in the bell. The
-baton is in your right fist, to tap on a music stand. The sound is synthesized in the
-browser, so there are no audio files.
+Chordless is a symphony of virtual instruments you play in VR with your own hands. We're not talking your typical VR "playing" either, we have full high fidelity instruments. Every note is synthesized live in the browser, with no audio files, and
+because it's a WebXR app it runs right in your headset's browser with nothing to install.
 
-When a song goes wrong, every instrument can be smashed: swing it into the
-floor and it dents, cracks and breaks apart where it hits. You play in any of
-61 scenes, from the theatre stage to a bathtub.
+Got stage fright? Chordless puts you wherever you feel most creative, whether that's headlining a
+stadium or your grandma's living room.
+
+And when the song goes sideways, channel your inner rock legend and smash your instrument to bits.
+It's the most expensive move in rock and roll, now completely free.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
 SDK. WebXR is the browser standard for VR and AR, so the app runs in the Quest

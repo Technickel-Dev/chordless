@@ -77,29 +77,38 @@ function writeWav(file, L, R, { peak = 0.7, af } = {}) {
 }
 
 /**
- * A moth fluttering: soft, papery wingbeats (about twenty a second, wavering),
- * close at first and drifting away to one side.
+ * A moth fluttering: soft, papery, irregular wingbeats (about ten a second, wavering,
+ * with little pauses), more breath than buzz, drifting away to one side.
  */
 export function writeMothFlutter(file, { dur = 1.3 } = {}) {
   const n = Math.ceil(dur * RATE);
   const L = new Float32Array(n);
   const R = new Float32Array(n);
   const rnd = seeded(31);
-  const bp = bandpass();
-  const bp2 = bandpass();
+  const low = bandpass();
+  const high = bandpass();
   let phase = 0;
+  let flap = 0;
+  let amp = 1;
   for (let i = 0; i < n; i++) {
     const t = i / RATE;
-    // The wingbeat wanders between about 17 and 25 a second.
-    const rate = 21 + 3 * Math.sin(t * 7.1) + 1.5 * Math.sin(t * 17.3);
+    // The wingbeat wanders between about 7 and 13 a second; now and then it pauses.
+    const rate = 10 + 2.5 * Math.sin(t * 5.3) + 1.2 * Math.sin(t * 13.1);
     phase += rate / RATE;
-    const beat = phase % 1;
-    // Each beat: a quick papery puff (the downstroke), then a softer one (the upstroke).
-    const stroke = Math.exp(-beat * 26) + 0.45 * Math.exp(-Math.abs(beat - 0.5) * 30);
+    if (phase >= 1) {
+      phase -= 1;
+      flap++;
+      // Each flap a little different, and one in five or so barely there (a glide).
+      amp = rnd() < 0.2 ? 0.15 : 0.6 + 0.4 * rnd();
+    }
+    // A soft swell of air each downstroke, a fainter one on the way up: no sharp edge.
+    const down = Math.sin(Math.PI * Math.min(1, phase / 0.55)) ** 2;
+    const up = phase > 0.55 ? 0.3 * Math.sin((Math.PI * (phase - 0.55)) / 0.45) ** 2 : 0;
     const noise = rnd() * 2 - 1;
-    const body = bp(noise, 900 + 500 * Math.sin(t * 3.3), 1.2) + 0.5 * bp2(noise, 2600, 2);
-    const env = Math.min(1, t / 0.05) * Math.min(1, (dur - t) / 0.35);
-    const v = body * stroke * env * (0.8 + 0.2 * Math.sin(t * 2.1));
+    // Mostly a low, breathy whoosh; a little papery hiss on top.
+    const body = low(noise, 520, 0.6) + 0.25 * high(noise, 1900, 0.7);
+    const env = Math.min(1, t / 0.08) * Math.min(1, (dur - t) / 0.4);
+    const v = body * (down + up) * amp * env;
     // It flies off to the right, getting quieter.
     const away = Math.min(1, t / dur);
     L[i] = v * (1 - 0.6 * away);

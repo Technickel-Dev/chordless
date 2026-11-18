@@ -255,7 +255,7 @@ for (const [shot, id] of [['1-3', 'vo-1-3'], ['1-4', 'vo-1-4'], ['1-5', 'vo-1-5'
   const t0 = clipSeg(shot, 0.25, d, GAG_VOL[shot] ?? 0.5);
   if (shot === '1-5' && k) {
     const flutter = Math.max(0.3, d - (MOTH_AT - 0.25) + 0.15);
-    audio.push({ file: writeMothFlutter(path.join(B, 'moth.wav'), { dur: flutter }), ss: 0, dur: flutter, at: t0 + MOTH_AT - 0.25, vol: 0.45, kind: 'sfx' });
+    audio.push({ file: writeMothFlutter(path.join(B, 'moth.wav'), { dur: flutter }), ss: 0, dur: flutter, at: t0 + MOTH_AT - 0.25, vol: 0.3, kind: 'sfx' });
   }
   // A beat after the cut, or sooner if the line would otherwise run past the next one.
   const lead = Math.max(0.1, Math.min(0.35, d - dur(id) - 0.12));

@@ -14,9 +14,10 @@ import { AirDrums } from './drums/air-drums-component.js';
 import { AirPiano } from './piano/air-piano-component.js';
 import { AirTriangle } from './triangle/air-triangle-component.js';
 import { AirHorn } from './horn/air-horn-component.js';
+import { AirBaton } from './baton/air-baton-component.js';
 import { AirTrombone } from './trombone/air-trombone-component.js';
 import { AirTrumpet } from './trumpet/air-trumpet-component.js';
 import { AirViolin } from './violin/air-violin-component.js';
 import { Smashable } from './smash/smashable-component.js';
 
-export default defineComponents([AirGuitar, AirBass, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums, AirTrumpet, AirTrombone, AirHorn, Smashable]);
+export default defineComponents([AirGuitar, AirBass, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums, AirTrumpet, AirTrombone, AirHorn, AirBaton, Smashable]);

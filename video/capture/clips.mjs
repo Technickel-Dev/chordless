@@ -20,8 +20,8 @@ async function playPart({ page, frame }, app, { inst, fromBar, toBar, view }) {
   const part = PARTS[inst];
   await startApp({ page, frame }, { root: part.root, view: view ?? part.view, modules: [part.performer] });
   await app.hideBanner();
-  // Picked from the menu, as a player would, so the menu folds out of the picture.
-  await choose(frame, dispatcher(frame), `instrument-${inst}`);
+  // Picked from the menu, as a player would, and the menu and hints folded out of the picture.
+  await chooseAndFold(frame, dispatcher(frame), inst);
   await wait(600);
   await app.startCapture();
   await wait(1500);
@@ -30,8 +30,9 @@ async function playPart({ page, frame }, app, { inst, fromBar, toBar, view }) {
   const r = await frame.evaluate(
     async ([mod, s]) => {
       const { perform } = await import(mod);
+      // The hands stay pinned in their last pose until the recording ends: let go, they
+      // fall onto the instrument and play a stray note after the closing chord.
       const out = await perform(s, {});
-      for (const side of ['left', 'right']) window.IWER_DEVICE.hands[side].setPin(null);
       return { fps: out.fps, drag: out.tempoDragPct, stalls: out.stalls };
     },
     [part.performer, song],
@@ -96,6 +97,31 @@ export async function choose(frame, dispatch, button) {
   await wait(250);
   await dispatch('select', { device: 'hand-right', duration: 0.15 });
   await wait(900);
+}
+
+/**
+ * Whether the panel's menu or its hint strip is out, read from the panel's own
+ * state (the hint strip is out while its time lasts).
+ */
+export const showing = (frame, what) =>
+  frame.evaluate((w) => {
+    const panel = Array.from(window.FRAMEWORK_MCP_RUNTIME.world.systems ?? []).find((s) => s && 'hintTime' in s && 'menuOpen' in s);
+    if (!panel) return false;
+    return w === 'menu' ? panel.menuOpen : panel.hintTime > 0;
+  }, what);
+
+/**
+ * Picks the instrument and folds the menu and the hint strip away, before the
+ * recording starts, so neither is in the picture. Each pinch is checked, and made
+ * again if it didn't take (one made while the panel is still settling can miss).
+ */
+export async function chooseAndFold(frame, dispatch, inst) {
+  await choose(frame, dispatch, `instrument-${inst}`);
+  for (let i = 0; i < 3 && (await showing(frame, 'menu')); i++) await choose(frame, dispatch, `instrument-${inst}`);
+  for (let i = 0; i < 3 && (await showing(frame, 'hint')); i++) await choose(frame, dispatch, 'hint-toggle');
+  const open = [];
+  for (const n of ['menu', 'hint']) if (await showing(frame, n)) open.push(n);
+  console.log(`[panel] ${inst} chosen; ${open.length ? `still showing: ${open.join(', ')}` : 'menu and hints folded'}`);
 }
 
 /** The camera for a smash: low, off to the side, so the whole swing and the blow fill the frame. */
@@ -244,8 +270,9 @@ export const CLIPS = {
 for (const inst of Object.keys(PARTS)) {
   CLIPS[`orch-${inst}`] = { scene: 'stage', capture: 'canvas', seconds: 150, run: (ctx, app) => playPart(ctx, app, { inst }) };
 }
-for (const [scene, inst, bar] of SCENE_RUN) {
-  CLIPS[`scn-${scene}`] = { scene, capture: 'canvas', seconds: 90, run: (ctx, app) => playPart(ctx, app, { inst, fromBar: bar - 2, toBar: bar + 3 }) };
+for (const [scene, inst, bar, bars, tilt = 0] of SCENE_RUN) {
+  const view = tilt ? { ...PARTS[inst].view, pitch: PARTS[inst].view.pitch + tilt } : undefined;
+  CLIPS[`scn-${scene}`] = { scene, capture: 'canvas', seconds: 90, run: (ctx, app) => playPart(ctx, app, { inst, fromBar: bar - 2, toBar: bar + bars + 1, view }) };
 }
 /** A few seconds of the trumpet on the stage, to check the capture. */
 CLIPS['probe-canvas'] = { scene: 'stage', capture: 'canvas', seconds: 90, run: (ctx, app) => playPart(ctx, app, { inst: 'trumpet', fromBar: 226, toBar: 233 }) };

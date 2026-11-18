@@ -19,6 +19,7 @@ import { AirDrumsSystem } from './drums/air-drums-system.js';
 import { AirTrumpetSystem } from './trumpet/air-trumpet-system.js';
 import { AirTromboneSystem } from './trombone/air-trombone-system.js';
 import { AirHornSystem } from './horn/air-horn-system.js';
+import { AirBatonSystem } from './baton/air-baton-system.js';
 import { mountTitleScreen } from './title-screen.js';
 
 World.create(
@@ -36,6 +37,7 @@ World.create(
   world.registerSystem(AirTrumpetSystem);
   world.registerSystem(AirTromboneSystem);
   world.registerSystem(AirHornSystem);
+  world.registerSystem(AirBatonSystem);
   world.registerSystem(PanelSystem);
   mountTitleScreen(world);
 });

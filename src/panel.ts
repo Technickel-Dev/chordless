@@ -14,6 +14,7 @@ import { AirTriangle } from './triangle/air-triangle-component.js';
 import { AirPiano } from './piano/air-piano-component.js';
 import { AirDrums } from './drums/air-drums-component.js';
 import { AirHorn } from './horn/air-horn-component.js';
+import { AirBaton } from './baton/air-baton-component.js';
 import { AirTrombone } from './trombone/air-trombone-component.js';
 import { AirTrumpet } from './trumpet/air-trumpet-component.js';
 import { AirViolin } from './violin/air-violin-component.js';
@@ -21,8 +22,8 @@ import { SCENES, sceneFromQuery, sceneUrl } from './scene-list.js';
 import { Smashable } from './smash/smashable-component.js';
 
 /** The instruments, by the panel button that takes each one out. */
-type Instrument = 'guitar' | 'bass' | 'violin' | 'cello' | 'cymbals' | 'triangle' | 'piano' | 'drums' | 'trumpet' | 'trombone' | 'horn';
-const INSTRUMENTS: Instrument[] = ['guitar', 'bass', 'violin', 'cello', 'cymbals', 'triangle', 'piano', 'drums', 'trumpet', 'trombone', 'horn'];
+type Instrument = 'guitar' | 'bass' | 'violin' | 'cello' | 'cymbals' | 'triangle' | 'piano' | 'drums' | 'trumpet' | 'trombone' | 'horn' | 'baton';
+const INSTRUMENTS: Instrument[] = ['guitar', 'bass', 'violin', 'cello', 'cymbals', 'triangle', 'piano', 'drums', 'trumpet', 'trombone', 'horn', 'baton'];
 
 /** How long an instrument's hint strip stays up after it is chosen. */
 const HINT_SECONDS = 20;
@@ -41,6 +42,7 @@ export class PanelSystem extends createSystem({
   trumpets: { required: [AirTrumpet] },
   trombones: { required: [AirTrombone] },
   horns: { required: [AirHorn] },
+  batons: { required: [AirBaton] },
   smashables: { required: [Smashable] },
 }) {
   private readonly buttons = new Map<Instrument, PanelElement>();
@@ -199,7 +201,7 @@ export class PanelSystem extends createSystem({
 
   /**
    * Instrument, tone, volume and reset buttons write to the AirGuitar,
-   * AirBass, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums, AirTrumpet, AirTrombone and AirHorn components.
+   * AirBass, AirViolin, AirCello, AirCymbals, AirTriangle, AirPiano, AirDrums, AirTrumpet, AirTrombone, AirHorn and AirBaton components.
    */
   private wireGuitarControls(panel: UIKitMLAsset): void {
     const clean = panel.getElementById('tone-clean');
@@ -236,6 +238,7 @@ export class PanelSystem extends createSystem({
       for (const entity of this.queries.trumpets.entities) entity.setValue(AirTrumpet, 'active', name === 'trumpet');
       for (const entity of this.queries.trombones.entities) entity.setValue(AirTrombone, 'active', name === 'trombone');
       for (const entity of this.queries.horns.entities) entity.setValue(AirHorn, 'active', name === 'horn');
+      for (const entity of this.queries.batons.entities) entity.setValue(AirBaton, 'active', name === 'baton');
       // Get the menu out of the way and show how to hold and play it instead.
       this.showing = name;
       this.menuOpen = false;
@@ -267,6 +270,9 @@ export class PanelSystem extends createSystem({
       for (const e of this.queries.horns.entities) {
         e.setValue(AirHorn, 'volume', clamp01((e.getValue(AirHorn, 'volume') ?? 0.8) + step));
       }
+      for (const e of this.queries.batons.entities) {
+        e.setValue(AirBaton, 'volume', clamp01((e.getValue(AirBaton, 'volume') ?? 0.8) + step));
+      }
     };
     const handlers: [string, () => void][] = [
       ['instrument-guitar', () => choose('guitar')],
@@ -280,6 +286,7 @@ export class PanelSystem extends createSystem({
       ['instrument-trumpet', () => choose('trumpet')],
       ['instrument-trombone', () => choose('trombone')],
       ['instrument-horn', () => choose('horn')],
+      ['instrument-baton', () => choose('baton')],
       [
         'tone-clean',
         () => {
@@ -306,6 +313,7 @@ export class PanelSystem extends createSystem({
           forEachBowed((e, c) => e.setValue(c, 'resetPlacement', true));
           for (const e of this.queries.pianos.entities) e.setValue(AirPiano, 'resetPlacement', true);
           for (const e of this.queries.drums.entities) e.setValue(AirDrums, 'resetPlacement', true);
+          for (const e of this.queries.batons.entities) e.setValue(AirBaton, 'resetPlacement', true);
           // And everything smashed is put back together.
           for (const e of this.queries.smashables.entities) e.setValue(Smashable, 'repair', true);
         },
@@ -344,6 +352,7 @@ export class PanelSystem extends createSystem({
     for (const e of this.queries.trumpets.entities) if (e.getValue(AirTrumpet, 'active')) out = 'trumpet';
     for (const e of this.queries.trombones.entities) if (e.getValue(AirTrombone, 'active')) out = 'trombone';
     for (const e of this.queries.horns.entities) if (e.getValue(AirHorn, 'active')) out = 'horn';
+    for (const e of this.queries.batons.entities) if (e.getValue(AirBaton, 'active')) out = 'baton';
     if (out === this.showing) return;
     this.showing = out;
     this.repaintInstruments();

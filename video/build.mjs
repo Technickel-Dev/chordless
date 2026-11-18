@@ -14,12 +14,16 @@
  * edit-plan.yaml's but not the same.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { renderCards, renderSteam, W, H } from './cards.mjs';
+import { renderCards, W, H } from './cards.mjs';
+import { renderSteam, steamBursts } from './steam.mjs';
+import { writeMothFlutter, writeRageSfx } from './sfx.mjs';
+import { renderCurtain, writeApplause, CURTAIN } from './curtain.mjs';
+import { renderHeadset, writeHeadsetSound, HEADSET } from './headset.mjs';
 import { barTime, ENTRANCES, MONTAGE, SCENE_RUN, END_BAR } from './score.mjs';
-import { beatMap, readTake, onsets, interp } from './sync.mjs';
+import { beatMap, readTake, onsets, interp, soundLag } from './sync.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const B = path.join(HERE, 'build');
@@ -126,14 +130,35 @@ for (const name of ['meltdown']) if (have(name)) takes[name] = { ...analyse(name
 /** Seconds after the finale's first bar that a take's first note sounds. */
 const firstNoteOffset = (name) => (takes[name] ? (takes[name].firstBeat - beats['wt-guitar']) * 60 / 152 : 0);
 for (const f of (existsSync(TAKES) ? (await import('node:fs')).readdirSync(TAKES) : []))
-  if (/^(orch|crash|scn)-.*\.json$/.test(f)) {
+  if (/^(orch|crash|scn|baton|title)-.*\.json$/.test(f)) {
     const name = f.slice(0, -5);
     if (existsSync(path.join(TAKES, `${name}.webm`))) takes[name] = { name, videoFile: path.join(TAKES, `${name}.webm`), audioFile: path.join(TAKES, `${name}.audio.wav`) };
   }
 for (const f of (existsSync(TAKES) ? (await import('node:fs')).readdirSync(TAKES) : []))
   if (/^(smash|env)-.*\.json$/.test(f)) takes[f.replace('.json', '')] = analyse(f.replace('.json', ''));
 
-const dur = (id) => probe(path.join(VO, `${id}.wav`));
+/**
+ * Each line's voice: the recording in video/audio (named without the "vo-", so vo-1-2
+ * is 1-2.wav) where there is one, else the placeholder voice (video/vo.ps1). A
+ * recording is trimmed of its silences, lightly compressed so it sits evenly over the
+ * music, levelled to the placeholder's loudness and limited, once (kept in build/vo-rec).
+ */
+const RECORDED = path.join(HERE, 'audio');
+const VO_REC = path.join(B, 'vo-rec');
+mkdirSync(VO_REC, { recursive: true });
+const voFiles = {};
+const voFile = (id) => {
+  if (voFiles[id]) return voFiles[id];
+  const src = path.join(RECORDED, `${id.replace(/^vo-/, '')}.wav`);
+  if (!existsSync(src)) return (voFiles[id] = path.join(VO, `${id}.wav`));
+  const out = path.join(VO_REC, `${id}.wav`);
+  if (!existsSync(out) || statSync(out).mtimeMs < statSync(src).mtimeMs) {
+    const trim = 'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03';
+    run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', src, '-af', `${trim},areverse,${trim.replace('0.03', '0.1')},areverse,highpass=f=80,acompressor=threshold=-24dB:ratio=3:attack=8:release=120,loudnorm=I=-20:TP=-1.5:LRA=7`, '-ar', '48000', out]);
+  }
+  return (voFiles[id] = out);
+};
+const dur = (id) => probe(voFile(id));
 const timeline = []; // { t, dur, label, ... } picture segments in order
 const overlays = []; // { id, t0, t1 }
 const audio = []; // { file, ss, dur, at, vol, fade }
@@ -145,48 +170,166 @@ const seg = (s) => {
   T += s.dur;
   return T - s.dur;
 };
-const voAt = (id, at, vol = 1) => audio.push({ file: path.join(VO, `${id}.wav`), ss: 0, dur: dur(id), at, vol, kind: 'vo' });
-const sub = (id, at) => {
+const voAt = (id, at, vol = 1) => audio.push({ file: voFile(id), ss: 0, dur: dur(id), at, vol, kind: 'vo' });
+/**
+ * A caption for a line; `bottom` (px) lifts it clear of something at the foot of the frame.
+ * The lines spell acronyms out for the voice ("S D K", "V R", "A I"); captions close them up.
+ */
+const sub = (id, at, { bottom } = {}) => {
   const d = dur(id);
-  overlays.push({ id: card({ id: `sub-${id}`, kind: 'sub', text: vo[id] }), t0: at, t1: at + d });
+  const text = vo[id].replace(/\b(?:[A-Z] )+[A-Z]\b/g, (m) => m.replace(/ /g, ''));
+  overlays.push({ id: card({ id: `sub-${id}`, kind: 'sub', text, bottom }), t0: at, t1: at + d });
 };
 const ai = (shot, d) => seg({ kind: 'png', id: card({ id: `ai-${shot}`, kind: 'ai', shot }), dur: d, label: `AI ${shot}` });
 /** A take's picture at score time `m` (seconds into the clip that began at its first note). */
 const takeAtAudio = (t, a) => t.offset + a;
 
-// ---- beat 1: the conductor of AI (0:00 - about 0:33)
-ai('1-1', 3.0);
+// ---- beat 1: the conductor of AI (0:00 - about 0:40). The generated clips in
+// video/clips where there are some; a card where a shot is still to generate.
+const CLIP_DIR = path.join(HERE, 'clips');
+const CLIP_FOR = {
+  '1-1': 'curtains-open',
+  '1-2': 'enter-under-spotlight',
+  '1-3': 'fitting-guitar_case-in-overhead',
+  '1-4': 'drummer-wakes-sleeping-person',
+  '1-5': 'shopping-for-violin',
+  '1-6': 'pushing-piano-uphill',
+  // The spotlight clip's last part, where the lights go down on him.
+  '1-7': 'enter-under-spotlight',
+};
+/** The spotlight clip: where its own (generated) voice starts, and where its lights start to go down. */
+const SPOT = { voice: 4.6, down: 10.3 };
+/** A shot's generated clip, known as a take, or null while it is still to generate. */
+const clipOf = (shot) => {
+  const file = CLIP_FOR[shot] && path.join(CLIP_DIR, `${CLIP_FOR[shot]}.mp4`);
+  if (!file || !existsSync(file)) return null;
+  const name = `clip-${shot}`;
+  takes[name] ??= { name, videoFile: file, audioFile: file, videoLen: probe(file) };
+  return takes[name];
+};
+/**
+ * The next cut: a shot's clip from `from` for `d` seconds, its own sound under the voice (or
+ * its card). Only the clip's sound from `soundFrom` to `soundUntil` (seconds into the cut) is used.
+ */
+const clipSeg = (shot, from, d, vol = 0.5, { soundFrom = 0, soundUntil = d } = {}) => {
+  const k = clipOf(shot);
+  if (!k) return ai(shot, d);
+  const t0 = seg({ kind: 'take', take: k.name, at: from, dur: d, label: `clip ${shot}: ${CLIP_FOR[shot]}` });
+  if (soundUntil > soundFrom) audio.push({ file: k.audioFile, ss: from + soundFrom, dur: soundUntil - soundFrom, at: t0 + soundFrom, vol, kind: 'stem', fadeIn: 0.15, fadeOut: 0.3 });
+  return t0;
+};
+clipSeg('1-1', 0, 4.6, 0.6);
 {
-  const d = dur('vo-1-2') + 0.7;
-  const t0 = seg({ kind: 'png', id: card({ id: 'ai-1-2', kind: 'ai', shot: '1-2' }), dur: d, label: 'AI 1-2' });
-  voAt('vo-1-2', t0 + 0.3);
-  sub('vo-1-2', t0 + 0.3);
+  // He walks into the spotlight and talks: one clip, up to where its lights start to go down
+  // (that part closes the opening, as 1-7). The welcome starts as he walks in; the clip's own
+  // voice is left out (its sound, the footsteps, stops where it starts talking).
+  const k = clipOf('1-2');
+  if (k) {
+    const voFrom = Math.max(0.6, SPOT.down - 0.25 - dur('vo-1-2'));
+    const t0 = clipSeg('1-2', 0, SPOT.down, 0.5, { soundUntil: SPOT.voice });
+    voAt('vo-1-2', t0 + voFrom);
+    sub('vo-1-2', t0 + voFrom);
+  } else {
+    const t0 = ai('1-2', 4.9);
+    voAt('vo-1-2', t0 + 1.6);
+    sub('vo-1-2', t0 + 1.6);
+    seg({ kind: 'png', id: card({ id: 'ai-1-2b', kind: 'ai', shot: '1-2b' }), dur: dur('vo-1-2') - 2.8, label: 'AI 1-2b (talking, to generate)' });
+  }
+}
+// The four gags: the plane, 2 a.m., the price, and getting it to the jam. The drummer's clip is loud.
+const GAG_VOL = { '1-4': 0.35 };
+// The price gag's clip has a bird singing as the wallet opens, but what flies out is a moth:
+// from there its sound loses the birdsong (a steep low-pass), and a moth's flutter goes over it.
+const MOTH_AT = 3.74;
+{
+  const k = clipOf('1-5');
+  if (k) {
+    const clean = path.join(B, 'clip-1-5-moth.wav');
+    const lp = Array(6).fill('lowpass=f=2500').join(',');
+    run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', k.videoFile, '-filter_complex', `[0:a]atrim=0:${MOTH_AT},asetpts=N/SR/TB[a];[0:a]atrim=start=${MOTH_AT - 0.04},asetpts=N/SR/TB,${lp}[b];[a][b]acrossfade=d=0.04[o]`, '-map', '[o]', clean]);
+    k.audioFile = clean;
+  }
 }
 for (const [shot, id] of [['1-3', 'vo-1-3'], ['1-4', 'vo-1-4'], ['1-5', 'vo-1-5'], ['1-6', 'vo-1-6']]) {
-  const d = Math.max(3.0, dur(id) + 0.8);
-  const t0 = ai(shot, d);
-  voAt(id, t0 + 0.25);
-  sub(id, t0 + 0.25);
+  const k = clipOf(shot);
+  const d = k ? Math.min(Math.max(4.4, dur(id) + 0.9), k.videoLen - 0.3) : Math.max(3.0, dur(id) + 0.8);
+  const t0 = clipSeg(shot, 0.25, d, GAG_VOL[shot] ?? 0.5);
+  if (shot === '1-5' && k) {
+    const flutter = Math.max(0.3, d - (MOTH_AT - 0.25) + 0.15);
+    audio.push({ file: writeMothFlutter(path.join(B, 'moth.wav'), { dur: flutter }), ss: 0, dur: flutter, at: t0 + MOTH_AT - 0.25, vol: 0.45, kind: 'sfx' });
+  }
+  // A beat after the cut, or sooner if the line would otherwise run past the next one.
+  const lead = Math.max(0.1, Math.min(0.35, d - dur(id) - 0.12));
+  voAt(id, t0 + lead);
+  sub(id, t0 + lead);
 }
 {
-  const t0 = ai('1-7', dur('vo-1-7') + 1.2);
-  voAt('vo-1-7', t0 + 0.8);
-  sub('vo-1-7', t0 + 0.8);
+  // Back on the stage: the lights go down on him, out to black for the headset. (Its sound
+  // starts a moment in, past the end of the clip's own voice.)
+  const k = clipOf('1-7');
+  const d = k ? k.videoLen - SPOT.down - 0.05 : dur('vo-1-7') + 1.2;
+  const t0 = clipSeg('1-7', SPOT.down, d, 0.4, { soundFrom: 0.4 });
+  voAt('vo-1-7', t0 + 0.6);
+  sub('vo-1-7', t0 + 0.6);
 }
 const md = takes.meltdown ? meltdownMarks() : null;
 /** A canvas take's sound runs this far behind its picture (measured with video/sync.mjs). */
 const AUDIO_LAG = 0.055;
 {
-  // The title card, over the idle theatre just before the tune.
-  const v = md ? Math.max(0, md.vTune - 2.9) : 0;
-  const t0 = seg({ kind: 'take', take: 'meltdown', at: v, dur: 2.4, grade: 'eq=brightness=-0.35', label: 'title card, over the theatre' });
-  overlays.push({ id: card({ id: 'title-chordless', kind: 'title', text: ['CHORDLESS', 'Air instruments for Meta Quest. Played with your bare hands.'] }), t0, t1: t0 + 2.4 });
+  // The title card, held until the announcement is done: over the empty theatre, seen from the
+  // stalls as the camera pushes slowly in towards the stage (or, without that take, over the
+  // idle theatre just before the tune).
+  const d = Math.max(2.4, dur('vo-1-8') + 0.9);
+  let t0;
+  if (takes['title-house']) {
+    // Before it, out of the generated clip's fade to black: the headset put on in first
+    // person, its lenses waking onto this same shot. (The take's capture stalls for a moment
+    // just before the push starts; the lenses wake after that.)
+    const at = readTake('title-house').marks.find((m) => m.what === 'push').t / 1000 + 1.4;
+    const th = seg({ kind: 'headset', dur: HEADSET.dur, take: 'title-house', revealAt: at - (HEADSET.dur - HEADSET.wake), label: 'the headset goes on' });
+    audio.push({ file: writeHeadsetSound(path.join(B, 'headset.wav')), ss: 0, dur: HEADSET.dur + 1, at: th, vol: 0.7, kind: 'sfx' });
+    t0 = seg({ kind: 'take', take: 'title-house', at, dur: d, label: 'title card, over the empty theatre' });
+  } else {
+    t0 = seg({ kind: 'take', take: 'meltdown', at: md ? Math.max(0, md.vTune - d - 0.5) : 0, dur: d, grade: 'eq=brightness=-0.35', label: 'title card, over the theatre' });
+  }
+  overlays.push({ id: card({ id: 'title-chordless', kind: 'title', text: ['CHORDLESS', 'Play *virtually* any instrument.'] }), t0, t1: t0 + d, fade: { in: 0.6 } });
   voAt('vo-1-8', t0 + 0.3);
   sub('vo-1-8', t0 + 0.3);
 }
-const tapT = T + 0.0;
-ai('1-9', 3.0);
-for (const k of [0, 1, 2]) audio.push({ kind: 'tap', at: tapT + 1.2 + k * 0.6, dur: 0.08, vol: 0.9 });
+// ---- 1-9, from the top: the baton taps the stand on the Ode's beats -4, -3 and -2,
+// rises, and its downbeat cuts to the guitar's first note (beat 0). The taps are found
+// in the take's sound, and the shot is placed so they keep the tune's time.
+const ODE_BEAT = 0.6; // quarter = 100
+/** The cut to the tune, this far ahead of its first note's attack. */
+let tunePre = 0.5;
+if (md) {
+  // The guitar's first note, in the picture: the first rise in the take's sound at the tune.
+  const first = onsets('meltdown', md.vTune - 0.3 + AUDIO_LAG, md.vTune + 0.5 + AUDIO_LAG, { rise: 12 })[0];
+  md.vNote = first ? first.t - AUDIO_LAG : md.vTune;
+  console.log('tune', JSON.stringify({ vTune: md.vTune, vNote: md.vNote }));
+}
+const countIn = (() => {
+  if (!takes['baton-countin']) return null;
+  const take = readTake('baton-countin');
+  const c = take.marks.find((m) => m.what === 'countin').t / 1000;
+  const taps = onsets('baton-countin', c + AUDIO_LAG, c + 2.2 + AUDIO_LAG, { rise: 12 }).slice(0, 3).map((o) => o.t - AUDIO_LAG);
+  if (taps.length < 3) return console.warn('count-in: fewer than three taps heard'), null;
+  // Beat 0, fitted through all three taps.
+  const beat0 = taps.reduce((s, t, k) => s + t + (4 - k) * ODE_BEAT, 0) / 3;
+  console.log('count-in', JSON.stringify({ taps: taps.map((t) => +(t - beat0).toFixed(3)) }));
+  return { taps, beat0 };
+})();
+if (countIn && md) {
+  tunePre = 0.04;
+  const v0 = countIn.taps[0] - 0.7;
+  const d = countIn.beat0 - tunePre - v0;
+  const t0 = seg({ kind: 'take', take: 'baton-countin', at: v0, dur: d, zoom: 1.2, zoomAt: [0.45, 0.45], label: '1-9 from the top: the baton count-in' });
+  audio.push({ file: takes['baton-countin'].audioFile, ss: v0 + AUDIO_LAG, dur: d, at: t0, vol: 1, kind: 'sfx', fadeIn: 0.1 });
+} else {
+  const tapT = T + 0.0;
+  ai('1-9', 3.0);
+  for (const k of [0, 1, 2]) audio.push({ kind: 'tap', at: tapT + 1.2 + k * 0.6, dur: 0.08, vol: 0.9 });
+}
 
 // ---- one unbroken take in the theatre. The tune's first phrase (no voiceover),
 // its last note wrong, a short fury (shake, red, steam), the guitar smashed in
@@ -197,9 +340,9 @@ let tW = 0;
 let tWreck = 0;
 const mseg = (v0, v1, extra = {}) => seg({ kind: 'take', take: 'meltdown', at: v0, dur: v1 - v0, ...extra });
 if (md) {
-  const a0 = md.vTune - 0.5;
+  const a0 = md.vNote - tunePre;
   const tA = mseg(a0, md.vFlub - 0.05, { label: 'the tune, in the theatre' });
-  overlays.push({ id: card({ id: 'lower-guitar', kind: 'lower', text: ['GUITAR · Theatre'] }), t0: tA + 0.4, t1: tA + 3.4 });
+  overlays.push({ id: card({ id: 'lower-guitar-open', kind: 'lower', text: ['GUITAR', 'Theatre'] }), t0: tA + 0.4, t1: tA + 3.4 });
   // The wrong note: a punch, a red flash. The rage starts here and not before.
   const tFlub = T + 0.05;
   const spike = (t, amp, len = 0.5) => [[t - 0.001, 0], [t, amp], [t + len, 0]];
@@ -214,7 +357,6 @@ if (md) {
   // The wreck, the menu, the trumpet chosen: all one clip, to the trumpet's first note.
   mseg(md.vWreck, md.vWt, { label: 'the wreck; the menu; the trumpet' });
   tW = T;
-  overlays.push({ id: card({ id: 'slam-destruction', kind: 'slam', text: 'FULL DESTRUCTION' }), t0: tWreck - 0.3, t1: tWreck + 2.6 });
   const keys = {
     rage: [[tRageStart, 0], [tD, 0.6], [tE, 1], [tWreck, 1], [tWreck + 1.4, 0]],
     shake: [[tRageStart, 0], [tD, 3], [tE, 20], [tWreck, 22], [tWreck + 0.4, 0]],
@@ -223,6 +365,17 @@ if (md) {
   for (const s of timeline) if (s.rageKeys) Object.assign(s, { rage: keys.rage, shake: keys.shake.map((p) => [...p]), spikes: keys.spikes });
   overlays.push({ id: card({ id: 'red-vig', kind: 'redvig' }), t0: tRageStart, t1: tWreck + 1.6, fade: { in: tE - tRageStart, out: 1.4 } });
   overlays.push({ id: 'STEAM', steam: true, t0: tD - 0.4, t1: tWreck + 0.6, fade: { in: 1.6, out: 0.6 } });
+  // The rage's own sound under the take: a building rumble, a racing heartbeat, a kettle
+  // whistle as the steam starts, a hiss with each puff, a whoosh and a boom for each hit.
+  // (The steam loops every 4 s from the start of the cut, so its puffs are at those times.)
+  {
+    const steamFrom = tD - 0.4;
+    const puffs = [];
+    for (let k = Math.floor(steamFrom / 4); k * 4 < tWreck + 1; k++) for (const s of new Set(steamBursts(4))) puffs.push(k * 4 + s - tRageStart);
+    const len = tWreck - tRageStart + 2.5;
+    const file = writeRageSfx(path.join(B, 'rage.wav'), { dur: len, shake: tD - tRageStart, steam: steamFrom - tRageStart, hits: keys.spikes.map((h) => h - tRageStart), wreck: tWreck - tRageStart, puffs });
+    audio.push({ file, ss: 0, dur: len, at: tRageStart, vol: 1, kind: 'sfx' });
+  }
   T0 = tW;
 } else {
   ai('c-1', 17);
@@ -236,7 +389,29 @@ const CHORD = barTime(END_BAR);
 
 // ---- where each take is at a trailer time, drift and all (video/sync.mjs)
 const maps = {};
-const mapOf = (name) => (name === 'meltdown' ? md.wt : (maps[name] ??= beatMap(readTake(name), 0)));
+/**
+ * Where a take's notes really sound against its performer's clock (video/sync.mjs
+ * soundLag). A part that sounds early or late is shifted, picture and sound
+ * together, so its notes land on the score. The fit is held near the first note,
+ * so it can't slip a quaver, and a modest one is trusted; a very weak fit keeps
+ * the usual capture delay, and so do bowed parts, whose notes swell in rather than
+ * start, so their onsets can't be timed.
+ */
+const BOWED = new Set(['violin', 'cello']);
+const shiftOf = (name) => {
+  const n = name === 'meltdown' ? 1 : 0;
+  const inst = readTake(name).marks.filter((m) => m.what === 'perform')[n]?.inst;
+  const r = soundLag(name, n);
+  const shift = !BOWED.has(inst) && r.score >= 1.25 ? r.lag - AUDIO_LAG : 0;
+  console.log('timing', name.padEnd(22), `sound ${(r.lag * 1000).toFixed(0)} ms behind its clock (fit ${r.score.toFixed(2)}): shifted ${(shift * 1000).toFixed(0)} ms`);
+  return shift;
+};
+const mapOf = (name) => {
+  if (maps[name]) return maps[name];
+  const base = name === 'meltdown' ? md.wt : beatMap(readTake(name), 0);
+  const shift = shiftOf(name);
+  return (maps[name] = { ...base, at: (s) => base.at(s) + shift });
+};
 /** A take's picture covering trailer times [s0, s1]: where to start, how much, how fast. */
 const source = (name, s0, s1) => {
   const m = mapOf(name);
@@ -249,11 +424,10 @@ const tseg = (name, s0, s1, extra = {}) => {
   const src = source(name, s0, s1);
   return seg({ kind: 'take', take: name, at: src.at, dur: s1 - s0, slow: src.rate, ...extra });
 };
-const NAMES = { trumpet: 'TRUMPET', guitar: 'GUITAR', violin: 'VIOLIN', cello: 'CELLO', piano: 'PIANO', drums: 'DRUMS', triangle: 'TRIANGLE', cymbals: 'CYMBALS' };
+const NAMES = { trumpet: 'TRUMPET', guitar: 'GUITAR', violin: 'VIOLIN', trombone: 'TROMBONE', cello: 'CELLO', piano: 'PIANO', drums: 'DRUMS', triangle: 'TRIANGLE', cymbals: 'CYMBALS' };
 const takeOf = (inst) => (inst === 'trumpet' && md ? 'meltdown' : `orch-${inst}`);
 const hasTake = (name) => (name === 'meltdown' ? !!md : !!takes[name]);
 const ORDER = ENTRANCES.map(([inst]) => inst);
-const centerCard = card({ id: 'ai-c-grid', kind: 'ai', shot: 'c-grid' });
 
 // ---- William Tell. The trumpet alone in the theatre; then, four bars apart,
 // the rest of the orchestra comes in on the same stage, each in a tile.
@@ -264,14 +438,13 @@ joins[0] = tW;
   const gridEnd = at(MONTAGE.from);
   if (md) tseg('meltdown', 0, gridStart - T0, { label: 'William Tell: the trumpet alone' });
   else ai('c-1', gridStart - T);
-  overlays.push({ id: card({ id: 'lower-trumpet', kind: 'lower', text: ['TRUMPET · Theatre', 'chosen from the menu, live'] }), t0: tW + 0.4, t1: tW + 3.6 });
+  overlays.push({ id: card({ id: 'lower-trumpet', kind: 'lower', text: ['TRUMPET', 'Theatre'] }), t0: tW + 0.4, t1: tW + 3.6 });
   const sources = ORDER.map((inst, i) => {
-    if (inst === 'CENTER') return { card: centerCard };
     const name = takeOf(inst);
     return hasTake(name) ? source(name, Math.max(joins[i], gridStart) - T0, gridEnd - T0) : null;
   });
   seg({ kind: 'dyngrid', start: gridStart, dur: gridEnd - gridStart, joins, order: ORDER, sources, expandFirst: false, label: 'the orchestra builds: tiles' });
-  overlays.push({ id: card({ id: 'slam-instruments', kind: 'slam', text: 'MULTIPLE INSTRUMENTS', sub: 'TEN OF THEM' }), t0: joins[1] + 0.2, t1: joins[1] + 2.9 });
+  overlays.push({ id: card({ id: 'slam-instruments', kind: 'slam', text: 'Multiple Instruments', sub: 'A playground for musicians' }), t0: joins[1] + 0.2, t1: joins[1] + 2.9 });
   ORDER.forEach((inst, i) => {
     if (!NAMES[inst] || i === 0) return;
     overlays.push({ id: card({ id: `lower-${inst}`, kind: 'lower', text: [NAMES[inst], 'Theatre'] }), t0: joins[i] + 0.45, t1: joins[i] + 2.95 });
@@ -280,13 +453,19 @@ joins[0] = tW;
   const tVo = at(244) + 0.2;
   voAt('vo-b', tVo, 0.9);
   sub('vo-b', tVo);
-  overlays.push({ id: card({ id: 'slam-hands', kind: 'slam', text: 'BARE HANDS', sub: 'NO CONTROLLERS · NO INSTALL' }), t0: tVo + 6.2, t1: tVo + 8.8 });
+  // The card lands with the line's last phrase ("No install, no controllers"): after its
+  // last pause (not counting any silence at the line's very end).
+  const r = run('ffmpeg', ['-hide_banner', '-i', voFile('vo-b'), '-af', 'silencedetect=n=-40dB:d=0.2', '-f', 'null', '-'], { soft: true });
+  const ends = [...r.stderr.matchAll(/silence_end: ([\d.]+)/g)].map((m) => Number(m[1])).filter((e) => e < dur('vo-b') - 0.3);
+  const lastPhrase = ends.at(-1) ?? dur('vo-b') - 2;
+  const tHands = tVo + lastPhrase + 0.37;
+  overlays.push({ id: card({ id: 'slam-hands', kind: 'slam', text: 'Hands-On Experience', sub: 'No controllers · No install' }), t0: tHands, t1: tHands + 2.6 });
 }
 
 // ---- The tutti: the instruments smashed, each blow on a cymbal crash.
 const CRASHES = ['crash-violin', 'crash-trumpet', 'crash-cello', 'crash-cymbals', 'crash-drums', 'crash-piano'];
 /** Punch-ins for the smashes that happen small in the frame: [zoom, x, y]. */
-const CRASH_ZOOM = { 'crash-violin': [1.7, 0.6, 0.55], 'crash-trumpet': [1.6, 0.5, 0.42], 'crash-cello': [1.3, 0.62, 0.5], 'crash-cymbals': [1.5, 0.5, 0.55] };
+const CRASH_ZOOM = { 'crash-violin': [1.25, 0.4, 0.42], 'crash-trumpet': [1.8, 0.52, 0.42], 'crash-cello': [1.25, 0.5, 0.42], 'crash-cymbals': [1.4, 0.55, 0.5], 'crash-piano': [1.5, 0.45, 0.5] };
 /** When, in a smash take, its biggest blow lands: the loudest sound near any marked blow. */
 function impactOf(name) {
   const take = readTake(name);
@@ -296,10 +475,14 @@ function impactOf(name) {
   const windows = hits.length ? hits.map((h) => [h - 0.25, h + 0.45]) : [[cueMark ? sec(cueMark) : 3, (cueMark ? sec(cueMark) : 3) + 2.5]];
   let best = null;
   for (const [lo, hi] of windows) for (const o of onsets(name, lo + AUDIO_LAG, hi + AUDIO_LAG)) if (!best || o.db > best.db) best = o;
+  // A shove or a throw: the landing is the first loud sound; the louder ones after it are pieces settling.
+  if (!hits.length && best) best = onsets(name, windows[0][0] + AUDIO_LAG, windows[0][1] + AUDIO_LAG).find((o) => o.db >= best.db - 8) ?? best;
   const fallback = hits[0] ?? windows[0][0];
   console.log('impact', name, best ? (best.t - AUDIO_LAG).toFixed(2) : `none (${fallback.toFixed(2)})`);
   return best ? best.t - AUDIO_LAG : fallback;
 }
+// FULL DESTRUCTION over the start of it, the smashing still showing through.
+overlays.push({ id: card({ id: 'slam-destruction', kind: 'slam', text: 'Full Destruction', sub: 'Break a leg. Or, if it goes badly, everything else.', scrim: 0.3 }), t0: at(MONTAGE.from) - 0.1, t1: at(MONTAGE.from) + 3.1 });
 for (let k = 0, bar = MONTAGE.from; bar < MONTAGE.to; bar += MONTAGE.every, k++) {
   const name = CRASHES[k % CRASHES.length];
   const d = at(bar + MONTAGE.every) - at(bar);
@@ -315,74 +498,104 @@ for (let k = 0, bar = MONTAGE.from; bar < MONTAGE.to; bar += MONTAGE.every, k++)
 }
 
 // ---- The tutti again: two bars in each place, a different instrument in each.
-const SCENE_NAMES = { 'space-station': 'SPACE STATION', 'volcano-rim': 'VOLCANO RIM', 'bouncy-castle': 'BOUNCY CASTLE', 'snow-globe': 'SNOW GLOBE', 'giant-turtle': 'GIANT TURTLE', 'upside-down-room': 'UPSIDE-DOWN ROOM', 'ice-cave': 'ICE CAVE', stadium: 'STADIUM' };
+// The places' names as the app shows them, from its own scene list.
+const SCENE_NAMES = Object.fromEntries(
+  [...readFileSync(path.join(HERE, '..', 'src', 'scene-list.ts'), 'utf8').matchAll(/\{ file: '([^']+)', name: (?:'([^']*)'|"([^"]*)") \}/g)].map((m) => [m[1], m[2] ?? m[3]]),
+);
 {
   const tScenes = T;
-  for (const [scene, inst, bar] of SCENE_RUN) {
+  const slamFor = 2.0;
+  for (const [scene, inst, bar, bars] of SCENE_RUN) {
     const name = `scn-${scene}`;
     const s0 = barTime(bar);
-    const s1 = barTime(bar + 2);
+    const s1 = barTime(bar + bars);
     const t0 = takes[name] ? tseg(name, s0, s1, { label: `${scene}: ${inst}` }) : ai('c-1', s1 - s0);
-    overlays.push({ id: card({ id: `lower-scene-${scene}`, kind: 'lower', text: [SCENE_NAMES[scene] ?? scene, NAMES[inst]] }), t0: t0 + 0.12, t1: t0 + 1.45 });
+    // The first place's pop-up starts under the card, so it stays up until the cut.
+    const hold = t0 === tScenes ? s1 - s0 - 0.15 : Math.min(2.6, s1 - s0 - 0.2);
+    overlays.push({ id: card({ id: `lower-scene-${scene}`, kind: 'lower', text: [NAMES[inst], SCENE_NAMES[scene] ?? scene] }), t0: t0 + 0.12, t1: t0 + hold });
   }
-  overlays.push({ id: card({ id: 'slam-environments', kind: 'slam', text: 'CHANGING ENVIRONMENTS', sub: 'MORE THAN SIXTY' }), t0: tScenes, t1: tScenes + 1.5 });
+  overlays.push({ id: card({ id: 'slam-environments', kind: 'slam', text: 'Changing Environments', sub: 'Stage fright? Try a new stage.' }), t0: tScenes, t1: tScenes + slamFor });
 }
 
 // ---- The closing chord: everyone at once, back on the stage.
 {
   const s0 = CHORD;
   const s1 = CHORD + 2.6;
-  const sources = ORDER.map((inst) => (inst === 'CENTER' ? { card: centerCard } : hasTake(takeOf(inst)) ? source(takeOf(inst), s0, s1) : null));
+  const sources = ORDER.map((inst) => (hasTake(takeOf(inst)) ? source(takeOf(inst), s0, s1) : null));
   seg({ kind: 'dyngrid', start: T, dur: s1 - s0, joins: ORDER.map(() => T), order: ORDER, sources, instant: true, expandFirst: false, label: 'the closing chord: everyone' });
 }
 const SCORE_END = T;
 
-// ---- the bow
+// ---- the curtain call: the curtains close over the closing chord and bouquets are
+// thrown, to applause; to black, and the end card fades in.
 {
-  ai('7-1', 3.0);
-  const t1 = ai('real-quest', dur('vo-7-2') + 0.8);
-  voAt('vo-7-2', t1 + 0.4);
-  sub('vo-7-2', t1 + 0.4);
-  const t2 = seg({ kind: 'png', id: card({ id: 'end', kind: 'end' }), dur: 5.5, label: 'end card' });
-  voAt('vo-7-3', t2 + 0.5);
-  sub('vo-7-3', t2 + 0.5);
+  const t0 = T;
+  const d = 0.8 + dur('vo-7-2') + 0.3 + CURTAIN.fade + CURTAIN.black;
+  seg({ kind: 'curtain', dur: d, label: 'the curtain call: curtains close, bouquets, to black' });
+  voAt('vo-7-2', t0 + 0.8);
+  // (The caption sits a little higher than usual, on the curtains.)
+  sub('vo-7-2', t0 + 0.8, { bottom: 140 });
+  // The applause starts as the chord is cut off and is gone with the picture; it ducks under the line.
+  const ad = 1.0 + d - CURTAIN.black;
+  const file = writeApplause(path.join(B, 'applause.wav'), { dur: ad, fadeOutAt: ad - CURTAIN.fade - 0.2, fadeOut: CURTAIN.fade + 0.2 });
+  audio.push({ file, ss: 0, dur: ad, at: t0 - 1.0, vol: 3.2, kind: 'stem' });
+  const t2 = seg({ kind: 'png', id: card({ id: 'end', kind: 'end' }), dur: 5.5, fadeIn: 0.8, label: 'end card' });
+  voAt('vo-7-3', t2 + 0.8);
+  sub('vo-7-3', t2 + 0.8);
 }
 const TOTAL = T;
 
-// IN-APP CAPTURE bug and the credits.
+// The in-app capture badge, and each song's title as it starts: bottom right, level with the
+// instrument and location pop-ups at the bottom left.
 overlays.push({ id: card({ id: 'bug', kind: 'bug' }), t0: TUNE_START, t1: SCORE_END });
-overlays.push({ id: card({ id: 'credit-ode', kind: 'credit', text: 'Ludwig van Beethoven · Ode to Joy (1824) · Public domain', style: 'left:20px;top:16px' }), t0: TUNE_START, t1: TUNE_START + 5 });
-overlays.push({ id: card({ id: 'credit-wt', kind: 'credit', text: 'Gioachino Rossini · William Tell Overture, Finale (1829) · Public domain', style: 'left:20px;top:16px' }), t0: tW, t1: tW + 6 });
-overlays.push({ id: card({ id: 'credit-capture', kind: 'credit', text: 'In-app capture. Every note is played and synthesized live in Chordless.', style: 'left:20px;bottom:120px' }), t0: TUNE_START, t1: TUNE_START + 5 });
+overlays.push({ id: card({ id: 'song-ode', kind: 'song', text: ['Ode to Joy', 'Ludwig van Beethoven · 1824 · Public domain'] }), t0: TUNE_START, t1: TUNE_START + 5, fade: { in: 0.25, out: 0.35 } });
+overlays.push({ id: card({ id: 'song-wt', kind: 'song', text: ['William Tell Overture, Finale', 'Gioachino Rossini · 1829 · Public domain'] }), t0: tW, t1: tW + 6, fade: { in: 0.25, out: 0.35 } });
 
 // ------------------------------------------------------------------ audio plan
 {
-  /** A take's sound for trailer times [s0, s1], conformed to the score eight bars at a time. */
+  /** A take's sound for trailer times [s0, s1], conformed to the score four bars at a time. */
   const stem = (name, s0, s1, vol, { fadeIn = 0.04, fadeOut = 0 } = {}) => {
     const m = mapOf(name);
-    const CH = 8 * BAR;
+    // Four bars at a time: a take that stalled unevenly drifts inside a longer stretch.
+    const CH = 4 * BAR;
     for (let a = s0; a < s1 - 1e-6; a += CH) {
       const b = Math.min(s1, a + CH);
       const ca = m.at(a) + AUDIO_LAG;
       const cb = m.at(b) + AUDIO_LAG;
-      audio.push({ file: takes[name].audioFile, ss: ca, dur: cb - ca, at: T0 + a, vol, kind: 'stem', tempo: (cb - ca) / (b - a), fadeIn: a === s0 ? fadeIn : 0, fadeOut: b >= s1 - 1e-6 ? fadeOut : 0 });
+      audio.push({ file: takes[name].audioFile, ss: ca, dur: cb - ca, at: T0 + a, vol, kind: 'stem', score: true, tempo: (cb - ca) / (b - a), fadeIn: a === s0 ? fadeIn : 0, fadeOut: b >= s1 - 1e-6 ? fadeOut : 0 });
     }
   };
   const MUSIC_END = CHORD + 4.4;
+  /**
+   * Where a take's stem ends, and over how long it fades: at the end of the music, or,
+   * if the take makes a sound of its own after the closing chord (the performer lets go
+   * and a hand lands on a key or a drum), just before that.
+   */
+  const tail = (name) => {
+    const m = mapOf(name);
+    const c = m.at(CHORD) + AUDIO_LAG;
+    const stray = onsets(name, c + 0.3, m.at(MUSIC_END) + AUDIO_LAG, { rise: 9 })[0];
+    if (!stray) return { end: MUSIC_END, fadeOut: 3 };
+    console.log('stray', name, `+${(stray.t - c).toFixed(2)} s after the chord`);
+    return { end: Math.max(CHORD + 0.4, CHORD + (stray.t - c) - 0.05), fadeOut: 0.3 };
+  };
   if (md) {
     // The tune, the silence, the smash and the menu, as they sounded; then the trumpet, on the score's clock.
-    const a0 = md.vTune - 0.5;
+    const a0 = md.vNote - tunePre;
     const aEnd = md.wt.at(-0.3);
     // The tune and its wrong note brought up to sit near the orchestra; the rest as recorded.
     const aSplit = md.vFlub + 1.6;
     audio.push({ file: takes.meltdown.audioFile, ss: a0 + AUDIO_LAG, dur: aSplit - a0, at: TUNE_START, vol: 2.8, kind: 'stem', fadeOut: 0.6 });
     audio.push({ file: takes.meltdown.audioFile, ss: aSplit + AUDIO_LAG, dur: aEnd - aSplit, at: TUNE_START + (aSplit - a0), vol: 1, kind: 'stem' });
-    stem('meltdown', -0.3, MUSIC_END, 0.8, { fadeIn: 0, fadeOut: 3 });
+    const t = tail('meltdown');
+    stem('meltdown', -0.3, t.end, 0.8, { fadeIn: 0, fadeOut: t.fadeOut });
   }
-  const VOL = { guitar: 0.6, violin: 0.55, cello: 0.6, piano: 0.55, drums: 0.6, triangle: 0.5, cymbals: 0.55, trumpet: 0.8 };
+  // (The triangle and cymbals cut through everything else, so they sit lower.)
+  const VOL = { guitar: 0.6, violin: 0.55, trombone: 0.6, cello: 0.6, piano: 0.55, drums: 0.6, triangle: 0.32, cymbals: 0.35, trumpet: 0.8 };
   ENTRANCES.forEach(([inst, bar]) => {
-    if (inst === 'CENTER' || takeOf(inst) === 'meltdown' || !hasTake(takeOf(inst))) return;
-    stem(takeOf(inst), barTime(bar) - 0.35, MUSIC_END, VOL[inst], { fadeOut: 3 });
+    if (takeOf(inst) === 'meltdown' || !hasTake(takeOf(inst))) return;
+    const t = tail(takeOf(inst));
+    stem(takeOf(inst), barTime(bar) - 0.35, t.end, VOL[inst], { fadeOut: t.fadeOut });
   });
 }
 
@@ -392,8 +605,17 @@ if (process.argv.includes('--plan')) {
   console.log(timeline.map((s) => `${s.t.toFixed(2)} +${s.dur.toFixed(2)} ${s.label}${s.slow ? ' x' + s.slow.toFixed(4) : ''}`).join(String.fromCharCode(10)));
   process.exit(0);
 }
+// A pop-up (instrument and place, or a song's title) that would sit under a caption is
+// lifted clear of it: captions can run to two lines.
+for (const o of overlays) {
+  if (!/^(lower|song)-/.test(o.id)) continue;
+  if (!overlays.some((x) => x.id.startsWith('sub-') && x.t0 < o.t1 && x.t1 > o.t0)) continue;
+  const c = cardList.find((x) => x.id === o.id);
+  o.id = card({ ...c, id: `${c.id}-up`, bottom: 136 });
+}
 const cardFiles = await renderCards(cardList, CARDS);
-const steamDir = path.join(B, 'steam');
+// (Versioned: the frames are kept between builds, so a change to the steam needs a new folder.)
+const steamDir = path.join(B, 'steam-v3');
 const steamPattern = overlays.some((o) => o.steam) ? (existsSync(path.join(steamDir, 'steam_0120.png')) ? path.join(steamDir, 'steam_%04d.png') : await renderSteam(steamDir)) : null;
 writeFileSync(path.join(B, 'timeline.json'), JSON.stringify({ total: TOTAL, T0, PEAK, SCORE_END, timeline, overlays, audio: audio.map((a) => ({ ...a, file: a.file && path.basename(a.file) })) }, null, 1));
 
@@ -403,10 +625,15 @@ const segFiles = [];
 timeline.forEach((s, i) => {
   const out = path.join(SEG, `${String(i).padStart(3, '0')}.mp4`);
   segFiles.push(out);
+  // The curtain call is drawn after the rest: it starts from the last frame of the shot before it.
+  // (The headset shot is drawn then too.)
+  if (s.kind === 'curtain' || s.kind === 'headset') return;
   let vf = scaleFilter;
   const args = ['-y', '-hide_banner', '-loglevel', 'error'];
   if (s.kind === 'png') {
     args.push('-loop', '1', '-framerate', String(FPS), '-t', s.dur.toFixed(3), '-i', cardFiles[s.id]);
+    // Tagged video range (as its values are), so it can't inherit another range from the shot before it in the join.
+    vf = `${scaleFilter},setparams=range=tv${s.fadeIn ? `,fade=t=in:st=0:d=${s.fadeIn}` : ''}`;
   } else if (s.kind === 'white') {
     args.push('-f', 'lavfi', '-t', s.dur.toFixed(3), '-i', `color=c=white:s=${W}x${H}:r=${FPS}`);
     vf = `format=yuv420p,fade=t=in:st=0:d=${Math.min(s.dur, 3).toFixed(2)}:color=white`;
@@ -524,6 +751,27 @@ timeline.forEach((s, i) => {
   }
   if (s.kind !== 'grid') run('ffmpeg', [...args, '-vf', vf, '-t', s.dur.toFixed(3), ...enc, '-r', String(FPS), out]);
 });
+for (const [i, s] of timeline.entries()) {
+  if (s.kind !== 'curtain') continue;
+  // The last frame of the shot before (every frame is written over the one before it).
+  const bg = path.join(B, 'curtain-bg.png');
+  run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-sseof', '-0.3', '-i', segFiles[i - 1], '-update', '1', bg]);
+  await renderCurtain({ background: bg, out: segFiles[i], dur: s.dur, fps: FPS, enc });
+}
+for (const [i, s] of timeline.entries()) {
+  if (s.kind !== 'headset') continue;
+  // The lenses wake onto the title shot's frames just before it starts, cut the same way as
+  // that shot, so the headset shot's last frame runs straight on into its first.
+  const span = HEADSET.dur - HEADSET.wake;
+  const dir = path.join(B, 'headset-frames');
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  const src = path.join(dir, 'theatre.mp4');
+  run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-ss', s.revealAt.toFixed(3), '-t', span.toFixed(3), '-i', takes[s.take].videoFile, '-vf', scaleFilter, '-t', span.toFixed(3), ...enc, '-r', String(FPS), src]);
+  run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', src, '-q:v', '2', path.join(dir, 'f%03d.jpg')]);
+  const theatre = readdirSync(dir).filter((f) => f.endsWith('.jpg')).sort().map((f) => path.join(dir, f));
+  await renderHeadset({ theatre, out: segFiles[i], fps: FPS, enc });
+}
 writeFileSync(path.join(SEG, 'list.txt'), segFiles.map((f) => `file '${f.replace(/\\/g, '/')}'`).join('\n'));
 run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', path.join(SEG, 'list.txt'), '-c', 'copy', path.join(B, 'picture.mp4')]);
 
@@ -548,9 +796,14 @@ run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'concat', '-saf
 }
 
 // Audio: every item delayed to its time, the music ducked under the voice, then mixed.
+// The score's two loud tuttis (bars 260-275, and 300 to the closing chord) sit about 3 dB
+// lower than the rest of it, eased in and out over half a bar.
+const LOUD = 0.7;
+const scoreLevel = [[0, 1], [at(259.5), 1], [at(260), LOUD], [at(275.5), LOUD], [at(276), 1], [at(299.5), 1], [at(300), LOUD], [TOTAL + 5, LOUD]];
 {
   const args = ['-y', '-hide_banner', '-loglevel', 'error'];
   const music = [];
+  const score = [];
   const voices = [];
   const sfx = [];
   let n = 0;
@@ -571,8 +824,12 @@ run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'concat', '-saf
     if (a.tempo && Math.abs(a.tempo - 1) > 1e-4) f += `,atempo=${a.tempo.toFixed(5)}`;
     f += `,adelay=${Math.round(a.at * 1000)}|${Math.round(a.at * 1000)}[a${n}]`;
     filters.push(f);
-    (a.kind === 'vo' ? voices : a.kind === 'sfx' ? sfx : music).push(`[a${n}]`);
+    (a.kind === 'vo' ? voices : a.kind === 'sfx' ? sfx : a.score ? score : music).push(`[a${n}]`);
     n++;
+  }
+  if (score.length) {
+    filters.push(`${score.join('')}amix=inputs=${score.length}:normalize=0:duration=longest,volume='${kf(scoreLevel, 't')}':eval=frame[score]`);
+    music.push('[score]');
   }
   const mixed = (list, name) => (list.length ? `${list.join('')}amix=inputs=${list.length}:normalize=0:duration=longest[${name}]` : `anullsrc=r=48000:cl=stereo[${name}]`);
   filters.push(mixed(music, 'music'), mixed(voices, 'voice0'), mixed(sfx, 'sfx'));
@@ -583,5 +840,6 @@ run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'concat', '-saf
   writeFileSync(fs, filters.join(';\n'));
   run('ffmpeg', [...args, '-filter_complex_script', fs, '-map', '[out]', '-ar', '48000', path.join(B, 'mix.wav')]);
 }
-run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', path.join(B, 'picture-text.mp4'), '-i', path.join(B, 'mix.wav'), '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', path.join(B, 'first-pass.mp4')]);
+// The mix is padded with silence so the picture (the end card) runs to its end; the music stops sooner.
+run('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', path.join(B, 'picture-text.mp4'), '-i', path.join(B, 'mix.wav'), '-c:v', 'copy', '-af', 'apad', '-c:a', 'aac', '-b:a', '192k', '-shortest', path.join(B, 'first-pass.mp4')]);
 console.log(`first pass: ${path.join(B, 'first-pass.mp4')} (${TOTAL.toFixed(1)} s, ${timeline.length} cuts)`);

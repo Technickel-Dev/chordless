@@ -2,8 +2,9 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { startApp } from '../../tests/app-start.js';
-import { meltdown, swingtest } from './meltdown.mjs';
+import { meltdown, swingtest, menupick } from './meltdown.mjs';
 import { CLIPS } from './clips.mjs';
+import { baton, batonCheck, batonCountIn } from './baton.mjs';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -32,9 +33,49 @@ async function tune({ page, frame }, app, song = 'ODE_TO_JOY_FLUB') {
 /** One instrument playing the finale through its existing play script, for about 3 minutes. */
 const wt = (script, scene, env = {}) => ({ script, scene, env, seconds: 185 });
 
+/**
+ * The title card's background: the empty theatre seen from the stalls, the camera
+ * pushing slowly in towards the stage. The hands, the panels and the instruments
+ * are hidden just before each render, so only the theatre and its lights show.
+ */
+async function titleHouse({ page, frame }, app) {
+  const view = (pitch) => ({ pitch, yaw: 180, roll: 0 });
+  await startApp({ page, frame }, { root: 'AirGuitar', view: view(0) });
+  await app.hideBanner();
+  await frame.evaluate(() => {
+    const scene = window.FRAMEWORK_MCP_RUNTIME.world.scene;
+    const panel = scene.getObjectByName('Welcome Panel');
+    const keep = (o) => o.name === 'LevelRoot' || o.name === 'spot-light-target' || o.isLight;
+    const before = scene.onBeforeRender;
+    scene.onBeforeRender = function (...args) {
+      before.apply(this, args);
+      for (const o of scene.children) if (!keep(o)) o.visible = false;
+      if (panel) panel.visible = false;
+    };
+  });
+  const dispatch = (method, params = {}) => frame.evaluate(([m, p]) => window.IWER_MCP.dispatch(m, p), [method, params]);
+  const from = { x: 0, y: 1.5, z: -12.5 };
+  const to = { x: 0, y: 1.15, z: -8.5 };
+  await dispatch('set_transform', { device: 'headset', position: from, orientation: view(0) });
+  await wait(1500);
+  await app.startCapture();
+  await wait(1000);
+  await app.mark('push', { from, to, seconds: 7 });
+  await dispatch('animate_to', { device: 'headset', position: to, orientation: view(3), duration: 7 });
+  await app.mark('end');
+  await wait(800);
+  return { from, to };
+}
+
 export const TAKE_LIST = {
   meltdown: { scene: 'stage', run: meltdown, seconds: 220, capture: 'canvas' },
+  baton: { scene: 'stage', run: baton, seconds: 120, capture: 'canvas' },
+  'baton-check': { scene: 'stage', run: batonCheck, seconds: 120 },
+  'baton-countin': { scene: 'stage', run: batonCountIn, seconds: 60, capture: 'canvas' },
+  'title-house': { scene: 'stage', run: titleHouse, seconds: 40, capture: 'canvas' },
   swingtest: { scene: 'stage', run: swingtest, seconds: 90 },
+  'swingtest-canvas': { scene: 'stage', run: swingtest, seconds: 90, capture: 'canvas' },
+  menupick: { scene: 'stage', run: menupick, seconds: 60, capture: 'canvas' },
   'tune-ode': { scene: 'cliffside', run: tune, seconds: 70 },
   'wt-guitar': wt('tests/william-tell.mjs', 'cliffside'),
   'wt-trumpet': wt('tests/trumpet-william-tell.mjs', 'pirate-ship'),

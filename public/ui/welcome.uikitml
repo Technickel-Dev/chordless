@@ -239,6 +239,10 @@
         <ButtonIcon><Shell></Shell></ButtonIcon>
         <ButtonLabel class="tile-label">Horn</ButtonLabel>
       </Button>
+      <Button id="instrument-baton" variant="secondary" class="tile">
+        <ButtonIcon><Wand></Wand></ButtonIcon>
+        <ButtonLabel class="tile-label">Baton</ButtonLabel>
+      </Button>
     </div>
 
     <div class="controls">
@@ -460,6 +464,23 @@
         <div class="step-icon"><ArrowUp class="glyph"></ArrowUp></div>
         <div class="step-text">Tilt up = higher</div>
         <div class="side">BELL</div>
+      </div>
+    </div>
+    <div id="hint-baton" class="steps">
+      <div class="step">
+        <div class="step-icon"><Grab class="glyph"></Grab></div>
+        <div class="step-text">Hold baton</div>
+        <div class="side">RIGHT FIST</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><ArrowDown class="glyph"></ArrowDown></div>
+        <div class="step-text">Tap the stand</div>
+        <div class="side">EDGE · DESK</div>
+      </div>
+      <div class="step">
+        <div class="step-icon"><Gauge class="glyph"></Gauge></div>
+        <div class="step-text">Faster is louder</div>
+        <div class="side">RIGHT</div>
       </div>
     </div>
   </div>

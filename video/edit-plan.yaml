@@ -72,7 +72,7 @@ tracks:
 
 media:
   ai: # clips/<id>.mp4
-    [1-1, 1-2, 1-3, 1-4, 1-5, 1-6, 1-7, 1-9, c-1, c-2, c-3, c-4, c-5, c-6, c-grid, 7-1]
+    [1-1, 1-2, 1-3, 1-4, 1-5, 1-6, 1-7, c-1, c-2, c-3, c-4, c-5, c-6]
   tune: # takes/<id>.mp4, audio in the same file
     [guitar-cliffside-tune, guitar-cliffside-rage]
   smash: # takes/<id>.mp4, one scripted smash each; audio in the same file
@@ -103,7 +103,7 @@ media:
      guitar-stadium, trumpet-desert-canyon, violin-ice-cave, drums-record-player]
   real: [R-quest, R-scene-flip] # takes/<id>.mp4
   vo: [vo-1-2, vo-1-3, vo-1-4, vo-1-5, vo-1-6, vo-1-7, vo-1-8, vo-a, vo-b, vo-7-2, vo-7-3]
-  sfx: [sfx-tuning, sfx-baton-tap, sfx-heartbeat, sfx-whoosh, sfx-card-slam, sfx-bass-hit, sfx-applause, sfx-broom-knock] # audio/<id>.wav
+  sfx: [sfx-tuning, sfx-heartbeat, sfx-whoosh, sfx-card-slam, sfx-bass-hit, sfx-applause, sfx-broom-knock] # audio/<id>.wav
 
 # -------------------------------------------------------------- beat 1: conductor of AI
 beat1:
@@ -111,11 +111,12 @@ beat1:
   - { id: 1-2, track: V2, at: 3.000, until: 9.000 }
   - { id: 1-3, track: V2, at: 9.000, until: 12.000, note: gag - the cello's plane seat }
   - { id: 1-4, track: V2, at: 12.000, until: 15.000, note: gag - the 2 a.m. drummer }
-  - { id: 1-5, track: V2, at: 15.000, until: 18.000, note: gag - the stuck piano }
-  - { id: 1-6, track: V2, at: 18.000, until: 21.000, note: gag - the library cymbals }
+  - { id: 1-5, track: V2, at: 15.000, until: 18.000, note: gag - the price of a violin }
+  - { id: 1-6, track: V2, at: 18.000, until: 21.000, note: gag - pushing the piano uphill to a jam }
   - { id: 1-7, track: V2, at: 21.000, until: 25.000, note: the vanishing act }
-  - { id: guitar-cliffside, track: V1, at: 25.000, until: 27.000, in: 2.0, speed: 0.5, grade: "darken -1.5 stops", note: title card background }
-  - { id: 1-9, track: V2, at: 27.000, until: 30.000, note: the downbeat lands on the cut }
+  - { id: headset-on, track: V1, dur: 3.35, note: "rendered 3D headset, no hands: front, side, then the inside up to your face, out of 1-7's fade to black; the lenses wake onto title-house's first frame" }
+  - { id: title-house, track: V1, at: 25.000, until: 27.000, note: "title card background: the empty theatre from the stalls, a slow push-in towards the stage" }
+  - { id: baton-countin, track: V1, at: 27.000, until: 30.000, zoom: 1.2, note: "shot 1-9, real footage: three taps on the stand on beats -4, -3, -2 (their own sound), then the downbeat lands on the cut" }
 
 # ------------------------------------------------- beat 2 and 3: the tune, the flub
 tune:
@@ -229,10 +230,10 @@ score:
       budget: [128.5, 138.5]
       playing: [trumpet, guitar, cello, violin, trombone, horn, piano, triangle, drums]
       # The grid: each tile is its take scaled to 1/3 and moved by pan/tilt in
-      # pixels. The centre tile runs the whole section; the others enter one
-      # every 2 bars in this order. All tiles run until the final chord.
+      # pixels. The tiles enter one every 2 bars in this order (the trombone
+      # where the conductor's tile was). All tiles run until the final chord.
       grid:
-        - { id: c-grid, track: V7, zoom: 0.333, pan: 0, tilt: 0, retime: "conducting on the beat at 152 bpm" }
+        - { take: orch-trombone, track: V7, zoom: 0.333, pan: 0, tilt: 0 }
         - { take: trumpet-pirate-ship, track: V3, zoom: 0.333, pan: -640, tilt: 360 }
         - { take: guitar-cliffside, track: V4, zoom: 0.333, pan: 0, tilt: 360 }
         - { take: cello-balloon-basket, track: V5, zoom: 0.333, pan: 640, tilt: 360 }
@@ -241,7 +242,7 @@ score:
         - { take: triangle-fridge, track: V9, zoom: 0.333, pan: -640, tilt: -360 }
         - { take: drums-neon-arcade, track: V10, zoom: 0.333, pan: 0, tilt: -360 }
         - { take: cymbals-bowling-alley, track: V11, zoom: 0.333, pan: 640, tilt: -360, note: "arrives last, poised and silent" }
-      real: { id: R-quest, track: V2, bars_long: 4, note: the BARE HANDS card sits on this; optional }
+      real: { id: R-quest, track: V2, bars_long: 4, note: the HANDS-ON EXPERIENCE card sits on this; optional }
 
     - id: coda
       beat: 6
@@ -266,10 +267,8 @@ score:
 
 # ------------------------------------------------------------------- beat 7
 beat7:
-  - { id: 7-1, track: V2, end: 0.0, until_end: 3.0 }
-  - { id: R-quest, track: V1, end: 3.0, until_end: 9.0 }
-  - { id: R-scene-flip, track: V1, end: 9.0, until_end: 11.0 }
-  - { id: end-card, track: V13, end: 11.0, until_end: 17.0, kind: title, text: ["CHORDLESS", "Built with IWSDK, Meta's Immersive Web SDK, for Meta Quest", "<GitHub Pages URL>", "Meta VR Start Developer Competition 2026"] }
+  - { id: curtain-call, track: V1, end: 0.0, until_end: 9.5, note: "drawn by video/curtain.mjs: cloth curtains close over the grid, bouquets thrown, falling out of shot; to black" }
+  - { id: end-card, track: V13, end: 9.5, until_end: 15.0, fade_in: 0.8, kind: title, text: ["CHORDLESS", "Play it now", "https://chordless.technickel.dev", "Built with Meta's Immersive Web SDK (IWSDK)", "Meta VR Start Developer Competition 2026"] }
 
 # ----------------------------------------------------------- rage ramps (beat 4)
 # All applied on V14 over the whole of beat 4 and the first second of beat 5.
@@ -290,10 +289,10 @@ rage:
 # A card is a game-trailer slam: a quarter-second dark dip, big white type (Text+),
 # a stinger, then gone. All on V13 and A10.
 cards:
-  - { id: card-full-destruction, text: "FULL DESTRUCTION", bar: 264, dur: 3.5, stinger: sfx-card-slam, under: smash montage, note: on the first non-guitar smash }
-  - { id: card-multiple-instruments, text: "MULTIPLE INSTRUMENTS", section: middle-quiet, offset: 0.3, dur: 3.5, stinger: sfx-card-slam }
-  - { id: card-changing-environments, text: "CHANGING ENVIRONMENTS", section: galop-returns, offset: 0.3, dur: 3.5, stinger: sfx-card-slam }
-  - { id: card-bare-hands, text: "BARE HANDS", section: pre-coda, offset: 0.3, dur: 3.0, stinger: sfx-card-slam, optional: true, note: "subtitle: NO CONTROLLERS, NO INSTALL" }
+  - { id: card-full-destruction, text: "FULL DESTRUCTION", bar: 264, dur: 3.5, stinger: sfx-card-slam, under: smash montage, note: on the first non-guitar smash, subtitle: "Break a leg. Or, if it goes badly, everything else." }
+  - { id: card-multiple-instruments, text: "MULTIPLE INSTRUMENTS", section: middle-quiet, offset: 0.3, dur: 3.5, stinger: sfx-card-slam, note: "subtitle: A playground for musicians" }
+  - { id: card-changing-environments, text: "CHANGING ENVIRONMENTS", section: galop-returns, offset: 0.3, dur: 3.5, stinger: sfx-card-slam, note: "subtitle: Stage fright? Try a new stage." }
+  - { id: card-hands-on, text: "HANDS-ON EXPERIENCE", section: pre-coda, offset: 0.3, dur: 3.0, stinger: sfx-card-slam, optional: true, note: "subtitle: NO CONTROLLERS, NO INSTALL" }
 
 # ---------------------------------------------------------------------- audio
 # Music: each instrument's stem is its take's audio, one continuous clip from
@@ -329,35 +328,31 @@ vo: # A1
   - { id: vo-1-8, at: 25.300 }
   - { id: vo-a, at: 31.000, must_fit: true, duck_stems: true, until: 42.000, note: under the tune }
   - { id: vo-b, section: middle-quiet, offset: 5.5, must_fit: true, duck_stems: true }
-  - { id: vo-7-2, end: 3.5 }
-  - { id: vo-7-3, end: 12.0 }
+  - { id: vo-7-2, end: 0.8, note: over the curtain call }
+  - { id: vo-7-3, end: 10.3 }
 
 sfx: # A10, plus the real capture's own audio on A11
-  - { id: sfx-baton-tap, at: 27.600 } # beats -4, -3, -2 before the first note at 30.0
-  - { id: sfx-baton-tap, at: 28.200 }
-  - { id: sfx-baton-tap, at: 28.800 }
+  # (The baton taps at 27.6, 28.2 and 28.8 are the baton-countin take's own sound.)
   - { id: sfx-tuning, at: 0.000, until: 4.000, fade_out: 1.5 }
   - { id: sfx-heartbeat, at: 45.3, until: 67.9, rate_ramp: [1.0, 2.0], note: doubling in rate, on the beat }
   - { id: sfx-whoosh, at: 54.9, note: into the cut to black }
   - { id: sfx-bass-hit, bar: 260, note: the swing into the floor, under the speed ramp }
-  - { id: sfx-applause, end: -0.5, until_end: 8.0, fade_out: 2.0 }
-  - { id: R-quest, track: A11, end: 3.0, until_end: 9.0, level_db: -14 }
+  - { id: sfx-applause, end: -1.0, until_end: 9.15, fade_out: 1.45, duck_under_vo: true, note: synthesized by video/curtain.mjs }
   - { id: sfx-broom-knock, end: 17.5, optional: true }
 
 # ------------------------------------------------------ captions and credits
 supers: # V13, lower third; line 2 italic
-  - { at: 25.000, until: 27.000, kind: title, text: ["CHORDLESS", "Air instruments for Meta Quest. Played with your bare hands."] }
-  - { at: 31.000, dur: 3.0, text: ["GUITAR · Cliffside Sunset"] }
+  - { at: 25.000, until: 27.000, kind: title, text: ["CHORDLESS", "Play virtually any instrument."] }
+  - { at: 31.000, dur: 3.0, text: ["GUITAR", "Theatre"] } # every pop-up: instrument, then location
   - { section: middle-quiet, offset_bars: 2, bars_long: 2, text: ["VIOLIN · Underwater"] }
   - { section: middle-quiet, offset_bars: 6, bars_long: 2, text: ["TROMBONE · Jazz Club"] }
   - { section: middle-quiet, offset_bars: 8, bars_long: 2, text: ["FRENCH HORN · Mountaintop"] }
   - { section: galop-returns, offset: 0.0, bars_long: 4, text: ["Drums · Grandma's Living Room", "2:13 a.m. Headphones in. Grandma's still asleep."] }
 
 credits: # V13
-  - { id: tune-credit, at: 30.000, until: 36.000, position: top-left, text: ["Ludwig van Beethoven · Ode to Joy (1824) · Public domain"] }
-  - { id: music-credit, at: 45.3, until: 51.3, position: top-left, text: ["Gioachino Rossini · William Tell Overture, Finale (1829) · Public domain"] }
-  - { id: capture-credit, at: 30.000, until: 36.000, position: bottom, text: ["In-app capture. Every note is played and synthesized live in Chordless."] }
-  - { id: capture-bug, at: 30.000, until_end: 0.0, position: top-right, size: small, text: ["IN-APP CAPTURE"] }
+  - { id: tune-credit, at: 30.000, until: 35.000, position: bottom-right, text: ["Ode to Joy", "Ludwig van Beethoven · 1824 · Public domain"], note: "song card: music note, title in Shrikhand, amber bar on the right" }
+  - { id: music-credit, at: 45.3, until: 51.3, position: bottom-right, text: ["William Tell Overture, Finale", "Gioachino Rossini · 1829 · Public domain"] }
+  - { id: capture-badge, at: 30.000, until: score-end, position: top-right, text: ["In-app capture"], note: "app icon, amber Shrikhand on a dark rounded badge" }
   - id: end-credits
     end: 11.0
     until_end: 17.0
@@ -380,6 +375,6 @@ markers:
   - { bar: 260, name: "Beat 5: the high point; white-out; the smash" }
   - { section: middle-quiet, name: "MULTIPLE INSTRUMENTS card; VO-B" }
   - { section: galop-returns, name: "CHANGING ENVIRONMENTS card; drums in" }
-  - { section: pre-coda, name: "Grid builds; BARE HANDS card" }
+  - { section: pre-coda, name: "Grid builds; HANDS-ON EXPERIENCE card" }
   - { section: coda, name: "Coda: cymbals" }
   - { end: 0.0, name: "Beat 7: the bow" }

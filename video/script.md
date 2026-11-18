@@ -32,7 +32,7 @@ episodes are trimmed.
 | 4. The rage | 0:45.3–1:07.9 | *William Tell* builds under him, and the picture goes red, then white |
 | 5. The high point | 1:07.9–1:20.5 | The score's tutti hits and he smashes the guitar. This is where destruction is introduced |
 | 6. The cards | 1:20.5–2:35.3 | **FULL DESTRUCTION**, **MULTIPLE INSTRUMENTS**, **CHANGING ENVIRONMENTS**, over the rest of the score |
-| 7. The bow | 2:35.3–2:52.3 | Final chord, the bow, a short pitch over real Quest footage, the end card |
+| 7. The bow | 2:35.3–2:52.3 | Final chord, the curtain call (the curtains close, bouquets thrown) under a short pitch, to black, the end card |
 
 ## How the rules shape this cut
 
@@ -46,7 +46,7 @@ Simulator" and real gameplay that honestly represents the app. So:
   and also covers the rule that entries may not "depict any identifiable person other than
   Entrants". No real brand logos in generated clips.
 - **Record at least one shot on a real Quest with your own hands** (shot `R-quest`, under the
-  **BARE HANDS** card and the closing pitch).
+  **HANDS-ON EXPERIENCE** card and the closing pitch).
 - **Captions and cards carry the story during the music, not voiceover.** There are only two
   voiceover lines during the performance, both in quiet passages. The loud passages have no talking.
   Voiceover is on its own track, so a music-only cut is just muting A1.
@@ -80,6 +80,13 @@ performer; see [Still to build](#still-to-build).
 cold into the silence after the flub. Because the rage must *build*, it uses the same layering as the
 concert cut, one instrument section at a time, but its sections now carry the story:
 
+> **As built** (`video/score.mjs`, about 71 s from the trumpet's fanfare to the closing chord):
+> bars 226–259, the fanfare and the quiet theme, the orchestra coming in a tile at a time; 260–275,
+> the tutti, the instruments smashed on its accents; 276–283, the second tune, the melody alone, the
+> scenes four bars each in calm places; 284–299, the theme twice more, the accompaniment back in;
+> 300–315, the tutti again, the scenes two bars each; 316, the closing chord. The table below is the
+> earlier plan.
+
 | Section | Share | Playing | What is on screen |
 | --- | --- | --- | --- |
 | Fanfare | ~10 s | trumpet alone | **Rage 1**: the silence cracks, Technickel's grin goes flat |
@@ -88,7 +95,7 @@ concert cut, one instrument section at a time, but its sections now carry the st
 | Middle episodes, quiet | ~18 s | + violin, trombone, horn | **MULTIPLE INSTRUMENTS** card |
 | Middle episodes, building | ~14 s | + piano, + triangle | the instrument roll continues |
 | Galop returns | ~16 s | + drums | **CHANGING ENVIRONMENTS** card |
-| Quiet before the coda | ~10 s | everyone but the cymbals | **BARE HANDS** card, the 3×3 grid builds |
+| Quiet before the coda | ~10 s | everyone but the cymbals | **HANDS-ON EXPERIENCE** card, the 3×3 grid builds |
 | Coda | ~14 s | **everything, with the cymbals' first crash** | the whole stage breaks on the crash |
 | Final chord | ~3 s | everything | cutoff |
 
@@ -132,6 +139,8 @@ of view. His emoji face is the mood gauge: 😎 (calm) → 😐 (the flub) → �
 
 #### Shot 1-1: The Empty Hall (0:00 – 0:03)
 
+**Generated:** `clips/curtains-open.mp4` (the curtains part on an empty stage).
+
 **Visuals:**
 > **Storyboard Prompt:** "A photorealistic, cinematic 16:9 still of a grand, gilded concert hall in near darkness. On stage, rows of empty orchestra chairs and music stands, but no musicians and no instruments. A single spotlight lands on an empty conductor's podium."
 >
@@ -141,19 +150,30 @@ of view. His emoji face is the mood gauge: 😎 (calm) → 😐 (the flub) → �
 
 #### Shot 1-2: The Introduction (0:03 – 0:09)
 
+**Generated:** `clips/enter-under-spotlight.mp4` (720p, 14 s): he walks into the spotlight and talks to
+camera with his hands, then the lights go down on him. Used up to where the lights start to go down
+(10.3 s); its last part is 1-7. The welcome line starts as he walks in, and the clip's own generated
+voice is left out (its footsteps are kept). His face is an emoji, so there are no lips to sync.
+
 **Visuals:**
 > **Storyboard Prompt:** "A photorealistic 16:9 medium shot of TECHNICKEL on a conductor's podium in a dim, gilded concert hall, empty orchestra chairs behind him, spotlit, baton held at his side."
 >
 > **Video Prompt:** "TECHNICKEL turns to face the camera, gives a small bow, and gestures with his baton at the empty chairs behind him, as if presenting them."
 
 **Technickel (VO, warm and theatrical):**
-Good evening! I'm Technickel, conductor of AI. And every musician I know has the same problem.
+Good evening, ladies and gentlemen! I'm Technickel, conductor of AI. Behind every great musician is a very
+inconvenient instrument.
 
 #### Shots 1-3 to 1-6: The Gag Montage (0:09 – 0:21, 3 s each)
 
 **Technickel (VO, quick, one line per shot):**
-Their instrument. (1-3) It needs its own plane seat. (1-4) It gets noise complaints at 2 a.m.
-(1-5) It won't fit up the stairs. (1-6) And it is *not* library-friendly.
+(1-3) They are often too fragile to check. Too big for the overhead bin. (1-4) Back home, when you
+practice, the whole house practices. (1-5) Your wallet feels it, and for many, it's out of reach.
+(1-6) And hauling it to a jam session? Uphill both ways.
+
+**Generated:** 1-3 `clips/fitting-guitar_case-in-overhead.mp4`, 1-4 `clips/drummer-wakes-sleeping-person.mp4`,
+1-5 `clips/shopping-for-violin.mp4`, 1-6 `clips/pushing-piano-uphill.mp4`. The last two replace the stairs
+and library gags: the cost of an instrument, and the work of getting it to practice or a jam.
 
 > **1-3 Storyboard Prompt:** "A photorealistic 16:9 still inside an airplane cabin. A full-size cello sits buckled into a window seat with a tiny airline meal on its tray table. Squeezed into the middle seat beside it, a cellist with a weary emoji face (😩) holds two boarding passes. No airline logos."
 >
@@ -163,45 +183,60 @@ Their instrument. (1-3) It needs its own plane seat. (1-4) It gets noise complai
 >
 > **1-4 Video Prompt:** "The ceiling shakes as someone upstairs pounds on it with a broom handle; plaster dust falls onto the cymbals. A note slides under the door reading 'PLEASE.' The drummer's emoji face changes to embarrassed (😬)."
 
-> **1-5 Storyboard Prompt:** "A photorealistic 16:9 still of a narrow apartment stairwell. Two movers with straining emoji faces (😣) are wedged sideways with a black grand piano, completely stuck. Behind them, a pianist with an anxious emoji face (😰) holds only the piano bench."
->
-> **1-5 Video Prompt:** "The movers push. The piano does not move. One mover slowly slides down the wall to sit on a step. The pianist sets the bench down and sits on it in defeat."
+> **1-5 (the cost):** a would-be violinist in a music shop reads the price tag on a violin in a glass case, then checks his wallet.
 
-> **1-6 Storyboard Prompt:** "A photorealistic 16:9 still of a silent, towering wood-paneled library. A percussionist with an excited emoji face (😁) stands between the shelves holding two large orchestral cymbals raised high, about to crash them."
->
-> **1-6 Video Prompt:** "From behind a bookshelf, a librarian with a shushing emoji face (🤫) slowly lowers their reading glasses and stares. The percussionist freezes mid-swing, cymbals an inch apart."
+> **1-6 (getting it to the jam):** a pianist pushes an upright piano up a steep street of row houses.
 
 *Alternates if one doesn't generate well:* the trumpet player whose practice sets off every dog
 on the block; the drummer's eleventh trip to an overflowing hatchback; the triangle player who
 booked the conservatory practice room three weeks out, for a triangle.
 
-#### Shot 1-7: The Vanishing Act (0:21 – 0:25)
+#### Shot 1-7: The Lights Go Down
+
+**Generated:** the last part of `clips/enter-under-spotlight.mp4` (from 10.3 s): back on the stage, the
+spotlight narrows and the stage goes dark, out to black for the headset shot. (It replaces the
+vanishing act below, kept for reference.)
 
 > **Storyboard Prompt:** "A photorealistic 16:9 wide shot of the gilded concert hall, now fully lit. Every orchestra chair holds an instrument (cellos, violins, a grand piano, a drum kit, trumpets) but there are still no musicians. TECHNICKEL stands on the podium, baton raised."
 >
 > **Video Prompt:** "TECHNICKEL flicks the baton once. Every instrument on stage dissolves into golden sparkles that drift up into the light, leaving only empty chairs. He tucks the baton under his arm, pleased."
 
 **Technickel (VO):**
-So I left the instruments at home. All of them.
+So I cut the chord. (The pun on Chordless: it sounds like "cord", and the logo's C is a coiled cord.)
+
+#### Shot 1-7b: The Headset Goes On (about 3.3 s)
+
+**Rendered, not generated** (`video/headset.mjs`, a small Three.js model): the generated clip 1-7
+ends by fading to black, and this picks up from the black. A VR headset turns in the light, no
+hands: first its front (the white visor, three dark sensor strips) with the strap loop behind,
+then its side, then, as the strap lifts up and over as if to go over your head, its inside (the
+grey face pad, the two lenses). It comes up to your face until everything goes dark. Then the
+two lenses wake onto the empty theatre, out of focus, a soft image in each, and open out and
+meet in one clear picture: the first frame of the title card's shot. Sound: a soft lift, the
+pad seating, a two-note start-up chime.
 
 #### Shot 1-8: Title Card (0:25 – 0:27)
 
-Designed in Resolve (Text+), not generated. **CHORDLESS**, with the subtitle *Air instruments
-for Meta Quest. Played with your bare hands.* Behind it, a slow-motion take of fingertips on
-the air guitar's strings (from `takes/guitar-cliffside.mp4`), darkened.
+Designed, not generated: the Chordless logo (`public/icons/logo.svg`, as on the app's title
+screen), with the app's tagline under it: *Play **virtually** any instrument.* Behind it, the
+empty theatre seen from the stalls (take `title-house`): no instrument, hands or menus, the stage
+lights on, the camera pushing slowly in over the seats towards the stage. The end card carries
+the same logo.
 
 **Technickel (VO):**
-Meet Chordless.
+And now, tonight's performance: Chordless.
 
 #### Shot 1-9: From the Top (0:27 – 0:30)
 
-> **Storyboard Prompt:** "A photorealistic 16:9 medium shot of TECHNICKEL on the podium wearing a sleek, unbranded white VR headset over his sunglasses emoji face, baton raised in the spotlight."
->
-> **Video Prompt:** "TECHNICKEL taps his baton three times on the music stand, raises both arms, holds for one beat, then gives a sharp downbeat."
+**Real footage, not a generated clip:** the app's own air baton, on the theatre stage
+(`takes/baton-countin`, recorded by `node video/capture/take.mjs baton-countin`). Seen from the
+conductor's right, close, the baton taps the top edge of the music stand three times, rises, and
+gives a sharp downbeat. The taps are the baton's own sound.
 
-**Sync note:** The three baton taps are SFX on beats −4, −3 and −2 before the first note (the tune is
+**Sync note:** The three taps land on beats −4, −3 and −2 before the first note (the tune is
 quarter = 100, so they are 0.6 s apart), and the downbeat cuts straight to the guitar on the first
-note, at **0:30**.
+note, at **0:30**. The edit finds the taps in the take's sound and places the shot by them, so they
+keep the tune's time.
 
 ---
 
@@ -213,11 +248,16 @@ POV capture, `takes/guitar-cliffside-tune.mp4`: the air guitar at the Cliffside 
 playing *Ode to Joy* slowly, single notes. Nothing flashy; it should feel like a first lesson.
 Slow push-in on the fretting hand over the 14 s.
 
-**Lower third (0:31, 3 s):** GUITAR · Cliffside Sunset
+**Lower third (0:31, 3 s):** GUITAR / *Theatre*. Every pop-up in the trailer is just the
+instrument, with the location in italics underneath.
 **On screen at the first note:**
 
-- **Music credit** (top left, 0:30–0:36): *Ludwig van Beethoven · Ode to Joy (1824) · Public domain*
-- **Corner bug** (small, top right, for the rest of the video): *IN-APP CAPTURE*
+- **Song title** (bottom right, level with the lower third, 0:30–0:35): the lower third's mirror
+  image, with an amber music note and the amber bar on the right. *Ode to Joy* is in the logo's
+  face, with *Ludwig van Beethoven · 1824 · Public domain* underneath. *William Tell Overture,
+  Finale* (Gioachino Rossini · 1829) comes up in the same place at the trumpet's first note.
+- **In-app capture badge** (top right, for the rest of the score): the app icon and *In-app capture*
+  in the logo's face, in amber on a dark rounded badge.
 
 **VO-A, the uniqueness line (0:31–0:42, about 11 s, under the tune):**
 Most music in VR is a rhythm game, or a mixed-reality overlay on a guitar you already own.
@@ -332,26 +372,27 @@ The card text is in `edit-plan.yaml`, and the picture behind each is real captur
 
 | Card | Time | Under it | Why this beat |
 | --- | --- | --- | --- |
-| **FULL DESTRUCTION** | 1:11–1:14.5 (bar 264) | the smash from beat 5, then **instrument after instrument** hit one by one, every 2 bars: the piano pushed over with keys flying, the drums pulled off their stands and thrown, the trumpet smashed, the violin smashed | It is the first thing the trailer shows, so the card names it |
-| **MULTIPLE INSTRUMENTS** | 1:21–1:24.5 (middle episodes) | a quiet moment: a pinch of both hands, and everything comes back whole. Then the instruments, one every 2 bars: violin, cello, trombone, horn, trumpet, piano, triangle, drums, cymbals, guitar | The pause after the destruction; ten instruments, one per bar |
-| **CHANGING ENVIRONMENTS** | 1:53–1:56.5 (galop returns) | a rapid scene flip with the player's real hands on **Next scene**, then a cut every bar: stage, Cliffside Sunset, Underwater, Space Station, Library, Ice Cave, Volcano Rim, Pinball, and so on | The music has returned to the galop; the picture races through the worlds |
-| **BARE HANDS** *(optional fourth)* | 2:09–2:12 (quiet before the coda) | `R-quest`, the real headset, real hands, no controllers | Proves the app works on the real device |
+| **FULL DESTRUCTION** / *Break a leg. Or, if it goes badly, everything else.* | 1:11–1:14.5 (bar 264) | the smash from beat 5, then **instrument after instrument** hit one by one, every 2 bars: the piano pushed over with keys flying, the drums pulled off their stands and thrown, the trumpet smashed, the violin smashed | It is the first thing the trailer shows, so the card names it |
+| **MULTIPLE INSTRUMENTS** / *A playground for musicians* | 1:21–1:24.5 (middle episodes) | a quiet moment: a pinch of both hands, and everything comes back whole. Then the instruments, one every 2 bars: violin, cello, trombone, horn, trumpet, piano, triangle, drums, cymbals, guitar | The pause after the destruction; ten instruments, one per bar |
+| **CHANGING ENVIRONMENTS** / *Stage fright? Try a new stage.* | 1:53–1:56.5 (galop returns) | a cut every four bars, then every two, an instrument playing in each place: Rainy Rooftop (violin), Pirate Ship (trumpet), Cherry Blossom Garden (guitar), Endless Library (cello), Desert Canyon (trombone), Museum at Night (piano), then Space Station (trumpet), Bowling Alley (drums), Clock Tower (piano), Farm Festival (violin), Bathtub (cymbals), Train Roof (cello), Parking Garage (triangle), Tropical Beach (guitar) | The music has returned to the galop; the picture races through the worlds |
+| **HANDS-ON EXPERIENCE** *(optional fourth)* | 2:09–2:12 (quiet before the coda) | `R-quest`, the real headset, real hands, no controllers | Proves the app works on the real device |
 
 The first three are the ones you named. The optional fourth carries the "built on the open web"
 claim and the real-Quest shot. If the cut feels too long, drop it and move `R-quest` to the pitch
 in beat 7.
 
-**VO-B, the tech line (1:27–1:38, about 11 s, over the quiet middle episodes):**
-It's built with Meta's Immersive Web SDK, so it runs right in the Quest browser. No install, no
-controllers. Ten instruments, and more than sixty places to play them.
+**VO-B, the tech line (about 8 s, over the quiet theme as the orchestra builds):**
+It's built with Meta's Immersive Web SDK, so it runs in VR, right in the browser. No install,
+no controllers.
 
 *Fit this line to the quietest passage. If the section is shorter than the line, move the line, don't
 shorten the music.*
 
 #### Grid and coda
 
-- **Quiet before the coda (2:08.5):** a 3×3 grid builds, Technickel conducting in the centre tile
-  (`c-grid`), one instrument tile appearing every 2 bars.
+- **Quiet before the coda (2:08.5):** a 3×3 grid builds, one instrument tile appearing every 2
+  bars; the trombone (`orch-trombone`, the trumpet's line an octave down) takes the tile the
+  conductor once had.
 - **Coda (2:18.5–2:32.5):** full screen on the cymbals' crash, then a 1-bar montage of the smash and
   environment takes, cutting back to the grid on each 4-bar phrase downbeat.
 - **Final chord (2:32.5):** the Theatre, full screen: the entire stage comes apart on the last crash
@@ -369,30 +410,33 @@ shorten the music.*
 
 **(2:35.3 – 2:52.3)**
 
-#### Shot 7-1: Ovation (3 s)
+#### Shot 7-1: The Curtain Call (about 9.5 s)
 
-> **Storyboard Prompt:** "A photorealistic 16:9 medium shot of TECHNICKEL on the podium, VR headset pushed up on his head, baton lowered, in a warm spotlight in the gilded concert hall."
->
-> **Video Prompt:** "TECHNICKEL turns to the camera and takes a deep, theatrical bow. Golden confetti drifts down through the spotlight."
->
-> **Audio:** Applause swell (SFX), fading under the VO.
+Drawn, not generated (`video/curtain.mjs`). Red velvet curtains close over the closing chord's
+grid, full frame, as cloth: their folds start bunched by the side and spread as they are drawn,
+the hems trail the tops and swing when they meet. Bouquets are thrown from the audience, one about
+every half second, and drop out of the bottom of the frame onto the stage below. A warm spot comes up on the closed
+curtains, then the picture fades to black. The end card, on black, fades in from it.
 
-#### Shot 7-2: The Pitch, Over Real Footage (8 s)
-
-Picture: `R-quest` (your own hands, playing on a real Quest, with its own audio low under the VO),
-then `R-scene-flip` for the last 2 s.
+**Audio:** Applause from the moment the chord is cut off, under the VO, gone with the picture.
 
 **Technickel (VO, warm, unhurried):**
-That's Chordless. Not a game about music: an orchestra you can play, and break, in a headset.
+That concludes tonight's performance of Chordless. And the encore? That's up to you.
 
 #### Shot 7-3: End Card and Credits (6 s)
 
-Designed in Resolve. **CHORDLESS**, *Built with IWSDK, Meta's Immersive Web SDK, for Meta
-Quest*, the GitHub Pages URL, and "Meta VR Start Developer Competition 2026". The credits
-block from [Attribution](#attribution) runs in small type underneath.
+Designed in Resolve. **CHORDLESS**, the site's address (**https://chordless.technickel.dev**,
+large, under the logo, with "Play it now" above it), *Built with Meta's Immersive Web SDK
+(IWSDK)*, and "Meta VR Start Developer Competition 2026". Underneath, the credits from
+[Attribution](#attribution) in small type, three short lines (the long form goes in the YouTube
+description):
+
+> Music: Beethoven, *Ode to Joy* · Rossini, *William Tell Overture*, Finale · public domain
+> William Tell arranged from Max Wilkinson's typeset score (IMSLP #22579, CC BY 3.0)
+> All music and gameplay recorded in Chordless · Conductor and story scenes are AI-generated
 
 **Technickel (VO):**
-Practice anywhere. Break anything.
+Play virtually any instrument, any time, anywhere.
 
 **(Fade to black. Optional sting: one broom-handle knock on a ceiling, then silence.)**
 
@@ -455,11 +499,9 @@ None of this exists yet. Do it before recording.
 
 | ID | Use | Length to generate |
 | --- | --- | --- |
-| 1-1 to 1-7, 1-9 | Beat 1 | 5–8 s each, trimmed in the edit |
+| 1-1 to 1-7 | Beat 1 | 5–8 s each, trimmed in the edit |
 | c-1 to c-5 | The look, the fist, the face, the podium, the grin | 3–4 s each; only 1–2 s is used |
 | c-6 | The cutoff | 3–4 s |
-| c-grid | Technickel conducting in a neutral 2/4 pattern, for the grid centre tile | 8–10 s. It won't be on tempo, so it gets retimed to 152 bpm in the edit |
-| 7-1 | The bow | 5 s |
 
 ### Chordless takes (scripted, screen-captured)
 
@@ -487,11 +529,11 @@ Each take is a full `play:*` run, 1920×1080 at 60 fps, opened with `?scene=<fil
 
 | ID | Line starts with | Placement |
 | --- | --- | --- |
-| vo-1-2 | "Good evening!" | 0:03 |
-| vo-1-3 to vo-1-6 | "Their instrument." … | 0:09, one per gag |
-| vo-1-7 | "So I left the instruments at home." | 0:21.5 |
-| vo-1-8 | "Meet Chordless." | 0:25.3 |
+| vo-1-2 | "Good evening, ladies and gentlemen!" | 0:03 |
+| vo-1-3 to vo-1-6 | "They are often too fragile to check." … | 0:09, one per gag |
+| vo-1-7 | "So I cut the chord." | 0:21.5 |
+| vo-1-8 | "And now, tonight's performance: Chordless." | 0:25.3 |
 | vo-a | "Most music in VR is a rhythm game…" | 0:31, under the tune |
 | vo-b | "It's built with Meta's Immersive Web SDK…" | the quietest middle episode |
-| vo-7-2 | "That's Chordless." | the bow + 3.5 s |
-| vo-7-3 | "Practice anywhere." | the end card |
+| vo-7-2 | "That concludes tonight's performance of Chordless." … | the curtain call + 0.8 s |
+| vo-7-3 | "Play virtually any instrument, any time, anywhere." | the end card |

@@ -10,8 +10,7 @@
  * for by timestamp).
  *
  * The timeline follows video/script.md. Times are computed here, from the
- * voiceover lengths and from the bars of the score, so they are close to
- * edit-plan.yaml's but not the same.
+ * voiceover lengths and from the bars of the score.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';

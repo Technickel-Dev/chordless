@@ -1,6 +1,6 @@
 # Chordless: The Conductor of AI (trailer cut)
 
-**Video Length:** 2:52 (the rules say *less than* three minutes; judges may stop at 3:00)
+**Video Length:** 2:39.6 as built (planned at 2:52; the rules say *less than* three minutes, and judges may stop at 3:00)
 **Competition:** Meta VR Start Developer Competition 2026 (deadline Nov 18, 2026, 12:00 PM PT)
 **Speaker:** Technickel (Conductor of AI, a human who directs AI tools; never presented as an AI himself)
 **Tech:** Built with IWSDK, Meta's Immersive Web SDK, as a WebXR app in the Quest browser
@@ -8,9 +8,14 @@
 *William Tell* Overture, Finale (1829), public domain, played in Chordless by its own synthesized
 instruments. No recording of either piece is used anywhere.
 
-This file is the human half of the edit: what to generate, what to record, and what Technickel
-says. [`edit-plan.yaml`](edit-plan.yaml) is the machine half. It uses the same shot IDs, placed
-on the timeline, for the DaVinci Resolve MCP to build from.
+This file is the plan for the edit: what to generate, what to record, and what Technickel
+says. The cut itself is built by [`build.mjs`](build.mjs) with ffmpeg, from the captured takes
+(`capture/`), the voiceover (`vo.ps1`, `vo-lines.json`) and the hand-picked in-points in
+`cuts.json`; it writes `build/first-pass.mp4` and `build/timeline.json`.
+
+**As built.** The cut drifted from this plan as it was made. [The shape](#the-shape) has the
+built timeline; the times in the beats below are the plan's, and where the cut differs, an
+*As built* note says so.
 
 **What changed from the first draft.** The first draft was a concert: the conductor's intro and gag
 montage, then one long play of the finale with instruments joining section by section. This draft keeps
@@ -23,6 +28,20 @@ episodes are trimmed.
 ---
 
 ## The shape
+
+As built (from `build/timeline.json`, 2:39.6 in all):
+
+| Beat | Time | What the viewer gets |
+| --- | --- | --- |
+| 1. The conductor of AI | 0:00–0:44.7 | The curtains open, Technickel introduces himself, the four gags, the lights go down, the headset goes on, the title card |
+| 2. A simple song | 0:44.7–0:56.1 | The baton's count-in, then one air guitar plays *Ode to Joy* in the theatre |
+| 3. The flub | 0:56.1–0:57.0 | One wrong note |
+| 4. The rage | 0:57.0–1:07.5 | Silence and the red, the fist shakes, the guitar swung overhead and smashed in three real swings |
+| 5. The high point | 1:07.5–1:16.5 | The wreck, the menu, the trumpet; *William Tell* starts on the trumpet alone |
+| 6. The cards | 1:16.5–2:26.2 | The orchestra builds a tile at a time (**MULTIPLE INSTRUMENTS**, **HANDS-ON EXPERIENCE**), six instruments smashed (**FULL DESTRUCTION**), fourteen scenes (**CHANGING ENVIRONMENTS**), the closing chord with everyone |
+| 7. The bow | 2:26.2–2:39.6 | The curtain call (curtains close, bouquets thrown) under the closing line, to black, the end card |
+
+The plan, for comparison:
 
 | Beat | Time | What the viewer gets |
 | --- | --- | --- |
@@ -40,15 +59,17 @@ From the competition's Polish & Presentation criterion: *"Don't lean on AI-gener
 carry the pitch."* It also asks for footage "as viewed on a Meta Quest device or via XR
 Simulator" and real gameplay that honestly represents the app. So:
 
-- **AI clips are the frame, app footage is the picture.** About 55 s of AI clips against about
-  2:00 of real Chordless footage, so roughly 70% real. The trailer cards make the app the star.
+- **AI clips are the frame, app footage is the picture.** As built, the generated clips are only
+  the opening, about 37 s of the 2:39.6. Everything after them is app footage or drawn in code
+  (the headset, the curtain call, the cards). The trailer cards make the app the star.
 - **Every human in an AI clip has an emoji face**, like Technickel. That keeps your house style
   and also covers the rule that entries may not "depict any identifiable person other than
   Entrants". No real brand logos in generated clips.
-- **Record at least one shot on a real Quest with your own hands** (shot `R-quest`, under the
-  **HANDS-ON EXPERIENCE** card and the closing pitch).
-- **Captions and cards carry the story during the music, not voiceover.** There are only two
-  voiceover lines during the performance, both in quiet passages. The loud passages have no talking.
+- **A shot on a real Quest was planned** (`R-quest`, under the **HANDS-ON EXPERIENCE** card),
+  but it was dropped with the old ending. All app footage is from IWSDK's emulator, which the
+  rules allow ("via XR Simulator, or another equivalent emulator").
+- **Captions and cards carry the story during the music, not voiceover.** As built, there is only
+  one voiceover line during the performance (VO-B), in a quiet passage; VO-A was cut. The loud passages have no talking.
   Voiceover is on its own track, so a music-only cut is just muting A1.
 - **Credits are on screen, not just in the description.** See [Attribution](#attribution).
 - **The destruction is the app's own.** Nothing is faked in post. The red, the white-out and the
@@ -366,9 +387,15 @@ itself.
 
 The music from here on is a trailer: bursts, drops, a build to a final crash. Each card is a slam in
 the style of a game trailer, big white type over a darkened quarter-second, with a short stinger.
-The card text is in `edit-plan.yaml`, and the picture behind each is real capture only.
+The card text is in `build.mjs`, and the picture behind each is real capture only.
 
 #### The cards
+
+> **As built:** four cards, in this order. **MULTIPLE INSTRUMENTS** (1:17) as the orchestra
+> builds a tile at a time; **HANDS-ON EXPERIENCE** / *No controllers · No install* (1:32.7) over
+> the same build, with no real-Quest shot under it; **FULL DESTRUCTION** (1:42.4) over six
+> instruments smashed in turn (violin, trumpet, cello, cymbals, drums, piano); **CHANGING
+> ENVIRONMENTS** (1:52) over the fourteen scenes listed below. The table is the plan.
 
 | Card | Time | Under it | Why this beat |
 | --- | --- | --- | --- |
@@ -390,6 +417,10 @@ shorten the music.*
 
 #### Grid and coda
 
+> **As built:** none of the coda below. The scenes run to the closing chord, which is a grid of
+> every instrument (2:23.6), and then the curtain call. There is no stage-wide smash and no
+> cutoff shot (`c-6`).
+
 - **Quiet before the coda (2:08.5):** a 3×3 grid builds, one instrument tile appearing every 2
   bars; the trombone (`orch-trombone`, the trumpet's line an octave down) takes the tile the
   conductor once had.
@@ -408,7 +439,7 @@ shorten the music.*
 
 ### **Beat 7: The Bow**
 
-**(2:35.3 – 2:52.3)**
+**(2:35.3 – 2:52.3)** *(as built: 2:26.2 – 2:39.6)*
 
 #### Shot 7-1: The Curtain Call (about 9.5 s)
 
@@ -423,9 +454,9 @@ curtains, then the picture fades to black. The end card, on black, fades in from
 **Technickel (VO, warm, unhurried):**
 That concludes tonight's performance of Chordless. And the encore? That's up to you.
 
-#### Shot 7-3: End Card and Credits (6 s)
+#### Shot 7-3: End Card and Credits (5.5 s as built)
 
-Designed in Resolve. **CHORDLESS**, the site's address (**https://chordless.technickel.dev**,
+Rendered by `cards.mjs`. **CHORDLESS**, the site's address (**https://chordless.technickel.dev**,
 large, under the logo, with "Play it now" above it), *Built with Meta's Immersive Web SDK
 (IWSDK)*, and "Meta VR Start Developer Competition 2026". Underneath, the credits from
 [Attribution](#attribution) in small type, three short lines (the long form goes in the YouTube
@@ -459,7 +490,7 @@ end card, and in the YouTube description.
 >
 > **Performance:** All music in this video is in-app capture from Chordless. Every note is
 > played and synthesized live by the app; no recordings of either piece are used. Performances
-> were recorded in IWSDK's XR emulator with scripted hand motion, and on a Meta Quest.
+> were recorded in IWSDK's XR emulator with scripted hand motion.
 >
 > **Built with:** IWSDK (Meta's Immersive Web SDK), WebXR.
 >
@@ -479,7 +510,9 @@ Two notes on this:
 
 ## Still to build
 
-None of this exists yet. Do it before recording.
+> **Done.** All of this was built before recording: the destruction work is on `main`,
+> `tests/songs/ode-to-joy.js` has the tune and its flub, and the takes are captured by
+> `capture/take.mjs` (the list is in `capture/takes.mjs`). The list is kept as it was planned.
 
 1. **Merge the destruction work into the branch you record from.** It lives on
    `claude/instrument-destruction-system-f73726` (guitar, drums, piano, strings, brass, cymbals and
@@ -494,6 +527,10 @@ None of this exists yet. Do it before recording.
    trombone and horn have one. The rest play the full-length part.
 
 ## Recording List
+
+> **As built:** the AI clips used are 1-1 to 1-7 only; c-1 to c-6 were not used. Neither real
+> capture (`R-quest`, `R-scene-flip`) is in the cut, and VO-A was cut. The takes actually
+> captured, and their names, are in `capture/takes.mjs`.
 
 ### AI clips (you generate)
 

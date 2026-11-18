@@ -1,26 +1,35 @@
 # Chordless
 
-Air instruments for Meta Quest, played with your bare hands: a guitar, a
-violin, a cello, a pair of orchestral cymbals, a triangle, a piano, a drum kit, a trombone and a French horn. On the guitar your left fingers fret real strings at real fret
+Air instruments for Meta Quest, played with your bare hands: a guitar, a bass
+guitar, a violin, a cello, a pair of orchestral cymbals, a triangle, a piano, a
+drum kit, a trumpet, a trombone, a French horn and a conductor's baton. On the guitar your left fingers fret real strings at real fret
 positions on a full-size steel-string guitar, and your right index fingertip
 plucks: sweep across the strings to strum, flick one string to pick a single
 note. On the violin and cello your left fingers stop the strings anywhere on
-a fretless fingerboard and your right hand draws a bow. The cymbals are one
+a fretless fingerboard and your right hand draws a bow. The bass is played
+as the guitar is, with four strings. The cymbals are one
 in each hand: clash them together. The triangle hangs from your left hand
 and the beater is in your right. The piano stands in front of you and
 you play its keys with all ten fingertips. The drum kit stands in front of you
-with a stick in each fist. The trombone is held to your lips in your left
+with a stick in each fist. The trumpet is in your right hand, its fingers on
+the valves, and a pinch of your left hand blows it. The trombone is held to your lips in your left
 hand, and your right hand works the slide. The French horn is in your left
-hand too, its fingers on the valves, with your right hand in the bell. The sound is synthesized in the
+hand too, its fingers on the valves, with your right hand in the bell. The
+baton is in your right fist, to tap on a music stand. The sound is synthesized in the
 browser, so there are no audio files.
+
+When a song goes wrong, every instrument can be smashed: swing it into the
+floor and it dents, cracks and breaks apart where it hits. You play in any of
+61 scenes, from the theatre stage to a bathtub.
 
 It is a WebXR app built with [IWSDK](https://iwsdk.dev/), Meta's Immersive Web
 SDK. WebXR is the browser standard for VR and AR, so the app runs in the Quest
 browser with no install.
 
-Play it at <https://technickel-dev.github.io/chordless/>: open that address in
-the Quest browser and press Enter XR. Every push to `main` redeploys it through
-[the Pages workflow](.github/workflows/deploy-pages.yml).
+Play it at <https://chordless.technickel.dev/>: open that address in the
+Quest browser and press **Enter VR** on the title screen. Every push to `main`
+redeploys it through [the Pages workflow](.github/workflows/deploy-pages.yml)
+(GitHub Pages, served from that custom domain).
 
 ## Run it
 
@@ -44,7 +53,7 @@ npm run dev:status
 
 Open the network URL it prints (`runtimeUrls.network`, an `https://` address
 on port 8081) in the Quest browser, accept the local certificate warning, press
-**Enter XR**, then put the controllers down so hand tracking takes over.
+**Enter VR**, then put the controllers down so hand tracking takes over.
 `npm run dev:down` stops the server.
 
 ## How to play
@@ -85,14 +94,21 @@ buttons, and a strip of pictograms shows how to play the instrument (which hand
 does what) for a few seconds. The **menu** button (three lines) opens the menu
 again, and the **?** button brings the pictograms back. Under the tiles are
 volume down / up, the guitar's clean (wave) or overdrive (lightning) tone, reset
-position (crosshair: back to the default position; the piano and drum kit move
-to where you stand), and the scene arrows (where you play: the theatre stage
+position (crosshair: back to the default position, and anything smashed is put
+back together; the piano, drum kit and music stand move to where you stand), and the scene arrows (where you play: the theatre stage
 first, then the other scenes in `src/scene-list.ts`).
 
 **Signs.** Each instrument has a small sign beside it. Until you play, it shows
 the next thing to do as sky-blue pictograms (show your hands, put the trumpet
 to your lips, pinch to blow); while you play, it names the chord, note or hit,
 with any reminder faded.
+
+### The bass
+
+A short-scale (30") four-string bass in standard tuning (E A D G), worn and
+played exactly as the guitar is: left fingertips fret, the right index
+fingertip plucks. It hangs a little further right than the guitar, since its
+neck is longer, so the nut stays within reach.
 
 ### The violin
 
@@ -193,6 +209,15 @@ instead of passing through. The kit is set out where you stand when you
 choose it, with the snare 72 cm below your eyes (the stands go from 65 cm
 to 1.1 m); **Reset position** moves it to you again.
 
+### The trumpet
+
+A B-flat trumpet, held in the right hand, whose fingers rest on the three
+valves: press a fingertip down to press its valve. The bell's tilt stands in
+for the lips: aim it higher for higher partials, 12 degrees per partial (the
+seventh is skipped, as players do). Pinch your left thumb and index finger to
+blow: closing the pinch tongues the note, closing it further plays louder.
+An open left hand held over the bell is a plunger mute.
+
 ### The trombone
 
 A B-flat tenor trombone, held in the left hand: bring the hand out to about
@@ -219,6 +244,24 @@ Bb2 to Bb4). Your right hand goes in the bell, which opens back beside your
 right hip: pinch it to blow, and the deeper it goes into the bell the darker
 and more covered the tone. The HUD shows the note as horn parts are written,
 in F, a fifth above where it sounds.
+
+### The baton
+
+A conductor's baton in your right fist and a music stand set down in front
+of you to tap it on. A tap sounds where it lands, as loud as the baton was
+moving: the sharp tick of the stand's top edge, the hollow desk, the dry
+ledge. Wave it fast and it swishes.
+
+### Smashing
+
+Every instrument can be destroyed. Swing it into the floor and it takes
+damage where it hits: the surface dents, cracks spread, chips fly, and parts
+near the hit come off first, until it breaks apart. A fist round the guitar's
+or bass's neck lifts it off your body to swing; opening your hand throws
+whatever you hold. Hands can also push things over, and a left fist on the
+music stand's desk pulls it off to throw. To put everything back together,
+pinch both hands for a second, or press **Reset position**. Each
+instrument's sign shows how to smash it, in red pictograms.
 
 ## How it works
 
@@ -399,6 +442,38 @@ The piano (`src/piano/`):
   three-pedal box (`piano` in the asset manifest). `fitPianoStand`
   stretches the side panels to the floor for the height the keys are set at.
 
+The bass (`src/bass/`) reuses the guitar's system (`src/guitar/fretted-system.ts`)
+with its own fretboard and voice (`geometry.ts`: a 30" scale, four strings,
+E1 A1 D2 G2) and model.
+
+The brass (`src/trumpet/`, `src/trombone/`, `src/horn/`) share one idea,
+set out in `src/trumpet/playing.ts`: a note is a fingering (valves or slide
+position) and a partial, the tilt stands in for the lips, and a pinch is the
+tongue and the air. Each folder has its geometry, where it is held, its
+synth, its model and its system.
+
+The baton (`src/baton/`): `tap.ts` sweeps the baton against the stand so a
+quick flick cannot pass through an edge unheard, `synth.ts` rings the stand's
+steel for each spot (top edge, desk, ledge) and the swish, and
+`air-baton-system.ts` sets out the stand and puts the baton in the hand.
+
+Smashing (`src/smash/`, and `src/guitar/smash.ts` and `smashing.ts` for the
+guitar and bass):
+
+- `prop-smash.ts` is the smashing shared by every instrument but the guitar:
+  health, picking up and throwing, and repair.
+- `scars.ts` marks each hit (dents, cracks, chips), `fracture.ts` pre-splits
+  bodies into the chunks they break into, `splinter.ts` bursts hard-hit
+  pieces into fragments, and `dent.ts` dents a mesh where it struck.
+- `tumble.ts` is a small rigid-body simulator for thrown instruments and
+  debris, with the floor as the only thing to hit; `hull.ts` gives each piece
+  its contact points.
+- `knock.ts` is the sound of an instrument hitting the floor, and
+  `smash-hints.ts` the red pictograms on each sign.
+
+`src/title-screen.ts` wires up the 2D title screen in `index.html`, which
+covers the page until the player enters VR.
+
 ## Tests
 
 ```sh
@@ -406,7 +481,8 @@ npm run typecheck
 npm run test:unit
 ```
 
-Unit tests ([Vitest](https://vitest.dev/)) cover the fretboard geometry, fret
+Unit tests ([Vitest](https://vitest.dev/), `tests/unit/`) cover every
+instrument and the smashing. For the guitar: the fretboard geometry, fret
 reading (chords, barres, flicker), pluck detection (single strings, fast and
 slow strums, tracking noise and dropouts, muting), chord naming, and the
 synth (every string in tune within 2 cents, matched loudness, no DC offset,
@@ -425,6 +501,8 @@ npm run test:cymbals
 npm run test:triangle
 npm run test:piano
 npm run test:drums
+npm run test:smash
+SMASH=drums npm run test:smash-props
 npm run play:william-tell
 npm run play:william-tell-cut
 npm run play:violin
@@ -434,6 +512,9 @@ npm run play:cymbals
 npm run play:triangle
 npm run play:piano
 npm run play:drums
+npm run play:bass
+npm run play:trumpet
+npm run check:trumpet
 npm run play:trombone-cut
 npm run check:trombone
 npm run play:horn-cut
@@ -568,6 +649,14 @@ npm run check:horn
   stick pushed into a head stops on it, every piece and zone sounds its own
   articulation, a tip rising through a drum is silent, and **Reset
   position** sets the kit out at the player's new spot and height.
+- `tests/guitar-smash.e2e.mjs` (`npm run test:smash`) makes a fist round the
+  guitar's neck, swings it into the floor until it is wrecked, brings a new
+  one with a two-handed pinch and throws that. `tests/smash-props.e2e.mjs`
+  (`npm run test:smash-props`) does the same for any other instrument,
+  named by `SMASH` (for example `SMASH=drums`).
+- `tests/bass-william-tell.mjs` (`npm run play:bass`, `play:bass-cut` for the
+  concert cut) plays the guitar's arrangement two octaves lower on the bass,
+  through `tests/fretted-play.js`.
 
 Both bring the browser window to the front; a window behind others renders at
 about 1 fps. Each script must finish within IWSDK's 110-second limit; a
@@ -580,13 +669,18 @@ run and picked up by the next: `npm run play:william-tell` runs
 ```
 iwsdk.config.json      IWSDK project settings: scene, assets, components, XR
 src/index.ts           creates the world and registers the systems
-src/guitar/            the air guitar (see How it works)
+src/guitar/            the air guitar (see How it works), whose system the bass shares
+src/bass/              the air bass
 src/violin/            the air violin and bow, and what the bowed instruments share
 src/cello/             the air cello
 src/cymbals/           the air cymbals
 src/triangle/          the air triangle
 src/piano/             the air piano
 src/drums/             the air drums
+src/trumpet/, src/trombone/, src/horn/   the brass
+src/baton/             the conductor's baton and music stand
+src/smash/             smashing: damage, fracture, debris and repair
+src/title-screen.ts    the 2D title screen shown before entering VR
 src/scene-assets/      the theatre's and the other scenes' models, the violin, cello and bows, the cymbal, the triangle and beater, the piano, and the drum kit and stick
 src/scene-list.ts      the scenes Prev/Next cycles through; the first, the stage, opens by default
 src/panel.ts           the panel's buttons
@@ -604,6 +698,9 @@ tests/piano.e2e.mjs    piano end-to-end test
 tests/drums.e2e.mjs, tests/drums-william-tell.mjs, -performer.js, -check.mjs   drums test, playback and its check
 tests/william-tell.mjs, tests/performer.js, tests/hand-rig.js, tests/songs/   song playback
 tests/hand-check.mjs, tests/timing-check.mjs   checks on the performer's hands and timing
+tests/guitar-smash.e2e.mjs, tests/smash-props.e2e.mjs   smashing tests
+video/                 the trailer: capture scripts, script, and the ffmpeg build (see video/script.md)
+docs/                  the Devpost write-up
 ```
 
 ## Credits
@@ -630,7 +727,11 @@ sounding pitch, the fanfare at the trumpets' own, closing on a held E5; for trom
 trumpet's part an octave lower, closing on a held E4, and the French horn the same notes;
 and for cello an
 octave below the guitar arrangement with the same double stop two octaves
-below the violin's. The cymbal part (bars 260–276) and the triangle part
+below the violin's; for bass the guitar's arrangement two octaves lower. The cymbal part (bars 260–276) and the triangle part
 (bars 252–276) are not from the score: they are arranged here.
+
+`tests/songs/ode-to-joy.js` is the first six bars of the melody of
+Ludwig van Beethoven's *Ode to Joy* (Ninth Symphony, 1824, public domain),
+written out by hand for the guitar.
 
 Built with [IWSDK](https://iwsdk.dev/).
